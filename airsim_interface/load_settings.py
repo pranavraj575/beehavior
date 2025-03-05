@@ -2,11 +2,18 @@ import os, sys, ast
 
 DIR = os.path.dirname(os.path.join(os.getcwd(), sys.argv[0]))
 SETT_DIR = os.path.join(DIR, 'settings.txt')
+
+
 class Keychain:
     UE4loc = 'unreal engine'
+    Defaultproj = 'defalut project'
+
 
 default_settings = {
-    Keychain.UE4loc: os.path.join('/home', 'pravna', 'UnrealEngine', 'Engine', 'Binaries', 'Linux', 'UE4Editor')
+    Keychain.UE4loc: os.path.join('/home', 'pravna',
+                                  'UnrealEngine', 'Engine', 'Binaries', 'Linux', 'UE4Editor'),
+    Keychain.Defaultproj: os.path.join('/home', 'pravna',
+                                       'AirSim', 'Unreal', 'Environments', 'Blocks_4.27', 'Blocks.uproject'),
 }
 
 

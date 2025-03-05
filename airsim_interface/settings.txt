@@ -1,3 +1,4 @@
 {
 "unreal engine":"/home/pravna/UnrealEngine/Engine/Binaries/Linux/UE4Editor",
+"defalut project":"/home/pravna/AirSim/Unreal/Environments/Blocks_4.27/Blocks.uproject",
 }
