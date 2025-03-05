@@ -8,8 +8,8 @@ setup(
     install_requires=['numpy',
                       'msgpack-rpc-python',
                       'matplotlib',
-                      'airsim',
                       'opencv-python',
+                      # 'airsim', TODO: NEED TO INSTALL THIS AFTER, it needs numpy and msgpack to already be installed
                       ],
     license='Liscence to Krill',
 )
