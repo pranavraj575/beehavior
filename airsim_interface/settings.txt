@@ -1,0 +1,3 @@
+{
+"unreal engine":"/home/pravna/UnrealEngine/Engine/Binaries/Linux/UE4Editor",
+}
