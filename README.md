@@ -49,6 +49,7 @@ If installed simultaneously to either of these packages, it throws an error.
   * keys 1234567890 control thrust, 1 is least and 0 is most
   * arrow keys control roll/pitch
   * each command runs the simulation for a quarter second and pauses
-  * space bar progresses simulation without submitting an action
+  * b progresses simulation without submitting an action
+  * space bar clears roll/pitch and progresses simulation  
   * r to reset simulation
   * Q (shift + q) to stop python script

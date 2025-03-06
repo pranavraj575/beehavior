@@ -6,7 +6,8 @@ in another terminal, run `python3 airsim_interface/keyboard_test.py`
   * keys 1234567890 control thrust, 1 is least and 0 is most
   * arrow keys control roll/pitch
   * each command runs the simulation for a quarter second and pauses
-  * space bar progresses simulation without submitting an action
+  * b progresses simulation without submitting an action
+  * space bar clears roll/pitch and progresses simulation
   * r to reset simulation
   * Q (shift + q) to stop python script
 """
@@ -20,15 +21,15 @@ if __name__ == '__main__':
     from airsim_interface.interface import step, connect_client, disconnect_client
 
     dt = .25
-    radian_ctrl=np.pi/6
+    radian_ctrl=np.pi/36
 
     thrust_n = 10
 
     discrete = list('1234567890')[:thrust_n]
 
     thrust = 0
-    lr = [False, False]  # whether left key or right key is being held
-    bf = [False, False]
+    lr = [0, 0]  # whether left key or right key is being held
+    bf = [0, 0]
     none_step = False
 
     reset = False
@@ -51,20 +52,22 @@ if __name__ == '__main__':
             for e in input_generator:
                 k = repr(e).replace("'", '')
                 if k == 'KEY_UP':
-                    bf[1] = True
-                    bf[0] = False
+                    bf[1] +=1
+                    bf[0] -=1
                 if k == 'KEY_DOWN':
-                    bf[0] = True
-                    bf[1] = False
+                    bf[0] += 1
+                    bf[1] -= 1
                 if k == 'KEY_LEFT':
-                    lr[0] = True
-                    lr[1] = False
+                    lr[0] += 1
+                    lr[1] -= 1
                 if k == 'KEY_RIGHT':
-                    lr[1] = True
-                    lr[0] = False
+                    lr[1] += 1
+                    lr[0] -= 1
                 if k == ' ':
-                    lr = [False, False]
-                    bf = [False, False]
+                    lr = [0, 0]
+                    bf = [0, 0]
+                    none_step = True
+                if k == 'b':
                     none_step = True
                 if k in discrete:
                     thrust = discrete.index(k)/(thrust_n - 1)
@@ -79,7 +82,7 @@ if __name__ == '__main__':
     th.start()
     if game_interface:
         client = connect_client()
-    old_cmd = None
+    old_cmd = get_cmd()
     while not close:
         cmd = get_cmd()
 
@@ -103,12 +106,12 @@ if __name__ == '__main__':
             if game_interface:
                 client.reset()
                 connect_client(client=client)
-            old_cmd = None
+            old_cmd = get_cmd()
             reset = False
 
             thrust = 0
-            lr = [False, False]  # whether left key or right key is being held
-            bf = [False, False]
+            lr = [0, 0]  # whether left key or right key is being held
+            bf = [0, 0]
             none_step = False
 
     disconnect_client(client=client)
