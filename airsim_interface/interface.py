@@ -8,7 +8,13 @@ def engine_started():
     """
     checks if unreal engine is running by trying to connect an airsim client
     """
-    return connect_client() is not None
+    client = airsim.MultirotorClient()  # we are using the multirotor client
+    try:
+        client.confirmConnection()
+        return True
+    except:
+        # failed connection
+        return False
 
 
 def start_game_engine(project=None, open_gui=True, start_paused=True, ):
@@ -25,11 +31,10 @@ def start_game_engine(project=None, open_gui=True, start_paused=True, ):
     if project is None:
         project = sett[Keychain.Defaultproj]
 
-    cmd = [sett[Keychain.UE4loc], project, '-game']
+    cmd = [sett[Keychain.UE4loc], project, '-game', '-windowed']
     if not open_gui:
         cmd += ['-renderoffscreen', '-nosplash', '-nullrhi']
     # os.system(' '.join(cmd))
-
     thing = subprocess.Popen(cmd,
                              # stdout=subprocess.PIPE,
                              )
@@ -42,8 +47,10 @@ def start_game_engine(project=None, open_gui=True, start_paused=True, ):
     return thing
 
 
-def connect_client():
-    client = airsim.MultirotorClient()  # we are using the multirotor client
+def connect_client(client=None):
+    if client is None:
+        client = airsim.MultirotorClient()  # we are using the multirotor client
+
     try:
         client.confirmConnection()
     except:
@@ -54,6 +61,15 @@ def connect_client():
     return client
 
 
+def disconnect_client(client):
+    """
+    disarms drone and removes api control from client
+
+    """
+    client.armDisarm(False)
+    client.enableApiControl(False)
+
+
 def quick_land(client):
     client.moveByRollPitchYawrateThrottleAsync(0, 0, 0, 0, 1).join()
 
@@ -62,21 +78,22 @@ def quick_takeoff(client):
     client.moveByRollPitchYawrateThrottleAsync(0, 0, 0, 1, 1).join()
 
 
-def step(client, frames=60, cmd=lambda: None):
+def step(client, seconds=.5, cmd=lambda: None, pause_after=True):
     """
     steps a simulation
     Args:
-        frames: number of frames to continue for
+        seconds: number of seconds to continue for
         cmd: ASYNCRHONOUS command to run for frames
             if cmd is not asyncronous, it will run fully on a paused simulation
     Returns:
 
     """
-
-    client.simPause(False)
+    if client.simIsPause():
+        client.simPause(False)
     cmd()
-    client.simContinueForFrames(frames=frames)
-    client.simPause(True)
+    client.simContinueForTime(seconds=seconds)
+    if pause_after:
+        client.simPause(True)
 
 
 if __name__ == '__main__':
@@ -84,11 +101,13 @@ if __name__ == '__main__':
         thing = start_game_engine(open_gui=True,
                                   start_paused=False,
                                   )
+    quit()
     quick = True
     client = connect_client()
     step(client=client,
-         frames=60,
+         seconds=60,
          cmd=lambda: client.moveByRollPitchYawrateThrottleAsync(0, 0, 0, .6, 1),
+         pause_after=False,
          )
     quit()
     if quick:

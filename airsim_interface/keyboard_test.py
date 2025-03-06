@@ -1,49 +1,40 @@
-import time
+"""
+Basic keyboard controller for quadrotor
+start a quadcopter project in game+windowed mode `<...>/Engine/Binaries/Linux/UE4Editor <...>/AirSim/Unreal/Environments/Blocks_4.27/Blocks.uproject -game -windowed`
+in another terminal, run `python3 airsim_interface/keyboard_test.py`
+* control the drone!
+  * keys 1234567890 control thrust, 1 is least and 0 is most
+  * arrow keys control roll/pitch
+  * each command runs the simulation for a quarter second and pauses
+  * space bar progresses simulation without submitting an action
+  * r to reset simulation
+  * Q (shift + q) to stop python script
+"""
+
+from threading import Thread
+
+import numpy as np
 
 if __name__ == '__main__':
-    from pynput.keyboard import Key, Listener
+    from curtsies import Input
+    from airsim_interface.interface import step, connect_client, disconnect_client
+
+    dt = .25
+    radian_ctrl=np.pi/6
 
     thrust_n = 10
+
     discrete = list('1234567890')[:thrust_n]
 
     thrust = 0
-    close = False
     lr = [False, False]  # whether left key or right key is being held
     bf = [False, False]
+    none_step = False
 
+    reset = False
+    close = False
 
-    def on_press(key):
-        global thrust, lr, bf, close
-
-        if 'char' in dir(key) and key.char in discrete:
-            thrust = discrete.index(key.char)/(thrust_n - 1)
-
-        elif key == Key.down:
-            bf[0] = True
-        elif key == Key.up:
-            bf[1] = True
-
-        elif key == Key.left:
-            lr[0] = True
-        elif key == Key.right:
-            lr[1] = True
-
-        elif key == Key.esc:
-            close = True
-
-
-    def on_release(key):
-        global thrust, lr, bf
-
-        if key == Key.down:
-            bf[0] = False
-        elif key == Key.up:
-            bf[1] = False
-
-        elif key == Key.left:
-            lr[0] = False
-        elif key == Key.right:
-            lr[1] = False
+    game_interface = True
 
 
     def get_cmd():
@@ -51,15 +42,73 @@ if __name__ == '__main__':
         x = -1*lr[0] + lr[1]
         y = -1*bf[0] + bf[
             1]  # -1, 0, or 1, depending if (just down is held), (either both held or none held), (just up held)
-        return thrust, x, y
+        return thrust, x*radian_ctrl, y*radian_ctrl
 
 
-    hear = Listener(on_press=on_press, on_release=on_release)
-    hear.start()
-    old_cmd=None
+    def record():
+        global bf, lr, thrust, none_step, reset, close
+        with Input(keynames='curses') as input_generator:
+            for e in input_generator:
+                k = repr(e).replace("'", '')
+                if k == 'KEY_UP':
+                    bf[1] = True
+                    bf[0] = False
+                if k == 'KEY_DOWN':
+                    bf[0] = True
+                    bf[1] = False
+                if k == 'KEY_LEFT':
+                    lr[0] = True
+                    lr[1] = False
+                if k == 'KEY_RIGHT':
+                    lr[1] = True
+                    lr[0] = False
+                if k == ' ':
+                    lr = [False, False]
+                    bf = [False, False]
+                    none_step = True
+                if k in discrete:
+                    thrust = discrete.index(k)/(thrust_n - 1)
+                if k == 'r':
+                    reset = True
+                if k == 'Q':
+                    close = True
+
+
+    client = None
+    th = Thread(target=record, daemon=True)
+    th.start()
+    if game_interface:
+        client = connect_client()
+    old_cmd = None
     while not close:
-        cmd=get_cmd()
-        if cmd!=old_cmd:
+        cmd = get_cmd()
+
+        if cmd != old_cmd or none_step:
+            none_step = False
             print(*zip(['thrust:', 'x:', 'y:'], cmd))
-        old_cmd=cmd
-        time.sleep(.01)
+            thrust, x, y = cmd
+            if game_interface:
+                step(client=client,
+                     seconds=dt,
+                     cmd=lambda: client.moveByRollPitchYawrateThrottleAsync(roll=x,
+                                                                            pitch=y,
+                                                                            yaw_rate=0,
+                                                                            throttle=thrust,
+                                                                            duration=1),
+                     pause_after=True,
+                     )
+        old_cmd = cmd
+        if reset:
+            print('resetting')
+            if game_interface:
+                client.reset()
+                connect_client(client=client)
+            old_cmd = None
+            reset = False
+
+            thrust = 0
+            lr = [False, False]  # whether left key or right key is being held
+            bf = [False, False]
+            none_step = False
+
+    disconnect_client(client=client)

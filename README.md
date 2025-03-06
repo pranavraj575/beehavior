@@ -26,16 +26,29 @@ If installed simultaneously to either of these packages, it throws an error.
 * then do make:
   `$ make`
 
-#### Test installation with GUI:
+## installation tests
+
+### test installation of unreal engine with GUI:
 
 * launch UE4E from the directory where you have UnrealEngine: `./Engine/Binaries/Linux/UE4Editor`
 * Select the existing environment or create a new environment
 * If selecting an existing environment, once it prompts you to convert the project before opening, select more options
   and click on skip conversion. This will then load the existing environment.
 
-#### Test installation with command line:
+### test installation of unreal engine with command line:
 
 * know the directory to the `UE4Editor` file, and the directory to an airsim `.uproject` file
-* Run the project in game mode: `./<...>/Engine/Binaries/Linux/UE4Editor <...>/<PROJECT.uproject> -game`
-* This should open the project in 'game' mode, which does not load the Editor GUI
+* Run the project in game mode: `./<...>/Engine/Binaries/Linux/UE4Editor <...>/<PROJECT.uproject> -game -windowed`
+* This should open the project in 'game' and 'windowed' mode, which does not load the Editor GUI, and allows you to click offscreen
 
+### test basic keyboard input
+
+* start a quadcopter project in game+windowed mode `<...>/Engine/Binaries/Linux/UE4Editor <...>/AirSim/Unreal/Environments/Blocks_4.27/Blocks.uproject -game -windowed`
+* in another terminal, run `python3 airsim_interface/keyboard_test.py`
+* control the drone!
+  * keys 1234567890 control thrust, 1 is least and 0 is most
+  * arrow keys control roll/pitch
+  * each command runs the simulation for a quarter second and pauses
+  * space bar progresses simulation without submitting an action
+  * r to reset simulation
+  * Q (shift + q) to stop python script
