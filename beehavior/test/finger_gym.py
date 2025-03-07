@@ -82,7 +82,9 @@ if __name__ == '__main__':
             print('\033[2K', *zip(['thrust:', 'x:', 'y:'], cmd), end='                  \r')
         if none_step or args.real_time:
             none_step = False
-            env.step(action=cmd)
+            observation, reward, termination, truncation, info = env.step(action=cmd)
+            if termination or truncation:
+                reset = True
         old_cmd = cmd
         if reset:
             print('resetting')
