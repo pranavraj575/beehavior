@@ -1,3 +1,8 @@
+"""
+handles interface with unreal airsim thing
+running this file will run airsim
+"""
+
 import time
 
 import airsim, subprocess, os
@@ -17,13 +22,14 @@ def engine_started():
         return False
 
 
-def start_game_engine(project=None, open_gui=True, start_paused=True, ):
+def start_game_engine(project=None, open_gui=True, start_paused=True, join=False):
     """
     starts unreal enging
     Args:
         project: what project to open, defaults to Keychain.Defaultproj
         open_gui: whether to open the gui for the project
         start_paused: guess what it means
+        join: if true, this function will run until the project is fully open
     Returns:
 
     """
@@ -35,15 +41,14 @@ def start_game_engine(project=None, open_gui=True, start_paused=True, ):
     if not open_gui:
         cmd += ['-renderoffscreen', '-nosplash', '-nullrhi']
     # os.system(' '.join(cmd))
-    thing = subprocess.Popen(cmd,
-                             # stdout=subprocess.PIPE,
-                             )
-    time.sleep(10)
-    while not engine_started():
+    thing = subprocess.Popen(cmd)
+    if join:
         time.sleep(10)
-    client = connect_client()
-    if start_paused:
-        client.simPause(True)
+        while not engine_started():
+            time.sleep(10)
+        client = connect_client()
+        if start_paused:
+            client.simPause(True)
     return thing
 
 
@@ -97,29 +102,16 @@ def step(client, seconds=.5, cmd=lambda: None, pause_after=True):
 
 
 if __name__ == '__main__':
+    import argparse
+
+    PARSER = argparse.ArgumentParser()
+    PARSER.add_argument("--headless", action='store_true', required=False,
+                        help="open in headless mode")
+    PARSER.add_argument("--start-paused", action='store_true', required=False,
+                        help="starts simulation paused")
+    args = PARSER.parse_args()
     if not engine_started():
-        thing = start_game_engine(open_gui=True,
+        thing = start_game_engine(open_gui=not args.headless,
                                   start_paused=False,
+                                  join=True,
                                   )
-    quit()
-    quick = True
-    client = connect_client()
-    step(client=client,
-         seconds=60,
-         cmd=lambda: client.moveByRollPitchYawrateThrottleAsync(0, 0, 0, .6, 1),
-         pause_after=False,
-         )
-    quit()
-    if quick:
-        quick_takeoff(client)
-    else:
-        client.takeoffAsync().join()
-    print('taken off')
-
-    # client.moveByRollPitchYawrateThrottleAsync(0,0,0,1,1).join()
-
-    if quick:
-        quick_land(client)
-    else:
-        client.landAsync()
-    print('landed off')

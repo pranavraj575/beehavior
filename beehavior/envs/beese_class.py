@@ -26,7 +26,8 @@ class BeeseClass(gym.Env):
             real_time: if true, does not pause simulation after each step
         """
         super().__init__()
-        self.client = connect_client(client=client)
+        if client is None:
+            self.client = connect_client(client=client)
 
         self.dt = dt
         self.max_tilt = max_tilt
@@ -65,7 +66,7 @@ class BeeseClass(gym.Env):
     ) -> Tuple[ObsType, dict]:
         super().reset(seed=seed)
         self.client.reset()
-        connect_client(client=self.client)
+        self.client = connect_client(client=self.client)
         # obs, info
         return self.get_obs(), {}
 
@@ -75,4 +76,12 @@ class BeeseClass(gym.Env):
 
 
 if __name__ == '__main__':
-    pass
+    env = BeeseClass(dt=1)
+    env.reset()
+    env.step(action=np.array([0., 0., 1.]))
+    for i in range(5):
+        action = env.action_space.sample()
+        r,p,t=action
+        print('roll:',r,'pitch:',p,'thrust:',t)
+        env.step(action=action)
+    env.close()

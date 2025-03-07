@@ -21,8 +21,10 @@ if __name__ == '__main__':
 
     PARSER.add_argument("--dt", type=float, required=False, default=.25,
                         help="time in between commands sent to simulation")
-    PARSER.add_argument("--radian-ctrl", type=float, required=False, default=np.pi/36,
+    PARSER.add_argument("--radian-ctrl", type=float, required=False, default=np.pi/18,
                         help="radians that each arrow command changes roll/pitch")
+    PARSER.add_argument("--max-ctrl", type=int, required=False, default=9,
+                        help="number of times you can increment by radian-ctrl")
     PARSER.add_argument("--thrust-n", type=int, required=False, default=10, choices=list(range(2, 11)),
                         help="number of potential thrust values, between 2 and 10")
     PARSER.add_argument('--real-time', action='store_true', required=False,
@@ -38,8 +40,8 @@ if __name__ == '__main__':
     discrete = list('1234567890')[:args.thrust_n]
 
     thrust = 0
-    lr = [0, 0]  # whether left key or right key is being held
-    bf = [0, 0]
+    lr = 0  # whether left key or right key is being held
+    bf = 0
     none_step = False
 
     reset = False
@@ -49,9 +51,7 @@ if __name__ == '__main__':
     def get_cmd():
         global thrust, lr, bf
         # number of time right is pressed-number of time left is pressed
-        x = -1*lr[0] + lr[1]
-        y = -1*bf[0] + bf[1]
-        return thrust, x*args.radian_ctrl, y*args.radian_ctrl
+        return lr*args.radian_ctrl, bf*args.radian_ctrl, thrust
 
 
     def record():
@@ -60,20 +60,16 @@ if __name__ == '__main__':
             for e in input_generator:
                 k = repr(e).replace("'", '')
                 if k == 'KEY_UP':
-                    bf[1] += 1
-                    bf[0] -= 1
+                    bf = min(1 + bf, args.max_ctrl)
                 if k == 'KEY_DOWN':
-                    bf[0] += 1
-                    bf[1] -= 1
+                    bf = max(bf - 1, -args.max_ctrl)
                 if k == 'KEY_LEFT':
-                    lr[0] += 1
-                    lr[1] -= 1
+                    lr = max(lr - 1, -args.max_ctrl)
                 if k == 'KEY_RIGHT':
-                    lr[1] += 1
-                    lr[0] -= 1
+                    lr = min(1 + lr, args.max_ctrl)
                 if k == 'c':
-                    lr = [0, 0]
-                    bf = [0, 0]
+                    lr = 0
+                    bf = 0
                 if k == ' ':
                     none_step = True
                 if k in discrete:
@@ -97,10 +93,10 @@ if __name__ == '__main__':
     while not close:
         cmd = get_cmd()
         if cmd != old_cmd:
-            print('\033[2K',*zip(['thrust:', 'x:', 'y:'], cmd), end='                  \r')
+            print('\033[2K', *zip(['thrust:', 'x:', 'y:'], cmd), end='                  \r')
         if none_step or args.real_time:
             none_step = False
-            thrust, x, y = cmd
+            x, y, thrust = cmd
             if game_interface:
                 step(client=client,
                      seconds=args.dt,
@@ -112,19 +108,19 @@ if __name__ == '__main__':
                      pause_after=not args.real_time,
                      )
             else:
-                print('\033[2Ksent:',*zip(['thrust:', 'x:', 'y:'], cmd), end='\r')
+                print('\033[2Ksent:', *zip(['thrust:', 'x:', 'y:'], cmd), end='\r')
         old_cmd = cmd
         if reset:
             print('resetting')
             if game_interface:
                 client.reset()
                 connect_client(client=client)
-            old_cmd = get_cmd()
             reset = False
 
             thrust = 0
-            lr = [0, 0]  # whether left key or right key is being held
-            bf = [0, 0]
+            lr = 0  # whether left key or right key is being held
+            bf = 0
             none_step = False
+            old_cmd = get_cmd()
     if game_interface:
         disconnect_client(client=client)
