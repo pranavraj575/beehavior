@@ -6,6 +6,8 @@ running this file will run airsim
 import time
 
 import airsim, subprocess, os
+from airsim import MultirotorClient
+
 from airsim_interface.load_settings import get_settings, Keychain
 
 
@@ -52,7 +54,7 @@ def start_game_engine(project=None, open_gui=True, start_paused=True, join=False
     return thing
 
 
-def connect_client(client=None):
+def connect_client(client=None, vehicle_name=''):
     if client is None:
         client = airsim.MultirotorClient()  # we are using the multirotor client
 
@@ -61,26 +63,26 @@ def connect_client(client=None):
     except:
         # failed connection
         return None
-    client.enableApiControl(True)
-    client.armDisarm(True)
+    client.enableApiControl(True, vehicle_name=vehicle_name)
+    client.armDisarm(True, vehicle_name=vehicle_name)
     return client
 
 
-def disconnect_client(client):
+def disconnect_client(client, vehicle_name=''):
     """
     disarms drone and removes api control from client
 
     """
-    client.armDisarm(False)
-    client.enableApiControl(False)
+    client.armDisarm(False, vehicle_name=vehicle_name)
+    client.enableApiControl(False, vehicle_name=vehicle_name)
 
 
-def quick_land(client):
-    client.moveByRollPitchYawrateThrottleAsync(0, 0, 0, 0, 1).join()
+def quick_land(client: MultirotorClient, vehicle_name=''):
+    client.moveByRollPitchYawrateThrottleAsync(0, 0, 0, 0, 1, vehicle_name=vehicle_name).join()
 
 
-def quick_takeoff(client):
-    client.moveByRollPitchYawrateThrottleAsync(0, 0, 0, 1, 1).join()
+def quick_takeoff(client, vehicle_name=''):
+    client.moveByRollPitchYawrateThrottleAsync(0, 0, 0, 1, 1, vehicle_name=vehicle_name).join()
 
 
 def step(client, seconds=.5, cmd=lambda: None, pause_after=True):
@@ -99,6 +101,24 @@ def step(client, seconds=.5, cmd=lambda: None, pause_after=True):
     client.simContinueForTime(seconds=seconds)
     if pause_after:
         client.simPause(True)
+
+
+def move_along_pth(client: MultirotorClient, pth, v=1., vehicle_name=''):
+    """
+    Args:
+        client: client
+        pth: path, sequence of (x,y,z)
+        v: velocity, either scalar or list (length of pth)
+    """
+    if type(v) == float or type(v) == int:
+        v = [v for _ in pth]
+    for t, v in zip(pth, v):
+        if len(t) == 2:
+            z = client.simGetVehiclePose(vehicle_name=vehicle_name).position.z_val
+            x, y = t
+        else:
+            x, y, z = t
+        client.moveToPositionAsync(x=x, y=y, z=z, velocity=v, vehicle_name=vehicle_name).join()
 
 
 if __name__ == '__main__':
