@@ -87,7 +87,7 @@ if __name__ == '__main__':
     while not close:
         cmd = get_cmd()
         if np.any(cmd != old_cmd):
-            print('\033[2K', *zip(['thrust:', 'x:', 'y:'], cmd), end='                  \r')
+            print('\033[2K', *zip(['r:', 'p:', 'thrust:'], cmd), end='                  \r')
         if none_step or args.real_time:
             none_step = False
             observation, reward, termination, truncation, info = env.step(action=cmd)
