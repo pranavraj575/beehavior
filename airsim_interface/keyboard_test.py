@@ -17,7 +17,15 @@ if __name__ == '__main__':
     import argparse
     from curtsies import Input
 
-    PARSER = argparse.ArgumentParser()
+    PARSER = argparse.ArgumentParser(
+        description='Control gym enviornment drone with keyboard: '
+                    'keys 1234567890 control thrust (1 is least and 0 is most); '
+                    'arrow keys control roll/pitch; '
+                    'space bar progresses simulation for a quarter second and pauses; '
+                    'c clears roll/pitch; '
+                    'r to reset simulation; '
+                    'Q (shift + q) to stop python script'
+    )
 
     PARSER.add_argument("--dt", type=float, required=False, default=.25,
                         help="time in between commands sent to simulation")

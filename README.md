@@ -67,3 +67,10 @@ cd AirSim
     * c clears roll/pitch
     * r to reset simulation
     * Q (shift + q) to stop python script
+
+### test gym enviornment
+
+* start a quadcopter project in game+windowed mode
+  `<...>/Engine/Binaries/Linux/UE4Editor <...>/AirSim/Unreal/Environments/Blocks_4.27/Blocks.uproject -game -windowed`
+* in another terminal, run `python3 beehavior/test/finger_gym.py`
+* control the drone! (same controls as `airsim_interface/keyboard_test.py`)
