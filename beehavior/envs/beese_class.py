@@ -3,7 +3,7 @@ import gymnasium as gym
 from gymnasium.core import ActType, ObsType
 import numpy as np
 
-from airsim_interface.interface import connect_client, disconnect_client, step
+from airsim_interface.interface import connect_client, disconnect_client, step, of_geo, get_of_geo_shape
 
 
 class BeeseClass(gym.Env):
@@ -46,6 +46,7 @@ class BeeseClass(gym.Env):
         self.action_space = gym.spaces.Box(low=np.array([-1, -1, 0]), high=1, shape=(3,), dtype=np.float64)
 
         # REDEFINE THIS
+        gym.spaces.Tuple
         self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2,), dtype=np.float64)
 
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, bool, dict]:
@@ -70,8 +71,18 @@ class BeeseClass(gym.Env):
         # observation, reward, termination, truncation, info
         return self.get_obs(), r, collided, collided, {}
 
+    def get_of_data(self):
+        return of_geo(client=self.client, camera_name='front', fov=60)
+
+    def get_of_data_shape(self):
+        return get_of_geo_shape(client=self.client, camera_name='front')
+
     def get_obs(self):
+        print(of_geo(client=self.client).shape)
         return np.zeros(2)
+
+    def get_obs_shape(self):
+        return
 
     def has_collided(self):
         """

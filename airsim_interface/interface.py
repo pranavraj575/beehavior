@@ -113,7 +113,20 @@ def move_along_pth(client: airsim.MultirotorClient, pth, v=1., vehicle_name=''):
         client.moveToPositionAsync(x=x, y=y, z=z, velocity=v, vehicle_name=vehicle_name).join()
 
 
-def of_geo(client: airsim.MultirotorClient, image_width=320, image_height=240, fov=60):
+def get_of_geo_shape(client: airsim.MultirotorClient, camera_name='front'):
+    """
+    obtains the shape of the image from of_geo
+    Args:
+        client: client
+        camera_name: guess
+    Returns:
+        shape tuple, probably (240, 360, 2)
+    """
+    depth_image = client.simGetImages([airsim.ImageRequest(camera_name, airsim.ImageType.DepthPerspective, True)])[0]
+    return (depth_image.height, depth_image.width, 2)
+
+
+def of_geo(client: airsim.MultirotorClient, camera_name='front', fov=60):
     """
     optic flow array caluclated from geometric data
     assumes STATIC obstacles, can redo this with dynamic obstacles, but it would be much more annoying
@@ -121,13 +134,16 @@ def of_geo(client: airsim.MultirotorClient, image_width=320, image_height=240, f
         from this, can calculate optic flow
     Args:
         client: client
-        image_width: guess
-        image_height: guess
+        camera_name: name of camera
         fov: guess
+    Returns:
+        optic flow array, shaped
     """
     # TODO: read camera settings from client
-    depth_image = client.simGetImages([airsim.ImageRequest("front", airsim.ImageType.DepthPerspective, True)])[0]
+    depth_image = client.simGetImages([airsim.ImageRequest(camera_name, airsim.ImageType.DepthPerspective, True)])[0]
     kinematics = client.simGetGroundTruthKinematics()
+    image_width = depth_image.width
+    image_height = depth_image.height
 
     T = np.array(
         [-kinematics.linear_velocity.y_val, -kinematics.linear_velocity.z_val, kinematics.linear_velocity.x_val])
@@ -140,9 +156,13 @@ def of_geo(client: airsim.MultirotorClient, image_width=320, image_height=240, f
     depth_map = np.array(depth_image.image_data_float, dtype=np.float32).reshape(depth_image.height, depth_image.width)
 
     focal_length_x = image_width/(2*math.tan(fov/2))
+    focal_length_y = image_width/(2*math.tan(fov/2))
 
-    vertical_FOV = 2*math.atan((math.tan(fov/2))/(image_width/image_height))
-    focal_length_y = image_height/(2*math.tan(vertical_FOV/2))
+    # TODO: why does focal_length_y == focal_length_x
+    #  this is the unsimplified code:
+    # vertical_FOV = 2*math.atan((math.tan(fov/2))/(image_width/image_height))
+    # focal_length_y = image_height/(2*math.tan(vertical_FOV/2))
+
     # Assuming these are already defined in your code
     Fx = focal_length_x  # focal length in pixels (Horizontal = Vertical)
     Fy = focal_length_y
@@ -185,7 +205,6 @@ def of_geo(client: airsim.MultirotorClient, image_width=320, image_height=240, f
         -u_shifted*v_shifted/Fy,
         u_shifted,
     ])
-
     # Perform matrix multiplications for all pixels
     Qu = np.tensordot(a_row1.T, state_vector, axes=1).T  # Dot product for each pixel
     Qv = np.tensordot(a_row2.T, state_vector, axes=1).T  # Dot product for each pixel
