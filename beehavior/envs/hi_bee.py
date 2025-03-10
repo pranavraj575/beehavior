@@ -1,8 +1,8 @@
 import numpy as np
-from beehavior.envs.beese_class import BeeseClass
+from beehavior.envs.beese_class import OFBeeseClass
 
 
-class HiBee(BeeseClass):
+class HiBee(OFBeeseClass):
     def __init__(self,
                  client=None,
                  dt=.25,

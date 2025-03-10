@@ -83,7 +83,12 @@ if __name__ == '__main__':
     th = Thread(target=record, daemon=True)
     th.start()
 
-    env = gym.make(args.env)
+    env = gym.make(args.env,
+                   dt=args.dt,
+                   max_tilt=args.radian_ctrl*args.max_ctrl,
+                   real_time=args.real_time,
+                   )
+
     env.reset()
 
     reward = 0

@@ -12,8 +12,8 @@ class BeeseClass(gym.Env):
     state is the current unreal engine state
     observation is a 2 vector of zeros right now
     Actions are roll [-1,1], pitch [-1,1], and thrust [0,1]
-    reward of d(s,t)-d(s',t), rewarding getting close to target
-    terminates if d(s,t)<1
+    reward is just -1 for collisions
+    terminates upon collision
     """
 
     def __init__(self,
@@ -36,7 +36,9 @@ class BeeseClass(gym.Env):
         """
         super().__init__()
         if client is None:
-            self.client = connect_client(client=client)
+            client = connect_client(client=client)
+        self.client = client
+
         self.vehicle_name = vehicle_name
         self.dt = dt
         self.max_tilt = max_tilt
@@ -47,6 +49,14 @@ class BeeseClass(gym.Env):
         self.observation_space = self.define_observation_space()
 
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, bool, dict]:
+        """
+        implementiaon of gym's step function
+        Args:
+            action: action that agent makes at a timestep
+        Returns:
+            (observation, reward, termination,
+                    truncation, info)
+        """
         roll, pitch, thrust = action
         step(client=self.client,
              seconds=self.dt,
@@ -70,9 +80,10 @@ class BeeseClass(gym.Env):
         r = self.get_rwd(collided=collided, obs=obs)
 
         self.col_cnt = max(0, self.col_cnt - 1)
+        term, trunc = self.get_termination(collided)
 
         # observation, reward, termination, truncation, info
-        return obs, r, collided, collided, {}
+        return obs, r, term, trunc, {}
 
     def reset(
             self,
@@ -80,6 +91,14 @@ class BeeseClass(gym.Env):
             seed: Optional[int] = None,
             options: Optional[dict] = None,
     ) -> Tuple[ObsType, dict]:
+        """
+        implementiaon of gym's reset function
+        Args:
+            seed: random seed
+            options: option dictionary
+        Returns:
+            (observation, info dict)
+        """
         super().reset(seed=seed)
         self.client.reset()
         self.client = connect_client(client=self.client)
@@ -89,6 +108,9 @@ class BeeseClass(gym.Env):
         return self.get_obs(), {}
 
     def close(self):
+        """
+        close client by disconnecting
+        """
         super().close()
         disconnect_client(client=self.client)
 
@@ -102,7 +124,25 @@ class BeeseClass(gym.Env):
         return self.last_collision != self.client.simGetCollisionInfo(vehicle_name=self.vehicle_name).time_stamp
 
     def update_recent_colision(self):
+        """
+        ignore the last thing agent collided with
+            useful since client.reset() does not reset collisions
+            also collisions with ground before takeoff counts
+        """
         self.last_collision = self.client.simGetCollisionInfo(vehicle_name=self.vehicle_name).time_stamp
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    # TERMINATION STUFF
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    def get_termination(self, collided):
+        """
+        returns whether to terminate/truncate an episode based on whether agent has collided
+        Args:
+            collided: whether agent collided with an obstacle
+        Returns:
+            terminate episode, truncate episode
+        """
+        return collided, False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # OBSERVATION STUFF
@@ -118,13 +158,71 @@ class BeeseClass(gym.Env):
         return get_of_geo_shape(client=self.client, camera_name='front')
 
     def get_obs_vector(self):
-        return np.arange(2)
+        return np.arange(2)*1.0
 
     def get_obs_vector_dim(self):
         return 2
 
     def get_obs(self):
+        return self.get_obs_vector()
 
+    def get_obs_shape(self):
+        return (self.get_obs_vector_dim(),)
+
+    def define_observation_space(self):
+
+        # REDEFINE THIS, currently assumes self.get_obs_vector() is between 0 and inf
+        shape = self.get_obs_shape()
+        return gym.spaces.Box(low=0, high=np.inf, shape=shape, dtype=np.float64)
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    # RWD STUFF
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    def get_rwd(self, collided, obs):
+        """
+        gets reward from last completed step() call
+        Args:
+            collided: wthr the agent has collided with a wall (no need to recalculate for both termination and reward)
+            obs: observation
+        Returns:
+        """
+        return -float(collided)
+
+
+class OFBeeseClass(BeeseClass):
+    """
+    observation is optic flow data, with a vector (self.get_obs_vector()) appended to every pixel
+    """
+
+    def __init__(self,
+                 client=None,
+                 dt=.25,
+                 max_tilt=np.pi/18,
+                 vehicle_name='',
+                 real_time=False,
+                 collision_grace=1,
+                 ):
+        super().__init__(
+            client=client,
+            dt=dt,
+            max_tilt=max_tilt,
+            vehicle_name=vehicle_name,
+            real_time=real_time,
+            collision_grace=collision_grace,
+        )
+
+    def define_observation_space(self):
+        # REDEFINE THIS, currently assumes self.get_obs_vector() is between 0 and inf
+        (H, W, C) = self.get_of_data_shape()
+        shape = self.get_obs_shape()
+        arr = np.ones(shape)
+        low = -np.inf*arr
+        low[:, :, C:] = 0
+        high = np.inf*arr
+        high[:, :, C:] = np.inf
+        return gym.spaces.Box(low=low, high=high, shape=shape, dtype=np.float64)
+
+    def get_obs(self):
         of = of_geo(client=self.client, camera_name='front', fov=60)
         H, W, C = of.shape
         # (H,W,C) optic flow data
@@ -144,31 +242,6 @@ class BeeseClass(gym.Env):
 
     def get_obs_shape(self):
         return (*self.get_of_data_shape()[:-1], self.get_of_data_shape()[-1] + self.get_obs_vector_dim())
-
-    def define_observation_space(self):
-
-        # REDEFINE THIS, currently assumes self.get_obs_vector() is between 0 and inf
-        (H, W, C) = self.get_of_data_shape()
-        shape = self.get_obs_shape()
-        arr = np.ones(shape)
-        low = -np.inf*arr
-        low[:, :, C:] = 0
-        high = np.inf*arr
-        high[:, :, C:] = np.inf
-        return gym.spaces.Box(low=low, high=high, shape=shape, dtype=np.float64)
-
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    # RWD STUFF
-    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
-    def get_rwd(self, collided, obs):
-        """
-        gets reward from last completed step() call
-        Args:
-            collided: wthr the agent has collided with a wall (no need to recalculate for both termination and reward)
-            obs: observation
-        Returns:
-        """
-        return -float(collided)
 
 
 if __name__ == '__main__':

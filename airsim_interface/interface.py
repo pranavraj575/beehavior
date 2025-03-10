@@ -57,7 +57,6 @@ def start_game_engine(project=None, open_gui=True, start_paused=True, join=False
 def connect_client(client=None, vehicle_name=''):
     if client is None:
         client = airsim.MultirotorClient()  # we are using the multirotor client
-
     try:
         client.confirmConnection()
     except:
@@ -90,18 +89,11 @@ def step(client, seconds=.5, cmd=lambda: None, pause_after=True):
     # unpause
     if client.simIsPause():
         client.simPause(False)
-
     cmd()
     client.simContinueForTime(seconds=seconds)
-
     # repause
     if pause_after:
         client.simPause(True)
-    else:
-        # TODO: why do we have to do this?
-        if client.simIsPause():
-            client.simPause(False)
-
 
 def move_along_pth(client: airsim.MultirotorClient, pth, v=1., vehicle_name=''):
     """
