@@ -24,6 +24,14 @@ class Test(gym.Env):
         self.t = None
 
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, bool, dict]:
+        """
+        implementiaon of gym's step function
+        Args:
+            action: action that agent makes at a timestep
+        Returns:
+            (observation, reward, termination,
+                    truncation, info)
+        """
         d = np.linalg.norm(self.t - self.s)
         self.s += action
         dp = np.linalg.norm(self.t - self.s)
@@ -41,6 +49,14 @@ class Test(gym.Env):
             seed: Optional[int] = None,
             options: Optional[dict] = None,
     ) -> Tuple[ObsType, dict]:
+        """
+        implementiaon of gym's reset function
+        Args:
+            seed: random seed
+            options: option dictionary
+        Returns:
+            (observation, info dict)
+        """
         super().reset(seed=seed)
         np.random.seed(seed)
         self.s = (2*np.random.random(2) - 1)*self.scale

@@ -21,6 +21,7 @@ class BeeseClass(gym.Env):
                  dt=.25,
                  max_tilt=np.pi/18,
                  vehicle_name='',
+                 of_camera='front',
                  real_time=False,
                  collision_grace=1,
                  ):
@@ -40,6 +41,7 @@ class BeeseClass(gym.Env):
         self.client = client
 
         self.vehicle_name = vehicle_name
+        self.of_camera=of_camera
         self.dt = dt
         self.max_tilt = max_tilt
         self.real_time = real_time
@@ -149,28 +151,53 @@ class BeeseClass(gym.Env):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     def get_pose(self):
+        """
+        gets pose of agent in environment, pose object has a .position and .orientation
+        """
         return self.client.simGetVehiclePose(vehicle_name=self.vehicle_name)
 
     def get_of_data(self):
-        return of_geo(client=self.client, camera_name='front', fov=60)
+        """
+        gets np array of optic flow from last completed step()
+        """
+        return of_geo(client=self.client, camera_name=self.of_camera, fov=60)
 
     def get_of_data_shape(self):
-        return get_of_geo_shape(client=self.client, camera_name='front')
+        """
+        shape of self.get_of_data()
+        costly, should not be run too many times, as we can either save this shape or just look at the last observation
+        """
+        return get_of_geo_shape(client=self.client, camera_name=self.of_camera)
 
     def get_obs_vector(self):
+        """
+        gets observation vector from last completed step()
+        """
         return np.arange(2)*1.0
 
     def get_obs_vector_dim(self):
+        """
+        dimension of self.get_obs_vector()
+        """
         return 2
 
     def get_obs(self):
+        """
+        returns observation from last step()
+        in the base class, returns a simple vector with no information
+        """
         return self.get_obs_vector()
 
     def get_obs_shape(self):
+        """
+        returns shape of observation
+        """
         return (self.get_obs_vector_dim(),)
 
     def define_observation_space(self):
-
+        """
+        to be run in __init__, defines the observation space of the environment
+        """
         # REDEFINE THIS, currently assumes self.get_obs_vector() is between 0 and inf
         shape = self.get_obs_shape()
         return gym.spaces.Box(low=0, high=np.inf, shape=shape, dtype=np.float64)
@@ -192,6 +219,8 @@ class BeeseClass(gym.Env):
 class OFBeeseClass(BeeseClass):
     """
     observation is optic flow data, with a vector (self.get_obs_vector()) appended to every pixel
+    the reason we do it this way is because gym.space.Tuple is not supported by stable_baselines3
+        we could make our own networks, but just appending is easier
     """
 
     def __init__(self,
@@ -212,7 +241,9 @@ class OFBeeseClass(BeeseClass):
         )
 
     def define_observation_space(self):
-        # REDEFINE THIS, currently assumes self.get_obs_vector() is between 0 and inf
+        """
+        defines gym observation space, taking optic flow image and appending a vector to each element
+        """
         (H, W, C) = self.get_of_data_shape()
         shape = self.get_obs_shape()
         arr = np.ones(shape)

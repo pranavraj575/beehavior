@@ -33,7 +33,7 @@ def start_game_engine(project=None, open_gui=True, start_paused=True, join=False
         start_paused: guess what it means
         join: if true, this function will run until the project is fully open
     Returns:
-
+        subprocess object
     """
     sett = get_settings()
     if project is None:
@@ -55,6 +55,9 @@ def start_game_engine(project=None, open_gui=True, start_paused=True, join=False
 
 
 def connect_client(client=None, vehicle_name=''):
+    """
+    connects a multirotor client to a particular vehicle, enables api ctrl, and arms it
+    """
     if client is None:
         client = airsim.MultirotorClient()  # we are using the multirotor client
     try:

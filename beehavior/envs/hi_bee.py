@@ -3,6 +3,11 @@ from beehavior.envs.beese_class import OFBeeseClass
 
 
 class HiBee(OFBeeseClass):
+    """
+    simple enviornment that gives the agent reward for holding a certian height
+    input is optic flow information AND the current z position of the agent
+    clearly this is simple to learn, so we use this as a test of the RL pipeline with the Unreal Engine
+    """
     def __init__(self,
                  client=None,
                  dt=.25,
