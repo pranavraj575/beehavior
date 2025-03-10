@@ -135,7 +135,7 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', fov=60):
     Args:
         client: client
         camera_name: name of camera
-        fov: guess
+        fov: set to a specific value because client.simGetFieldOfView is wrong
     Returns:
         optic flow array, shaped
     """
@@ -155,13 +155,9 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', fov=60):
     # Convert depth data to a numpy array and reshape it to the image dimensions
     depth_map = np.array(depth_image.image_data_float, dtype=np.float32).reshape(depth_image.height, depth_image.width)
 
+    # fixed bug from geometric_flow_calc.py that led to focal_length_y = focal_length_x
     focal_length_x = image_width/(2*math.tan(fov/2))
-    focal_length_y = image_width/(2*math.tan(fov/2))
-
-    # TODO: why does focal_length_y == focal_length_x
-    #  this is the unsimplified code:
-    # vertical_FOV = 2*math.atan((math.tan(fov/2))/(image_width/image_height))
-    # focal_length_y = image_height/(2*math.tan(vertical_FOV/2))
+    focal_length_y = image_height/(2*math.tan(fov/2))
 
     # Assuming these are already defined in your code
     Fx = focal_length_x  # focal length in pixels (Horizontal = Vertical)
