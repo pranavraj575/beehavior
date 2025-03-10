@@ -21,6 +21,9 @@ if __name__ == '__main__':
                     'Q (shift + q) to stop python script'
     )
 
+    PARSER.add_argument("--env", action='store', required=False, default='Beese-v0',
+                        choices=('Beese-v0', 'HiBee-v0'),
+                        help="RL gym class to run")
     PARSER.add_argument("--dt", type=float, required=False, default=.25,
                         help="time in between commands sent to simulation")
     PARSER.add_argument("--radian-ctrl", type=float, required=False, default=np.pi/18,
@@ -80,20 +83,25 @@ if __name__ == '__main__':
     th = Thread(target=record, daemon=True)
     th.start()
 
-    env = gym.make('Beese-v0')
+    env = gym.make(args.env)
     env.reset()
 
-    old_cmd = get_cmd()
+    reward = 0
+    strout_old = ''
+
     while not close:
         cmd = get_cmd()
-        if np.any(cmd != old_cmd):
-            print('\033[2K', *zip(['r:', 'p:', 'thrust:'], cmd), end='                  \r')
         if none_step or args.real_time:
             none_step = False
             observation, reward, termination, truncation, info = env.step(action=cmd)
             if termination or truncation:
                 reset = True
-        old_cmd = cmd
+        strout = ('\033[2K' +
+                  str(tuple(zip(['r:', 'p:', 'thrust:'], cmd))) +
+                  ' last rwd:' + str(reward) + '                  \r')
+        if strout != strout_old:
+            print(strout, end='')
+            strout_old = strout
         if reset:
             print('resetting')
             env.reset()
@@ -104,5 +112,4 @@ if __name__ == '__main__':
             lr = 0  # whether left key or right key is being held
             bf = 0
             none_step = False
-            old_cmd = get_cmd()
     env.close()

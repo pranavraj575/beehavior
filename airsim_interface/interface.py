@@ -87,12 +87,20 @@ def step(client, seconds=.5, cmd=lambda: None, pause_after=True):
     Returns:
 
     """
+    # unpause
     if client.simIsPause():
         client.simPause(False)
+
     cmd()
     client.simContinueForTime(seconds=seconds)
+
+    # repause
     if pause_after:
         client.simPause(True)
+    else:
+        # TODO: why do we have to do this?
+        if client.simIsPause():
+            client.simPause(False)
 
 
 def move_along_pth(client: airsim.MultirotorClient, pth, v=1., vehicle_name=''):

@@ -97,11 +97,16 @@ if __name__ == '__main__':
     else:
         client = None
 
-    old_cmd = get_cmd()
+    old_strout = ''
     while not close:
         cmd = get_cmd()
-        if cmd != old_cmd:
-            print('\033[2K', *zip(['r:', 'p:', 'thrust:'], cmd), end='                  \r')
+
+        strout = ('\033[2K' +
+                  str(tuple(zip(['r:', 'p:', 'thrust:'], cmd))) +
+                  '                  \r')
+        if strout != old_strout:
+            print(strout, end='')
+            old_strout = strout
         if none_step or args.real_time:
             none_step = False
             x, y, thrust = cmd
@@ -117,7 +122,6 @@ if __name__ == '__main__':
                      )
             else:
                 print('\033[2Ksent:', *zip(['thrust:', 'x:', 'y:'], cmd), end='\r')
-        old_cmd = cmd
         if reset:
             print('resetting')
             if game_interface:
@@ -129,6 +133,5 @@ if __name__ == '__main__':
             lr = 0  # whether left key or right key is being held
             bf = 0
             none_step = False
-            old_cmd = get_cmd()
     if game_interface:
         disconnect_client(client=client)
