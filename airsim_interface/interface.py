@@ -98,6 +98,7 @@ def step(client, seconds=.5, cmd=lambda: None, pause_after=True):
     if pause_after:
         client.simPause(True)
 
+
 def move_along_pth(client: airsim.MultirotorClient, pth, v=1., vehicle_name=''):
     """
     Args:
@@ -129,7 +130,7 @@ def get_of_geo_shape(client: airsim.MultirotorClient, camera_name='front'):
     return (depth_image.height, depth_image.width, 2)
 
 
-def of_geo(client: airsim.MultirotorClient, camera_name='front', fov=60):
+def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name='', FOVx=60):
     """
     optic flow array caluclated from geometric data
     assumes STATIC obstacles, can redo this with dynamic obstacles, but it would be much more annoying
@@ -138,15 +139,18 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', fov=60):
     Args:
         client: client
         camera_name: name of camera
-        fov: set to a specific value because client.simGetFieldOfView is wrong
+        vehicle_name: guess
+        FOVx: in DEGREES set to a specific value because client.simGetFieldOfView is wrong
     Returns:
-        optic flow array, shaped
+        optic flow array, shaped (H,W,2)
     """
-    # TODO: read camera settings from client
     depth_image = client.simGetImages([airsim.ImageRequest(camera_name, airsim.ImageType.DepthPerspective, True)])[0]
-    kinematics = client.simGetGroundTruthKinematics()
+    kinematics = client.simGetGroundTruthKinematics(vehicle_name=vehicle_name)
     image_width = depth_image.width
     image_height = depth_image.height
+
+    FOVx = math.radians(FOVx)  # in radians now
+    # FOVy = 2*math.atan((image_height/image_width)*math.tan(FOVx/2))
 
     T = np.array(
         [-kinematics.linear_velocity.y_val, -kinematics.linear_velocity.z_val, kinematics.linear_velocity.x_val])
@@ -156,15 +160,13 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', fov=60):
         [-kinematics.angular_velocity.y_val, -kinematics.angular_velocity.z_val, kinematics.angular_velocity.x_val])
 
     # Convert depth data to a numpy array and reshape it to the image dimensions
-    depth_map = np.array(depth_image.image_data_float, dtype=np.float32).reshape(depth_image.height, depth_image.width)
-
-    # fixed bug from geometric_flow_calc.py that led to focal_length_y = focal_length_x
-    focal_length_x = image_width/(2*math.tan(fov/2))
-    focal_length_y = image_height/(2*math.tan(fov/2))
+    depth_map = np.array(depth_image.image_data_float, dtype=np.float32).reshape(image_height, image_width)
 
     # Assuming these are already defined in your code
-    Fx = focal_length_x  # focal length in pixels (Horizontal = Vertical)
-    Fy = focal_length_y
+    Fx = image_width/(2*math.tan(FOVx/2))  # focal length in pixels (Horizontal = Vertical)
+    # Fy = image_height/(2*math.tan(FOVy/2))
+    Fy = Fx  # Fx and Fx are the same value
+
     Z = depth_map  # Depth map
 
     X_dot, Y_dot, Z_dot = T  # Linear velocities
