@@ -10,6 +10,7 @@ setup(
                       'matplotlib',
                       'opencv-python',
                       'gymnasium',
+                      'stable-baselines3[extra]',
                       # 'airsim', TODO: NEED TO INSTALL THIS AFTER, it needs numpy and msgpack to already be installed
                       ],
     license='Liscence to Krill',

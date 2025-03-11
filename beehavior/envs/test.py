@@ -14,7 +14,7 @@ class Test(gym.Env):
     terminates if d(s,t)<1
     """
 
-    def __init__(self, scale=10):
+    def __init__(self, scale=100):
         super().__init__()
         self.scale = scale
 

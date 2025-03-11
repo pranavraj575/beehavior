@@ -8,6 +8,7 @@ class HiBee(OFBeeseClass):
     input is optic flow information AND the current z position of the agent
     clearly this is simple to learn, so we use this as a test of the RL pipeline with the Unreal Engine
     """
+
     def __init__(self,
                  client=None,
                  dt=.25,
@@ -29,6 +30,8 @@ class HiBee(OFBeeseClass):
                          collision_grace=collision_grace,
                          )
         self.ht_rng = height_range
+        # shoot for average
+        self.ht_tgt = sum(height_range)/2
 
     def get_obs_vector(self):
         """
@@ -45,15 +48,18 @@ class HiBee(OFBeeseClass):
 
     def get_rwd(self, collided, obs):
         """
-        -1 for colliding, .5 for correct height, 0 for incorrect height
+        -1 for colliding, .5 for correct height, (0,.5) for incorrect height
         """
         if collided:
             return -1.
-        ht = obs[0, 0, -1]  # grab one example of the agent's height
-        if ht > self.ht_rng[0] and ht < self.ht_rng[1]:
+        ht = obs[-1, 0, 0]  # grab one example of the agent's height, which is copied across the last channel
+        if ht >= self.ht_rng[0] and ht <= self.ht_rng[1]:
             return .5
         else:
-            return 0.
+            rad = (self.ht_rng[1] - self.ht_rng[0])/2
+            offset = abs(ht - self.ht_tgt) # offset>rad, so offset/rad>1
+            return .5/(offset/rad) # .5/(offset/rad)<.5
+
 
 if __name__ == '__main__':
     import time
@@ -71,7 +77,7 @@ if __name__ == '__main__':
               'pitch:', p,
               'thrust:', t,
               'reward:', rwd,
-              'height:',obs[0,0,-1],
+              'height:', obs[0, 0, -1],
               )
         if term:
             print("CRASHED")

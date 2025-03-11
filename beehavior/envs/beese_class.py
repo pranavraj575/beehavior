@@ -244,27 +244,28 @@ class OFBeeseClass(BeeseClass):
         """
         defines gym observation space, taking optic flow image and appending a vector to each element
         """
-        (H, W, C) = self.get_of_data_shape()
+        (C, H, W) = self.get_of_data_shape()
         shape = self.get_obs_shape()
         arr = np.ones(shape)
         low = -np.inf*arr
-        low[:, :, C:] = 0
+        low[C:, :, :] = 0
         high = np.inf*arr
-        high[:, :, C:] = np.inf
+        high[C:, :, :] = np.inf
+
         return gym.spaces.Box(low=low, high=high, shape=shape, dtype=np.float64)
 
     def get_obs(self):
         of = of_geo(client=self.client, camera_name='front', vehicle_name=self.vehicle_name, FOVx=60)
-        H, W, C = of.shape
-        # (H,W,C) optic flow data
+        C, H, W = of.shape
+        # (C,H,W) optic flow data
 
         vec = self.get_obs_vector()
         # (m,) sized vector, goal conditioning
         obs = np.zeros(self.get_obs_shape())
-        # (H,W,C+m)
+        # (C+m,H,W)
 
-        obs[:, :, :C] = of
-        obs[:, :, C:] = vec
+        obs[:C, :, :] = of
+        obs[C:, :, :] = vec
 
         # places copies of vec at every pixel
         # can technically use gym.spaces.Tuple, and return (of, vec)
@@ -272,7 +273,7 @@ class OFBeeseClass(BeeseClass):
         return obs
 
     def get_obs_shape(self):
-        return (*self.get_of_data_shape()[:-1], self.get_of_data_shape()[-1] + self.get_obs_vector_dim())
+        return (self.get_of_data_shape()[0] + self.get_obs_vector_dim(),*self.get_of_data_shape()[1:])
 
 
 if __name__ == '__main__':

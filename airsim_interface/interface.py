@@ -124,10 +124,10 @@ def get_of_geo_shape(client: airsim.MultirotorClient, camera_name='front'):
         client: client
         camera_name: guess
     Returns:
-        shape tuple, probably (240, 360, 2)
+        shape tuple, probably (2, 240, 320)
     """
     depth_image = client.simGetImages([airsim.ImageRequest(camera_name, airsim.ImageType.DepthPerspective, True)])[0]
-    return (depth_image.height, depth_image.width, 2)
+    return (2,depth_image.height, depth_image.width)
 
 
 def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name='', FOVx=60):
@@ -142,7 +142,7 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name=''
         vehicle_name: guess
         FOVx: in DEGREES set to a specific value because client.simGetFieldOfView is wrong
     Returns:
-        optic flow array, shaped (H,W,2)
+        optic flow array, shaped (2,H,W) for better use in CNNs
     """
     depth_image = client.simGetImages([airsim.ImageRequest(camera_name, airsim.ImageType.DepthPerspective, True)])[0]
     kinematics = client.simGetGroundTruthKinematics(vehicle_name=vehicle_name)
@@ -209,10 +209,9 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name=''
     # Perform matrix multiplications for all pixels
     Qu = np.tensordot(a_row1.T, state_vector, axes=1).T  # Dot product for each pixel
     Qv = np.tensordot(a_row2.T, state_vector, axes=1).T  # Dot product for each pixel
-
     # print(f"Qu shape:{Qu.shape};Qv shape:{Qv.shape}")
     # Multiply by frame_time to scale
-    geometric_flow = np.stack((Qu, Qv), axis=-1)
+    geometric_flow = np.stack((Qu, Qv), axis=0)
 
     # Downsample the geometric flow if needed
     # geometric_flow_ds = geometric_flow[::1, ::1]
