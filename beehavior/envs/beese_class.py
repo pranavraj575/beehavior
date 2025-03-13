@@ -307,7 +307,7 @@ class OFBeeseClass(BeeseClass):
         # (C+m,H,W)
 
         obs[:C, :, :] = of
-        obs[C:, :, :] = vec
+        obs[C:, :, :] = np.expand_dims(vec, axis=(1, 2))  # (m,1,1)
 
         # places copies of vec at every pixel
         # can technically use gym.spaces.Tuple, and return (of, vec)
