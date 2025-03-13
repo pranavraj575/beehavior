@@ -2,6 +2,7 @@ from typing import Tuple, Optional
 import gymnasium as gym
 from gymnasium.core import ActType, ObsType
 import numpy as np
+import math
 
 from airsim_interface.interface import connect_client, disconnect_client, step, of_geo, get_of_geo_shape
 
@@ -24,6 +25,7 @@ class BeeseClass(gym.Env):
                  of_camera='front',
                  real_time=False,
                  collision_grace=1,
+                 initial_position=None,
                  ):
         """
         Args:
@@ -34,6 +36,7 @@ class BeeseClass(gym.Env):
             vehicle_name: name of vehicle
             real_time: if true, does not pause simulation after each step
             collision_grace: number of timesteps to forgive collisions after reset
+            initial_position: initial position to go to after reset
         """
         super().__init__()
         if client is None:
@@ -46,6 +49,7 @@ class BeeseClass(gym.Env):
         self.max_tilt = max_tilt
         self.real_time = real_time
         self.collision_grace = collision_grace
+        self.initial_pos = initial_position
 
         self.action_space = gym.spaces.Box(low=np.array([-1, -1, 0]), high=1, shape=(3,), dtype=np.float64)
         self.observation_space = self.define_observation_space()
@@ -106,6 +110,14 @@ class BeeseClass(gym.Env):
         self.client = connect_client(client=self.client)
         self.update_recent_colision()
         self.col_cnt = self.collision_grace
+        if self.initial_pos is not None:
+            x, y, z = self.initial_pos
+            step(self.client,
+                 seconds=None,
+                 cmd=lambda: self.client.moveToPositionAsync(x, y, z, 1, ).join(),
+                 pause_after=not self.real_time,
+                 )
+
         # obs, info
         return self.get_obs(), {}
 
@@ -155,6 +167,34 @@ class BeeseClass(gym.Env):
         gets pose of agent in environment, pose object has a .position and .orientation
         """
         return self.client.simGetVehiclePose(vehicle_name=self.vehicle_name)
+
+    def get_orientation_eulerian(self, quaternion=None):
+        """
+        returns roll,pitch,yaw
+        Args:
+            quaternion: if specified (x,y,z,w) uses this
+                else, uses self.get_pose()
+        """
+        if quaternion is None:
+            o = self.get_pose().orientation
+            quaternion = (o.x_val, o.y_val, o.z_val, o.w_val)
+        x, y, z, w = quaternion
+
+        # convert to rpy
+        t0 = +2.0*(w*x + y*z)
+        t1 = +1.0 - 2.0*(x*x + y*y)
+        rl = math.atan2(t0, t1)
+
+        t2 = +2.0*(w*y - z*x)
+        t2 = +1.0 if t2 > +1.0 else t2
+        t2 = -1.0 if t2 < -1.0 else t2
+        ptch = math.asin(t2)
+
+        t3 = +2.0*(w*z + x*y)
+        t4 = +1.0 - 2.0*(y*y + z*z)
+        yw = math.atan2(t3, t4)
+
+        return rl, ptch, yw
 
     def get_of_data(self):
         """
@@ -230,6 +270,7 @@ class OFBeeseClass(BeeseClass):
                  vehicle_name='',
                  real_time=False,
                  collision_grace=1,
+                 initial_position=None,
                  ):
         super().__init__(
             client=client,
@@ -238,6 +279,7 @@ class OFBeeseClass(BeeseClass):
             vehicle_name=vehicle_name,
             real_time=real_time,
             collision_grace=collision_grace,
+            initial_position=initial_position,
         )
 
     def define_observation_space(self):
@@ -273,7 +315,7 @@ class OFBeeseClass(BeeseClass):
         return obs
 
     def get_obs_shape(self):
-        return (self.get_of_data_shape()[0] + self.get_obs_vector_dim(),*self.get_of_data_shape()[1:])
+        return (self.get_of_data_shape()[0] + self.get_obs_vector_dim(), *self.get_of_data_shape()[1:])
 
 
 if __name__ == '__main__':

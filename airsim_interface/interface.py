@@ -84,6 +84,8 @@ def step(client, seconds=.5, cmd=lambda: None, pause_after=True):
     steps a simulation
     Args:
         seconds: number of seconds to continue for
+            if None, runs cmd and pauses after
+                in this case, cmd should probably be a .join()
         cmd: ASYNCRHONOUS command to run for frames
             if cmd is not asyncronous, it will run fully on a paused simulation
     Returns:
@@ -93,7 +95,8 @@ def step(client, seconds=.5, cmd=lambda: None, pause_after=True):
     if client.simIsPause():
         client.simPause(False)
     cmd()
-    client.simContinueForTime(seconds=seconds)
+    if seconds is not None:
+        client.simContinueForTime(seconds=seconds)
     # repause
     if pause_after:
         client.simPause(True)
@@ -127,7 +130,7 @@ def get_of_geo_shape(client: airsim.MultirotorClient, camera_name='front'):
         shape tuple, probably (2, 240, 320)
     """
     depth_image = client.simGetImages([airsim.ImageRequest(camera_name, airsim.ImageType.DepthPerspective, True)])[0]
-    return (2,depth_image.height, depth_image.width)
+    return (2, depth_image.height, depth_image.width)
 
 
 def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name='', FOVx=60):
@@ -144,10 +147,22 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name=''
     Returns:
         optic flow array, shaped (2,H,W) for better use in CNNs
     """
-    depth_image = client.simGetImages([airsim.ImageRequest(camera_name, airsim.ImageType.DepthPerspective, True)])[0]
-    kinematics = client.simGetGroundTruthKinematics(vehicle_name=vehicle_name)
+    depth_image = client.simGetImages([
+        airsim.ImageRequest(camera_name,
+                            airsim.ImageType.DepthPerspective, True)
+    ])[0]
     image_width = depth_image.width
     image_height = depth_image.height
+    while image_height*image_width == (0, 0):
+        print('IMG CAPTURE FAILED SOMEHOW? trying to capture image again')
+        depth_image = client.simGetImages([
+            airsim.ImageRequest(camera_name,
+                                airsim.ImageType.DepthPerspective, True)
+        ])[0]
+
+        image_width = depth_image.width
+        image_height = depth_image.height
+    kinematics = client.simGetGroundTruthKinematics(vehicle_name=vehicle_name)
 
     FOVx = math.radians(FOVx)  # in radians now
     # FOVy = 2*math.atan((image_height/image_width)*math.tan(FOVx/2))

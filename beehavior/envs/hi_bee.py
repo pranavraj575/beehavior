@@ -5,7 +5,7 @@ from beehavior.envs.beese_class import OFBeeseClass
 class HiBee(OFBeeseClass):
     """
     simple enviornment that gives the agent reward for holding a certian height
-    input is optic flow information AND the current z position of the agent
+    input is optic flow information AND the current pose of the agent
     clearly this is simple to learn, so we use this as a test of the RL pipeline with the Unreal Engine
     """
 
@@ -17,6 +17,7 @@ class HiBee(OFBeeseClass):
                  real_time=False,
                  collision_grace=1,
                  height_range=(2, 3),
+                 initial_position=(0., 0., -1.),
                  ):
         """
         Args:
@@ -28,6 +29,7 @@ class HiBee(OFBeeseClass):
                          vehicle_name=vehicle_name,
                          real_time=real_time,
                          collision_grace=collision_grace,
+                         initial_position=initial_position,
                          )
         self.ht_rng = height_range
         # shoot for average
@@ -38,13 +40,23 @@ class HiBee(OFBeeseClass):
         get height, a single real number
         """
         pose = self.get_pose()
-        return np.array([-pose.position.z_val])
+        r, p, y = self.get_orientation_eulerian(quaternion=(pose.orientation.x_val,
+                                                            pose.orientation.y_val,
+                                                            pose.orientation.z_val,
+                                                            pose.orientation.w_val,
+                                                            ))
+        return np.array([
+            r,
+            p,
+            y,
+            -pose.position.z_val,
+        ])
 
     def get_obs_vector_dim(self):
         """
-        shape of obs vector is (1,)
+        shape of obs vector is (4,)
         """
-        return 1
+        return 4
 
     def get_rwd(self, collided, obs):
         """
@@ -57,8 +69,8 @@ class HiBee(OFBeeseClass):
             return .5
         else:
             rad = (self.ht_rng[1] - self.ht_rng[0])/2
-            offset = abs(ht - self.ht_tgt) # offset>rad, so offset/rad>1
-            return .5/(offset/rad) # .5/(offset/rad)<.5
+            offset = abs(ht - self.ht_tgt)  # offset>rad, so offset/rad>1
+            return .5/(offset/rad)  # .5/(offset/rad)<.5
 
 
 if __name__ == '__main__':
