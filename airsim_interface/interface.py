@@ -153,7 +153,6 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name=''
     ])[0]
     image_width = depth_image.width
     image_height = depth_image.height
-    print(image_width,image_height)
     while image_height*image_width == 0:
         print('IMG CAPTURE FAILED SOMEHOW? trying to capture image again')
         depth_image = client.simGetImages([
