@@ -51,9 +51,23 @@ if __name__ == '__main__':
     model = A2C('CnnPolicy', env, verbose=1, policy_kwargs=policy_kwargs)
     model.learn(total_timesteps=10000)
     obs, _ = env.reset()
+    rwds=[]
     done = False
     while not done:
-        action, _ = model.predict(observation=obs)
-        print('TARGET DIRECTION:', obs, '; ACTION:', action)
+        action, _ = model.predict(observation=obs,deterministic=True)
+        obs, rwd, done, term, info = env.step(action)
+        rwds.append(rwd)
+    print('DETERMINISTIC')
+    print('ep length:',len(rwds))
+    print('rwd mean:',sum(rwds)/len(rwds))
+    obs, _ = env.reset()
+    rwds=[]
+    done = False
+    while not done:
+        action, _ = model.predict(observation=obs,deterministic=False)
         obs, rwd, done, term, info = env.step(action)
 
+        rwds.append(rwd)
+    print('STOCHASTIC')
+    print('ep length:',len(rwds))
+    print('rwd mean:',sum(rwds)/len(rwds))
