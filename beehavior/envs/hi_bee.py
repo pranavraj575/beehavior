@@ -17,7 +17,8 @@ class HiBee(OFBeeseClass):
                  real_time=False,
                  collision_grace=1,
                  height_range=(2, 3),
-                 initial_position=(0., 0., -1.),
+                 initial_position=((-1.,0.), (-1.,1.), (-.5,-2.)),
+                 timeout=30,
                  ):
         """
         Args:
@@ -30,6 +31,7 @@ class HiBee(OFBeeseClass):
                          real_time=real_time,
                          collision_grace=collision_grace,
                          initial_position=initial_position,
+                         timeout=timeout,
                          )
         self.ht_rng = height_range
         # shoot for average
@@ -40,6 +42,7 @@ class HiBee(OFBeeseClass):
         get height, a single real number
         """
         pose = self.get_pose()
+        ht = -pose.position.z_val
         r, p, y = self.get_orientation_eulerian(quaternion=(pose.orientation.x_val,
                                                             pose.orientation.y_val,
                                                             pose.orientation.z_val,
@@ -49,7 +52,7 @@ class HiBee(OFBeeseClass):
             r,
             p,
             y,
-            -pose.position.z_val,
+            ht,
         ])
 
     def get_obs_vector_dim(self):

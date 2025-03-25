@@ -26,6 +26,7 @@ class BeeseClass(gym.Env):
                  real_time=False,
                  collision_grace=1,
                  initial_position=None,
+                 timeout=300,
                  ):
         """
         Args:
@@ -37,6 +38,7 @@ class BeeseClass(gym.Env):
             real_time: if true, does not pause simulation after each step
             collision_grace: number of timesteps to forgive collisions after reset
             initial_position: initial position to go to after reset
+            timeout: seconds until env timeout
         """
         super().__init__()
         if client is None:
@@ -50,8 +52,14 @@ class BeeseClass(gym.Env):
         self.real_time = real_time
         self.collision_grace = collision_grace
         self.initial_pos = initial_position
+        self.timeout = timeout
+        self.env_time = 0  # count environment time in intervals of dt
 
-        self.action_space = gym.spaces.Box(low=np.array([-1, -1, 0]), high=1, shape=(3,), dtype=np.float64)
+        self.action_space = gym.spaces.Box(low=np.array([-self.max_tilt, -self.max_tilt, 0]),
+                                           high=np.array([self.max_tilt, self.max_tilt, 1]),
+                                           shape=(3,),
+                                           dtype=np.float64,
+                                           )
         self.observation_space = self.define_observation_space()
 
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, bool, dict]:
@@ -81,6 +89,7 @@ class BeeseClass(gym.Env):
             self.update_recent_colision()
 
         collided = self.has_collided()
+        self.env_time += self.dt  # TODO: maybe query client or something? this is prob sufficient
         obs = self.get_obs()
 
         r = self.get_rwd(collided=collided, obs=obs)
@@ -110,8 +119,17 @@ class BeeseClass(gym.Env):
         self.client = connect_client(client=self.client)
         self.update_recent_colision()
         self.col_cnt = self.collision_grace
+        self.env_time = 0
         if self.initial_pos is not None:
-            x, y, z = self.initial_pos
+            if type(self.initial_pos) == set or type(self.initial_pos) == list:
+                initial_pos = np.random.choice(list(self.initial_pos))
+            else:
+                initial_pos = self.initial_pos
+
+            initial_pos = [d[0] + np.random.rand()*(d[1] - d[0]) if type(d) == tuple else d
+                           for d in initial_pos
+                           ]
+            x, y, z = initial_pos
             step(self.client,
                  seconds=None,
                  cmd=lambda: self.client.moveToPositionAsync(x, y, z, 1, ).join(),
@@ -156,7 +174,8 @@ class BeeseClass(gym.Env):
         Returns:
             terminate episode, truncate episode
         """
-        return collided, False
+        termination = collided or self.env_time > self.timeout
+        return termination, False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # OBSERVATION STUFF
@@ -271,6 +290,7 @@ class OFBeeseClass(BeeseClass):
                  real_time=False,
                  collision_grace=1,
                  initial_position=None,
+                 timeout=300,
                  ):
         super().__init__(
             client=client,
@@ -280,6 +300,7 @@ class OFBeeseClass(BeeseClass):
             real_time=real_time,
             collision_grace=collision_grace,
             initial_position=initial_position,
+            timeout=timeout,
         )
 
     def define_observation_space(self):
@@ -290,7 +311,7 @@ class OFBeeseClass(BeeseClass):
         shape = self.get_obs_shape()
         arr = np.ones(shape)
         low = -np.inf*arr
-        low[C:, :, :] = 0
+        low[C:, :, :] = -np.inf
         high = np.inf*arr
         high[C:, :, :] = np.inf
 

@@ -22,6 +22,8 @@ class CustomCNN(BaseFeaturesExtractor):
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
             nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
             nn.Flatten(),
         )
 
@@ -31,7 +33,10 @@ class CustomCNN(BaseFeaturesExtractor):
                 torch.as_tensor(observation_space.sample()[None]).float()
             ).shape[1]
 
-        self.linear = nn.Sequential(nn.Linear(n_flatten, features_dim), nn.ReLU())
+        self.linear = nn.Sequential(
+            nn.Linear(n_flatten, features_dim),
+            nn.ReLU(),
+        )
 
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         return self.linear(self.cnn(observations))
@@ -39,35 +44,29 @@ class CustomCNN(BaseFeaturesExtractor):
 
 if __name__ == '__main__':
     import beehavior
-    from stable_baselines3 import A2C
+    from stable_baselines3 import PPO as MODEL
 
-    env = gym.make('HiBee-v0',dt=.1,)
+    env = gym.make('HiBee-v0', dt=.1, )
 
     policy_kwargs = dict(
         features_extractor_class=CustomCNN,
         features_extractor_kwargs=dict(features_dim=128),
     )
 
-    model = A2C('CnnPolicy', env, verbose=1, policy_kwargs=policy_kwargs)
+    model = MODEL('CnnPolicy', env, verbose=1, policy_kwargs=policy_kwargs,
+                  # buffer_size=1000,  # for replay buffer methods
+                  n_steps=128,
+                  )
     model.learn(total_timesteps=10000)
-    obs, _ = env.reset()
-    rwds=[]
-    done = False
-    while not done:
-        action, _ = model.predict(observation=obs,deterministic=True)
-        obs, rwd, done, term, info = env.step(action)
-        rwds.append(rwd)
-    print('DETERMINISTIC')
-    print('ep length:',len(rwds))
-    print('rwd mean:',sum(rwds)/len(rwds))
-    obs, _ = env.reset()
-    rwds=[]
-    done = False
-    while not done:
-        action, _ = model.predict(observation=obs,deterministic=False)
-        obs, rwd, done, term, info = env.step(action)
-
-        rwds.append(rwd)
-    print('STOCHASTIC')
-    print('ep length:',len(rwds))
-    print('rwd mean:',sum(rwds)/len(rwds))
+    while True:
+        for determininstic in [True, False]:
+            obs, _ = env.reset()
+            rwds = []
+            done = False
+            while not done:
+                action, _ = model.predict(observation=obs, deterministic=determininstic)
+                obs, rwd, done, term, info = env.step(action)
+                rwds.append(rwd)
+            print('DETERMINISTIC' if determininstic else 'STOCHASTIC')
+            print('ep length:', len(rwds))
+            print('rwd mean:', sum(rwds)/len(rwds))
