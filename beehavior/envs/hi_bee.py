@@ -17,7 +17,7 @@ class HiBee(OFBeeseClass):
                  real_time=False,
                  collision_grace=1,
                  height_range=(2, 3),
-                 initial_position=((-1.,0.), (-1.,1.), (-.5,-2.)),
+                 initial_position=((-1.,0.), (-1.,1.), (-1.,-1.5)),
                  timeout=30,
                  ):
         """

@@ -130,6 +130,12 @@ class BeeseClass(gym.Env):
                            for d in initial_pos
                            ]
             x, y, z = initial_pos
+
+            step(self.client,
+                 seconds=None,
+                 cmd=lambda: self.client.moveToZAsync(z, 1, ).join(),
+                 pause_after=not self.real_time,
+                 )
             step(self.client,
                  seconds=None,
                  cmd=lambda: self.client.moveToPositionAsync(x, y, z, 1, ).join(),
