@@ -6,7 +6,7 @@ running this file will run airsim
 import time
 
 import numpy as np
-import airsim, subprocess, math
+import airsim, subprocess, math, sys
 
 from airsim_interface.load_settings import get_settings, Keychain
 
@@ -54,6 +54,35 @@ def start_game_engine(project=None, open_gui=True, start_paused=True, join=False
     return thing
 
 
+def cconfirmConnection(client, debug=False):
+    """
+    client.confirmConnection without annoying print statements
+    """
+    if client.ping():
+        if debug: print("Connected!")
+    else:
+        if debug: print("Ping returned false!")
+        return False
+    server_ver = client.getServerVersion()
+    client_ver = client.getClientVersion()
+    server_min_ver = client.getMinRequiredServerVersion()
+    client_min_ver = client.getMinRequiredClientVersion()
+
+    ver_info = "Client Ver:" + str(client_ver) + " (Min Req: " + str(client_min_ver) + \
+               "), Server Ver:" + str(server_ver) + " (Min Req: " + str(server_min_ver) + ")"
+
+    if server_ver < server_min_ver:
+        print(ver_info, file=sys.stderr)
+        if debug: print("AirSim server is of older version and not supported by this client. Please upgrade!")
+    elif client_ver < client_min_ver:
+        print(ver_info, file=sys.stderr)
+        if debug: print("AirSim client is of older version and not supported by this server. Please upgrade!")
+    else:
+        if debug: print(ver_info)
+    if debug: print('')
+    return True
+
+
 def connect_client(client=None, vehicle_name=''):
     """
     connects a multirotor client to a particular vehicle, enables api ctrl, and arms it
@@ -61,7 +90,8 @@ def connect_client(client=None, vehicle_name=''):
     if client is None:
         client = airsim.MultirotorClient()  # we are using the multirotor client
     try:
-        client.confirmConnection()
+        if not cconfirmConnection(client=client, debug=False):
+            return None
     except:
         # failed connection
         return None
