@@ -150,6 +150,34 @@ def move_along_pth(client: airsim.MultirotorClient, pth, v=1., vehicle_name=''):
         client.moveToPositionAsync(x=x, y=y, z=z, velocity=v, vehicle_name=vehicle_name).join()
 
 
+def get_depth_img(client: airsim.MultirotorClient, camera_name='front'):
+    """
+    obtains depth image
+        sometimes there is a bug where width and height are zero, queries until this is not the case
+    Args:
+        client: client
+        camera_name: camera name
+    Returns:
+        output of client.simGetImages
+    """
+    # airsim.ImageType.OpticalFlow
+    img_type = airsim.ImageType.DepthPerspective
+    depth_image = client.simGetImages([
+        airsim.ImageRequest(camera_name,
+                            img_type,
+                            True,
+                            )
+    ])[0]
+    while depth_image.height*depth_image.width == 0:
+        print('IMG CAPTURE FAILED SOMEHOW? trying to capture image again')
+        depth_image = client.simGetImages([
+            airsim.ImageRequest(camera_name,
+                                airsim.ImageType.DepthPerspective, True)
+        ])[0]
+
+    return depth_image
+
+
 def get_of_geo_shape(client: airsim.MultirotorClient, camera_name='front'):
     """
     obtains the shape of the image from of_geo
@@ -159,7 +187,7 @@ def get_of_geo_shape(client: airsim.MultirotorClient, camera_name='front'):
     Returns:
         shape tuple, probably (2, 240, 320)
     """
-    depth_image = client.simGetImages([airsim.ImageRequest(camera_name, airsim.ImageType.DepthPerspective, True)])[0]
+    depth_image = get_depth_img(client=client, camera_name=camera_name)
     return (2, depth_image.height, depth_image.width)
 
 
@@ -177,21 +205,10 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name=''
     Returns:
         optic flow array, shaped (2,H,W) for better use in CNNs
     """
-    depth_image = client.simGetImages([
-        airsim.ImageRequest(camera_name,
-                            airsim.ImageType.DepthPerspective, True)
-    ])[0]
+    depth_image = get_depth_img(client=client, camera_name=camera_name)
     image_width = depth_image.width
     image_height = depth_image.height
-    while image_height*image_width == 0:
-        print('IMG CAPTURE FAILED SOMEHOW? trying to capture image again')
-        depth_image = client.simGetImages([
-            airsim.ImageRequest(camera_name,
-                                airsim.ImageType.DepthPerspective, True)
-        ])[0]
 
-        image_width = depth_image.width
-        image_height = depth_image.height
     kinematics = client.simGetGroundTruthKinematics(vehicle_name=vehicle_name)
 
     FOVx = math.radians(FOVx)  # in radians now

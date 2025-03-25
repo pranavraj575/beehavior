@@ -57,16 +57,14 @@ if __name__ == '__main__':
                   # buffer_size=1000,  # for replay buffer methods
                   n_steps=128,
                   )
-    model.learn(total_timesteps=10000)
-    while True:
-        for determininstic in [True, False]:
-            obs, _ = env.reset()
-            rwds = []
-            done = False
-            while not done:
-                action, _ = model.predict(observation=obs, deterministic=determininstic)
-                obs, rwd, done, term, info = env.step(action)
-                rwds.append(rwd)
-            print('DETERMINISTIC' if determininstic else 'STOCHASTIC')
-            print('ep length:', len(rwds))
-            print('rwd mean:', sum(rwds)/len(rwds))
+    model.learn(total_timesteps=20000)
+    for _ in range(100):
+        obs, _ = env.reset()
+        rwds = []
+        done = False
+        while not done:
+            action, _ = model.predict(observation=obs, deterministic=False)
+            obs, rwd, done, term, info = env.step(action)
+            rwds.append(rwd)
+        print('ep length:', len(rwds))
+        print('rwd mean:', sum(rwds)/len(rwds))

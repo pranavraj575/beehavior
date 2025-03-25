@@ -298,6 +298,7 @@ class OFBeeseClass(BeeseClass):
                  initial_position=None,
                  timeout=300,
                  ):
+        self.obs_shape = None
         super().__init__(
             client=client,
             dt=dt,
@@ -342,7 +343,10 @@ class OFBeeseClass(BeeseClass):
         return obs
 
     def get_obs_shape(self):
-        return (self.get_of_data_shape()[0] + self.get_obs_vector_dim(), *self.get_of_data_shape()[1:])
+        if self.obs_shape is None:
+            of_shape = self.get_of_data_shape()
+            self.obs_shape = (of_shape[0] + self.get_obs_vector_dim(), *of_shape[1:])
+        return self.obs_shape
 
 
 if __name__ == '__main__':
