@@ -1,4 +1,8 @@
+from typing import Optional, Tuple
+
 import numpy as np
+from gymnasium.core import ObsType
+
 from beehavior.envs.beese_class import OFBeeseClass
 
 
@@ -34,6 +38,7 @@ class ForwardBee(OFBeeseClass):
                          )
         self.bounds = bounds
         self.goal_x = goal_x
+        self.farthest_reached = None
 
     def get_obs_vector(self):
         """
@@ -89,8 +94,25 @@ class ForwardBee(OFBeeseClass):
         if pose.position.x_val > self.goal_x:
             return 10.
         else:
-            dist = abs(pose.position.x_val - self.goal_x)
-            return min(1., 1/dist)
+            if pose.position.x_val > self.farthest_reached:
+                val = pose.position.x_val - self.farthest_reached
+            else:
+                val = 0
+            self.farthest_reached = max(
+                self.farthest_reached,
+                pose.position.x_val,
+            )
+            return val
+
+    def reset(
+            self,
+            *,
+            seed: Optional[int] = None,
+            options: Optional[dict] = None,
+    ) -> Tuple[ObsType, dict]:
+        stuff = super().reset(seed=seed, options=options, )
+        self.farthest_reached = self.client.simGetVehiclePose(vehicle_name=self.vehicle_name).position.x_val
+        return stuff
 
 
 if __name__ == '__main__':
