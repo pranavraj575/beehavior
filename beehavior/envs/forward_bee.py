@@ -2,11 +2,9 @@ import numpy as np
 from beehavior.envs.beese_class import OFBeeseClass
 
 
-class HiBee(OFBeeseClass):
+class ForwardBee(OFBeeseClass):
     """
-    simple enviornment that gives the agent reward for holding a certian height
-    input is optic flow information AND the current pose of the agent
-    clearly this is simple to learn, so we use this as a test of the RL pipeline with the Unreal Engine
+    reward for moving forward (x direction) through obstacles
     """
 
     def __init__(self,
@@ -16,9 +14,10 @@ class HiBee(OFBeeseClass):
                  vehicle_name='',
                  real_time=False,
                  collision_grace=1,
-                 height_range=(2, 3),
                  initial_position=((-1., 0.), (-1., 1.), (-1., -1.5)),
                  timeout=30,
+                 bounds=((-5., 27), (-2.5, 2.5), (-5., 0.)),
+                 goal_x=24.,
                  ):
         """
         Args:
@@ -33,9 +32,8 @@ class HiBee(OFBeeseClass):
                          initial_position=initial_position,
                          timeout=timeout,
                          )
-        self.ht_rng = height_range
-        # shoot for average
-        self.ht_tgt = sum(height_range)/2
+        self.bounds = bounds
+        self.goal_x = goal_x
 
     def get_obs_vector(self):
         """
@@ -48,12 +46,12 @@ class HiBee(OFBeeseClass):
                                                             pose.orientation.z_val,
                                                             pose.orientation.w_val,
                                                             ))
-        print(pose.position)
+
         return np.array([
             r,
             p,
             y,
-            ht,
+            ht
         ])
 
     def get_obs_vector_dim(self):
@@ -62,25 +60,43 @@ class HiBee(OFBeeseClass):
         """
         return 4
 
+    def get_termination(self, collided):
+        """
+        terminate if out of bounds or in goal region
+        """
+        term, trunc = super().get_termination(collided=collided)
+        if term:
+            return term, trunc
+        pose = self.client.simGetVehiclePose(vehicle_name=self.vehicle_name)
+        for val, (low, high) in zip(
+                (pose.position.x_val, pose.position.y_val, pose.position.z_val),
+                self.bounds,
+        ):
+            if val < low or val > high:
+                term = True
+        if pose.position.x_val > self.goal_x:
+            term = True
+        return term, trunc
+
     def get_rwd(self, collided, obs):
         """
         -1 for colliding, .5 for correct height, (0,.5) for incorrect height
         """
         if collided:
             return -1.
-        ht = obs[-1, 0, 0]  # grab one example of the agent's height, which is copied across the last channel
-        if ht >= self.ht_rng[0] and ht <= self.ht_rng[1]:
-            return .5
+        pose = self.client.simGetVehiclePose(vehicle_name=self.vehicle_name)
+
+        if pose.position.x_val > self.goal_x:
+            return 10.
         else:
-            rad = (self.ht_rng[1] - self.ht_rng[0])/2
-            offset = abs(ht - self.ht_tgt)  # offset>rad, so offset/rad>1
-            return .5/(offset/rad)  # .5/(offset/rad)<.5
+            dist = abs(pose.position.x_val - self.goal_x)
+            return min(1., 1/dist)
 
 
 if __name__ == '__main__':
     import time
 
-    env = HiBee(dt=.2)
+    env = ForwardBee(dt=.2)
     env.reset()
     env.step(action=np.array([0., 0., 1.]))
     for _ in range(0, int(.5/env.dt), 1):

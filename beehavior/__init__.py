@@ -17,3 +17,9 @@ gym.envs.register(
     entry_point='beehavior.envs.hi_bee:HiBee',
     max_episode_steps=10000,
 )
+
+gym.envs.register(
+    id='ForwardBee-v0',
+    entry_point='beehavior.envs.forward_bee:ForwardBee',
+    max_episode_steps=10000,
+)

@@ -22,7 +22,7 @@ if __name__ == '__main__':
     )
 
     PARSER.add_argument("--env", action='store', required=False, default='Beese-v0',
-                        choices=('Beese-v0', 'HiBee-v0'),
+                        choices=('Beese-v0', 'HiBee-v0','ForwardBee-v0'),
                         help="RL gym class to run")
     PARSER.add_argument("--dt", type=float, required=False, default=.25,
                         help="time in between commands sent to simulation")
