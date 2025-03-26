@@ -48,7 +48,7 @@ if __name__ == '__main__':
                   n_steps=256,
                   )
     model.learn(total_timesteps=args.timesteps)
-    for _ in range(100):
+    while True:
         obs, _ = env.reset()
         rwds = []
         done = False

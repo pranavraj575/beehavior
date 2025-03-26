@@ -65,6 +65,16 @@ class ForwardBee(OFBeeseClass):
         """
         return 4
 
+    def out_of_bounds(self, pose):
+
+        for val, (low, high) in zip(
+                (pose.position.x_val, pose.position.y_val, pose.position.z_val),
+                self.bounds,
+        ):
+            if val < low or val > high:
+                return True
+        return False
+
     def get_termination(self, collided):
         """
         terminate if out of bounds or in goal region
@@ -73,12 +83,7 @@ class ForwardBee(OFBeeseClass):
         if term:
             return term, trunc
         pose = self.client.simGetVehiclePose(vehicle_name=self.vehicle_name)
-        for val, (low, high) in zip(
-                (pose.position.x_val, pose.position.y_val, pose.position.z_val),
-                self.bounds,
-        ):
-            if val < low or val > high:
-                term = True
+        term = self.out_of_bounds(pose=pose)
         if pose.position.x_val > self.goal_x:
             term = True
         return term, trunc
@@ -91,18 +96,20 @@ class ForwardBee(OFBeeseClass):
             return -1.
         pose = self.client.simGetVehiclePose(vehicle_name=self.vehicle_name)
 
+        if self.out_of_bounds(pose=pose):
+            return -.5
         if pose.position.x_val > self.goal_x:
             return 10.
+
+        if pose.position.x_val > self.farthest_reached:
+            val = pose.position.x_val - self.farthest_reached
         else:
-            if pose.position.x_val > self.farthest_reached:
-                val = pose.position.x_val - self.farthest_reached
-            else:
-                val = 0
-            self.farthest_reached = max(
-                self.farthest_reached,
-                pose.position.x_val,
-            )
-            return val
+            val = 0
+        self.farthest_reached = max(
+            self.farthest_reached,
+            pose.position.x_val,
+        )
+        return val
 
     def reset(
             self,

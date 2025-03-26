@@ -325,7 +325,7 @@ class OFBeeseClass(BeeseClass):
         return gym.spaces.Box(low=low, high=high, shape=shape, dtype=np.float64)
 
     def get_obs(self):
-        of = of_geo(client=self.client, camera_name='front', vehicle_name=self.vehicle_name,)
+        of = of_geo(client=self.client, camera_name='front', vehicle_name=self.vehicle_name, )
         C, H, W = of.shape
         # (C,H,W) optic flow data
 
