@@ -48,7 +48,6 @@ class HiBee(OFBeeseClass):
                                                             pose.orientation.z_val,
                                                             pose.orientation.w_val,
                                                             ))
-        print(pose.position)
         return np.array([
             r,
             p,

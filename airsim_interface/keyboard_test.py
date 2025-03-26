@@ -10,6 +10,7 @@ in another terminal, run `python3 airsim_interface/keyboard_test.py`
   * r to reset simulation
   * Q (shift + q) to stop python script
 """
+import airsim
 
 if __name__ == '__main__':
     from threading import Thread
@@ -43,17 +44,18 @@ if __name__ == '__main__':
     game_interface = not args.without_game_interface
 
     if game_interface:
-        from airsim_interface.interface import step, connect_client, disconnect_client
+        from airsim_interface.interface import step, connect_client, disconnect_client, get_depth_img
 
     discrete = list('1234567890')[:args.thrust_n]
 
-    thrust = 0
+    thrust = .6
     lr = 0  # whether left key or right key is being held
     bf = 0
     none_step = False
 
     reset = False
     close = False
+    img = False
 
 
     def get_cmd():
@@ -63,7 +65,7 @@ if __name__ == '__main__':
 
 
     def record():
-        global bf, lr, thrust, none_step, reset, close
+        global bf, lr, thrust, none_step, reset, close, img
         with Input(keynames='curses') as input_generator:
             for e in input_generator:
                 k = repr(e).replace("'", '')
@@ -84,6 +86,8 @@ if __name__ == '__main__':
                     thrust = discrete.index(k)/(args.thrust_n - 1)
                 if k == 'r':
                     reset = True
+                if k == 'i':
+                    img = True
                 if k == 'Q':
                     close = True
                     return
@@ -129,9 +133,22 @@ if __name__ == '__main__':
                 connect_client(client=client)
             reset = False
 
-            thrust = 0
+            thrust = .6
             lr = 0  # whether left key or right key is being held
             bf = 0
             none_step = False
+        if img and game_interface:
+
+            response = client.simGetImages([airsim.ImageRequest('front', airsim.ImageType.Scene, False, False)])
+            img_data = response[0].image_data_uint8
+            if img_data:
+                image = np.frombuffer(img_data, dtype=np.uint8).reshape(response[0].height, response[0].width, 3)
+                # image = cv2.resize(image, (320, 240))  #(1080, 720) : Resize to 320x240 for performance
+                from matplotlib import pyplot as plt
+
+                plt.imshow(image, interpolation='nearest')
+                plt.show()
+            quit()
+            img=False
     if game_interface:
         disconnect_client(client=client)

@@ -191,7 +191,7 @@ def get_of_geo_shape(client: airsim.MultirotorClient, camera_name='front'):
     return (2, depth_image.height, depth_image.width)
 
 
-def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name='', FOVx=60):
+def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name='', FOVx=120):
     """
     optic flow array caluclated from geometric data
     assumes STATIC obstacles, can redo this with dynamic obstacles, but it would be much more annoying
@@ -202,6 +202,7 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name=''
         camera_name: name of camera
         vehicle_name: guess
         FOVx: in DEGREES set to a specific value because client.simGetFieldOfView is wrong
+            value in /Documents/Airsim/settings.json
     Returns:
         optic flow array, shaped (2,H,W) for better use in CNNs
     """

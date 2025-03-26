@@ -301,7 +301,7 @@ output_csv = 'average_optical_flow.csv'
 all_avg_flow_x = []
 all_avg_cal_flow_x = []
 start_time = time.time()
-client.moveByVelocityAsync(1, 0, 0, 10)  
+client.moveByVelocityAsync(0, 0, 0, 10)
 # yaw_rate_deg_per_sec = 1* (180 / 3.141592653589793)  # Convert 2 rad/s to degrees/s
 # client.rotateByYawRateAsync(yaw_rate_deg_per_sec, 10)
    
@@ -310,16 +310,16 @@ client.moveByVelocityAsync(1, 0, 0, 10)
 while time.time() - start_time < 5:
     frame_start = time.time()
 # Capture two consecutive images for optical flow calculation
-    curr_img =  capture_image(client, "bottom")
+    curr_img =  capture_image(client, "front")
 
     if frame_count >= 1:
         # flow = calculate_optic_flow(prev_img, curr_img)
         # avg_flow = calculate_average_flow(flow)
-        flow = OF_cal(prev_img, curr_img)
-        # if frame_count % 10 == 0:
-        #     visualized_image = visualize_optic_flow(curr_img.copy(), flow) #visualize_optic_flow(curr_images[camera_name].copy(), flow)
-        #     cv2.imshow("Optic Flow Visualization", visualized_image)
-        #     cv2.waitKey(1)
+        # flow = OF_cal(prev_img, curr_img)
+        if frame_count % 10 == 0:
+            #visualized_image = visualize_optic_flow(curr_img.copy(), flow) #visualize_optic_flow(curr_images[camera_name].copy(), flow)
+            cv2.imshow("Optic Flow Visualization", curr_img)
+            cv2.waitKey(1)
     
 
     

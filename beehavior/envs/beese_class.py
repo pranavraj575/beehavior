@@ -225,7 +225,7 @@ class BeeseClass(gym.Env):
         """
         gets np array of optic flow from last completed step()
         """
-        return of_geo(client=self.client, camera_name=self.of_camera, vehicle_name=self.vehicle_name, FOVx=60)
+        return of_geo(client=self.client, camera_name=self.of_camera, vehicle_name=self.vehicle_name)
 
     def get_of_data_shape(self):
         """
@@ -325,7 +325,7 @@ class OFBeeseClass(BeeseClass):
         return gym.spaces.Box(low=low, high=high, shape=shape, dtype=np.float64)
 
     def get_obs(self):
-        of = of_geo(client=self.client, camera_name='front', vehicle_name=self.vehicle_name, FOVx=60)
+        of = of_geo(client=self.client, camera_name='front', vehicle_name=self.vehicle_name,)
         C, H, W = of.shape
         # (C,H,W) optic flow data
 

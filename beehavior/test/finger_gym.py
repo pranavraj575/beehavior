@@ -38,7 +38,7 @@ if __name__ == '__main__':
 
     discrete = list('1234567890')[:args.thrust_n]
 
-    thrust = 0
+    thrust = .6
     lr = 0  # whether left key or right key is being held
     bf = 0
     none_step = False
@@ -113,7 +113,7 @@ if __name__ == '__main__':
 
             reset = False
 
-            thrust = 0
+            thrust = .6
             lr = 0  # whether left key or right key is being held
             bf = 0
             none_step = False
