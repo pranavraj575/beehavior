@@ -8,8 +8,11 @@ import time
 import numpy as np
 import airsim, subprocess, math, sys
 
-from airsim_interface.load_settings import get_settings, Keychain
+from airsim_interface.load_settings import get_settings, Keychain, get_fov,get_camera_settings
 
+# do this initially
+SETTINGS = get_settings()
+CAMERA_SETTINGS=get_camera_settings(sett=SETTINGS)
 
 def engine_started():
     """
@@ -35,11 +38,10 @@ def start_game_engine(project=None, open_gui=True, start_paused=True, join=False
     Returns:
         subprocess object
     """
-    sett = get_settings()
     if project is None:
-        project = sett[Keychain.Defaultproj]
+        project = SETTINGS[Keychain.Defaultproj]
 
-    cmd = [sett[Keychain.UE4loc], project, '-game', '-windowed']
+    cmd = [SETTINGS[Keychain.UE4loc], project, '-game', '-windowed']
     if not open_gui:
         cmd += ['-renderoffscreen', '-nosplash', '-nullrhi']
     # os.system(' '.join(cmd))
@@ -191,7 +193,7 @@ def get_of_geo_shape(client: airsim.MultirotorClient, camera_name='front'):
     return (2, depth_image.height, depth_image.width)
 
 
-def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name='', FOVx=120):
+def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name='', FOVx=None):
     """
     optic flow array caluclated from geometric data
     assumes STATIC obstacles, can redo this with dynamic obstacles, but it would be much more annoying
@@ -202,10 +204,15 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name=''
         camera_name: name of camera
         vehicle_name: guess
         FOVx: in DEGREES set to a specific value because client.simGetFieldOfView is wrong
-            value in /Documents/Airsim/settings.json
+            if None, obtains value in /Documents/Airsim/settings.json, or wherever this file is (set in airsim_interface/settings.txt)
     Returns:
         optic flow array, shaped (2,H,W) for better use in CNNs
     """
+    if FOVx is None:
+        FOVx = get_fov(camera_settings=CAMERA_SETTINGS,
+                       camera_name=camera_name,
+                       image_type=airsim.ImageType.DepthPerspective,
+                       )
     depth_image = get_depth_img(client=client, camera_name=camera_name)
     image_width = depth_image.width
     image_height = depth_image.height

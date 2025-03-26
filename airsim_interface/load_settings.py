@@ -1,4 +1,6 @@
-import os, sys, ast
+import os, sys, ast, json
+
+import airsim
 
 DIR = os.path.dirname(os.path.join(os.getcwd(), sys.argv[0]))
 SETT_DIR = os.path.join(DIR, 'settings.txt')
@@ -7,6 +9,7 @@ SETT_DIR = os.path.join(DIR, 'settings.txt')
 class Keychain:
     UE4loc = 'unreal engine'
     Defaultproj = 'defalut project'
+    CameraSettingLoc = 'camera settings'
 
 
 default_settings = {
@@ -14,7 +17,27 @@ default_settings = {
                                   'UnrealEngine', 'Engine', 'Binaries', 'Linux', 'UE4Editor'),
     Keychain.Defaultproj: os.path.join('/home', 'pravna',
                                        'AirSim', 'Unreal', 'Environments', 'Blocks_4.27', 'Blocks.uproject'),
+    Keychain.CameraSettingLoc: os.path.join('/home', 'pravna',
+                                            'Documents', 'AirSim', 'settings.json'),
 }
+
+
+def get_camera_settings(sett):
+    f = open(sett[Keychain.CameraSettingLoc], 'r')
+    camera_sett = json.load(f)
+    f.close()
+    return camera_sett
+
+
+def get_fov(camera_settings, camera_name='front', image_type=airsim.ImageType.DepthPerspective):
+    dic = camera_settings['Vehicles']['Drone0']['Cameras'][camera_name]['CaptureSettings']
+    cam_dic=None
+    for d in dic:
+        if d['ImageType']==image_type:
+            cam_dic=d
+    if cam_dic is None:
+        raise Exception('image type',image_type,'not found')
+    return cam_dic['FOV_Degrees']
 
 
 def get_settings(old_settings=None):
@@ -55,3 +78,6 @@ def unparse(itm):
 
 if __name__ == '__main__':
     print(get_settings())
+    save_settings(get_settings())
+    print(get_camera_settings(get_settings())['Vehicles']['Drone0']['Cameras']['front']['CaptureSettings'])
+    print(get_fov(camera_settings=get_camera_settings(get_settings())))
