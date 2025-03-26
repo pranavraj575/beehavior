@@ -2,7 +2,7 @@ import os, sys, ast, json
 
 import airsim
 
-DIR = os.path.dirname(os.path.join(os.getcwd(), sys.argv[0]))
+DIR = os.path.dirname(__file__)
 SETT_DIR = os.path.join(DIR, 'settings.txt')
 
 

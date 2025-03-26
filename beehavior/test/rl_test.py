@@ -47,7 +47,7 @@ if __name__ == '__main__':
                   # buffer_size=1000,  # for replay buffer methods
                   n_steps=256,
                   )
-    model.learn(total_timesteps=10000)
+    model.learn(total_timesteps=args.timesteps)
     for _ in range(100):
         obs, _ = env.reset()
         rwds = []
