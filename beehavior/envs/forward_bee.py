@@ -56,7 +56,7 @@ class ForwardBee(OFBeeseClass):
             r,
             p,
             y,
-            ht
+            ht,
         ])
 
     def get_obs_vector_dim(self):
