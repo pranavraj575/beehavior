@@ -19,6 +19,9 @@ class HiBee(OFBeeseClass):
                  height_range=(2, 3),
                  initial_position=((-1., 0.), (-1., 1.), (-1., -1.5)),
                  timeout=30,
+                 img_stack_size=3,
+                 velocity_ctrl=False,
+                 fix_z_to=None,
                  ):
         """
         Args:
@@ -32,6 +35,9 @@ class HiBee(OFBeeseClass):
                          collision_grace=collision_grace,
                          initial_position=initial_position,
                          timeout=timeout,
+                         img_stack_size=img_stack_size,
+                         velocity_ctrl=velocity_ctrl,
+                         fix_z_to=fix_z_to,
                          )
         self.ht_rng = height_range
         # shoot for average

@@ -22,6 +22,9 @@ class ForwardBee(OFBeeseClass):
                  timeout=30,
                  bounds=((-5., 27), (-2.5, 2.5), (-5., 0.)),
                  goal_x=24.,
+                 img_stack_size=3,
+                 velocity_ctrl=True,
+                 fix_z_to=None,
                  ):
         """
         Args:
@@ -35,6 +38,9 @@ class ForwardBee(OFBeeseClass):
                          collision_grace=collision_grace,
                          initial_position=initial_position,
                          timeout=timeout,
+                         img_stack_size=img_stack_size,
+                         velocity_ctrl=velocity_ctrl,
+                         fix_z_to=fix_z_to,
                          )
         self.bounds = bounds
         self.goal_x = goal_x

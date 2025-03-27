@@ -27,6 +27,8 @@ class BeeseClass(gym.Env):
                  real_time=False,
                  collision_grace=1,
                  initial_position=None,
+                 velocity_ctrl=False,
+                 fix_z_to=None,
                  timeout=300,
                  ):
         """
@@ -39,6 +41,8 @@ class BeeseClass(gym.Env):
             real_time: if true, does not pause simulation after each step
             collision_grace: number of timesteps to forgive collisions after reset
             initial_position: initial position to go to after reset
+            velocity_ctrl: output velocity command (x,y,z) instead of r,p,thrust
+            fix_z_to: if velocity_ctrl, fixes the height to a certin value, if None, doesnt do this
             timeout: seconds until env timeout
         """
         super().__init__()
@@ -55,12 +59,23 @@ class BeeseClass(gym.Env):
         self.initial_pos = initial_position
         self.timeout = timeout
         self.env_time = 0  # count environment time in intervals of dt
+        self.velocity_ctrl = velocity_ctrl
+        self.fix_z_to = fix_z_to
 
-        self.action_space = gym.spaces.Box(low=np.array([-self.max_tilt, -self.max_tilt, 0]),
-                                           high=np.array([self.max_tilt, self.max_tilt, 1]),
-                                           shape=(3,),
-                                           dtype=np.float64,
-                                           )
+        if self.velocity_ctrl:
+            self.action_space = gym.spaces.Box(
+                low=np.array([-1, -1, -1]),
+                high=np.array([1, 1, 1]),
+                shape=(3,),
+                dtype=np.float64,
+            )
+        else:
+            self.action_space = gym.spaces.Box(
+                low=np.array([-self.max_tilt, -self.max_tilt, 0]),
+                high=np.array([self.max_tilt, self.max_tilt, 1]),
+                shape=(3,),
+                dtype=np.float64,
+            )
         self.observation_space = self.define_observation_space()
 
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, bool, dict]:
@@ -72,16 +87,35 @@ class BeeseClass(gym.Env):
             (observation, reward, termination,
                     truncation, info)
         """
-        roll, pitch, thrust = action
+        if self.velocity_ctrl:
+            vx, vy, vz = action
+            if self.fix_z_to is not None:
+                cmd = lambda: self.client.moveByVelocityZAsync(vx=vx,
+                                                               vy=vy,
+                                                               z=self.fix_z_to,
+                                                               duration=self.dt,
+                                                               vehicle_name=self.vehicle_name,
+                                                               )
+            else:
+                cmd = lambda: self.client.moveByVelocityAsync(vx=vx,
+                                                              vy=vy,
+                                                              vz=vz,
+                                                              duration=self.dt,
+                                                              vehicle_name=self.vehicle_name,
+                                                              )
+
+        else:
+            roll, pitch, thrust = action
+            cmd = lambda: self.client.moveByRollPitchYawrateThrottleAsync(roll=roll,
+                                                                          pitch=pitch,
+                                                                          yaw_rate=0,
+                                                                          throttle=thrust,
+                                                                          duration=self.dt,
+                                                                          vehicle_name=self.vehicle_name,
+                                                                          )
         step(client=self.client,
              seconds=self.dt,
-             cmd=lambda: self.client.moveByRollPitchYawrateThrottleAsync(roll=roll,
-                                                                         pitch=pitch,
-                                                                         yaw_rate=0,
-                                                                         throttle=thrust,
-                                                                         duration=self.dt,
-                                                                         vehicle_name=self.vehicle_name,
-                                                                         ),
+             cmd=cmd,
              pause_after=not self.real_time,
              )
 
@@ -301,6 +335,8 @@ class OFBeeseClass(BeeseClass):
                  initial_position=None,
                  timeout=300,
                  img_stack_size=3,
+                 velocity_ctrl=False,
+                 fix_z_to=None,
                  ):
         """
         Args:
@@ -326,6 +362,8 @@ class OFBeeseClass(BeeseClass):
             collision_grace=collision_grace,
             initial_position=initial_position,
             timeout=timeout,
+            velocity_ctrl=velocity_ctrl,
+            fix_z_to=fix_z_to,
         )
 
     def define_observation_space(self):
