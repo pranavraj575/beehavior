@@ -3,6 +3,7 @@ import gymnasium as gym
 from gymnasium.core import ActType, ObsType
 import numpy as np
 import math
+from collections import deque
 
 from airsim_interface.interface import connect_client, disconnect_client, step, of_geo, get_of_geo_shape
 
@@ -286,6 +287,7 @@ class OFBeeseClass(BeeseClass):
     observation is optic flow data, with a vector (self.get_obs_vector()) appended to every pixel
     the reason we do it this way is because gym.space.Tuple is not supported by stable_baselines3
         we could make our own networks, but just appending is easier
+    we also only use translational OF, tangential is not important apparently
     """
 
     def __init__(self,
@@ -297,8 +299,23 @@ class OFBeeseClass(BeeseClass):
                  collision_grace=1,
                  initial_position=None,
                  timeout=300,
+                 img_stack_size=3,
                  ):
+        """
+        Args:
+            client:
+            dt:
+            max_tilt:
+            vehicle_name:
+            real_time:
+            collision_grace:
+            initial_position:
+            timeout:
+            img_stack_size: number of images to show at each time step
+        """
         self.obs_shape = None
+        self.img_stack_size = img_stack_size
+        self.img_stack = None
         super().__init__(
             client=client,
             dt=dt,
@@ -314,7 +331,8 @@ class OFBeeseClass(BeeseClass):
         """
         defines gym observation space, taking optic flow image and appending a vector to each element
         """
-        (C, H, W) = self.get_of_data_shape()
+        (_, H, W) = self.get_of_data_shape()
+        C = self.img_stack_size  # stack this many images on top of each other
         shape = self.get_obs_shape()
         arr = np.ones(shape)
         low = -np.inf*arr
@@ -326,15 +344,21 @@ class OFBeeseClass(BeeseClass):
 
     def get_obs(self):
         of = of_geo(client=self.client, camera_name='front', vehicle_name=self.vehicle_name, )
-        C, H, W = of.shape
-        # (C,H,W) optic flow data
+        of = of[0, :, :]  # only use translational, not tangential
+        # H, W = of.shape
+
+        # (_,H,W) optic flow data
+        if len(self.img_stack) == 0:
+            self.img_stack = deque([of for _ in range(self.img_stack_size)], maxlen=self.img_stack_size)
+        self.img_stack.append(of)
 
         vec = self.get_obs_vector()
         # (m,) sized vector, goal conditioning
         obs = np.zeros(self.get_obs_shape())
         # (C+m,H,W)
+        C = self.img_stack_size  # number of of images
 
-        obs[:C, :, :] = of
+        obs[:C, :, :] = np.stack(self.img_stack, axis=0)  # this is a (C,H,W) history of optic flow data
         obs[C:, :, :] = np.expand_dims(vec, axis=(1, 2))  # (m,1,1)
 
         # places copies of vec at every pixel
@@ -345,8 +369,20 @@ class OFBeeseClass(BeeseClass):
     def get_obs_shape(self):
         if self.obs_shape is None:
             of_shape = self.get_of_data_shape()
-            self.obs_shape = (of_shape[0] + self.get_obs_vector_dim(), *of_shape[1:])
+            # self.obs_shape = (of_shape[0] + self.get_obs_vector_dim(), *of_shape[1:])
+            # we are only using translational optic flow (1,H,W), and stacking self.img_stack_size of them
+            self.obs_shape = (self.img_stack_size + self.get_obs_vector_dim(), *of_shape[1:])
         return self.obs_shape
+
+    def reset(
+            self,
+            *,
+            seed: Optional[int] = None,
+            options: Optional[dict] = None,
+    ) -> Tuple[ObsType, dict]:
+        self.img_stack = deque(maxlen=self.img_stack_size)
+        stuf = super().reset(seed=seed, options=options)
+        return stuf
 
 
 if __name__ == '__main__':
