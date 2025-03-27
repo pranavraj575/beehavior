@@ -8,11 +8,12 @@ import time
 import numpy as np
 import airsim, subprocess, math, sys
 
-from airsim_interface.load_settings import get_settings, Keychain, get_fov,get_camera_settings
+from airsim_interface.load_settings import get_settings, Keychain, get_fov, get_camera_settings
 
 # do this initially
 SETTINGS = get_settings()
-CAMERA_SETTINGS=get_camera_settings(sett=SETTINGS)
+CAMERA_SETTINGS = get_camera_settings(sett=SETTINGS)
+
 
 def engine_started():
     """
@@ -152,13 +153,14 @@ def move_along_pth(client: airsim.MultirotorClient, pth, v=1., vehicle_name=''):
         client.moveToPositionAsync(x=x, y=y, z=z, velocity=v, vehicle_name=vehicle_name).join()
 
 
-def get_depth_img(client: airsim.MultirotorClient, camera_name='front'):
+def get_depth_img(client: airsim.MultirotorClient, camera_name='front', numpee=False):
     """
     obtains depth image
         sometimes there is a bug where width and height are zero, queries until this is not the case
     Args:
         client: client
         camera_name: camera name
+        numpee: return numpy array, shaped (height, width)
     Returns:
         output of client.simGetImages
     """
@@ -176,6 +178,10 @@ def get_depth_img(client: airsim.MultirotorClient, camera_name='front'):
             airsim.ImageRequest(camera_name,
                                 airsim.ImageType.DepthPerspective, True)
         ])[0]
+    if numpee:
+        image_height = depth_image.height
+        image_width = depth_image.width
+        depth_image = np.array(depth_image.image_data_float, dtype=np.float32).reshape(image_height, image_width)
 
     return depth_image
 
@@ -213,9 +219,6 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name=''
                        camera_name=camera_name,
                        image_type=airsim.ImageType.DepthPerspective,
                        )
-    depth_image = get_depth_img(client=client, camera_name=camera_name)
-    image_width = depth_image.width
-    image_height = depth_image.height
 
     kinematics = client.simGetGroundTruthKinematics(vehicle_name=vehicle_name)
 
@@ -230,7 +233,14 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name=''
         [-kinematics.angular_velocity.y_val, -kinematics.angular_velocity.z_val, kinematics.angular_velocity.x_val])
 
     # Convert depth data to a numpy array and reshape it to the image dimensions
-    depth_map = np.array(depth_image.image_data_float, dtype=np.float32).reshape(image_height, image_width)
+    depth_map = get_depth_img(client=client, camera_name=camera_name, numpee=True)
+    image_height, image_width = depth_map.shape
+
+    # depth_image = get_depth_img(client=client, camera_name=camera_name)
+    # image_width = depth_image.width
+    # image_height = depth_image.height
+    # Convert depth data to a numpy array and reshape it to the image dimensions
+    # depth_map = np.array(depth_image.image_data_float, dtype=np.float32).reshape(image_height, image_width)
 
     # Assuming these are already defined in your code
     Fx = image_width/(2*math.tan(FOVx/2))  # focal length in pixels (Horizontal = Vertical)

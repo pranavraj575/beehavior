@@ -66,6 +66,7 @@ cd AirSim
     * space bar progresses simulation for a quarter second and pauses
     * c clears roll/pitch
     * r to reset simulation
+    * i to view images
     * Q (shift + q) to stop python script
 
 ### test gym enviornment

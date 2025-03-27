@@ -8,6 +8,7 @@ in another terminal, run `python3 airsim_interface/keyboard_test.py`
   * space bar progresses simulation for a quarter second and pauses
   * c clears roll/pitch
   * r to reset simulation
+  * i to display images
   * Q (shift + q) to stop python script
 """
 import airsim
@@ -25,6 +26,7 @@ if __name__ == '__main__':
                     'space bar progresses simulation for a quarter second and pauses; '
                     'c clears roll/pitch; '
                     'r to reset simulation; '
+                    'i to display camera images; '
                     'Q (shift + q) to stop python script'
     )
 
@@ -44,7 +46,7 @@ if __name__ == '__main__':
     game_interface = not args.without_game_interface
 
     if game_interface:
-        from airsim_interface.interface import step, connect_client, disconnect_client, get_depth_img
+        from airsim_interface.interface import step, connect_client, disconnect_client, get_depth_img, of_geo
 
     discrete = list('1234567890')[:args.thrust_n]
 
@@ -138,17 +140,30 @@ if __name__ == '__main__':
             bf = 0
             none_step = False
         if img and game_interface:
+            from matplotlib import pyplot as plt
 
             response = client.simGetImages([airsim.ImageRequest('front', airsim.ImageType.Scene, False, False)])
             img_data = response[0].image_data_uint8
             if img_data:
                 image = np.frombuffer(img_data, dtype=np.uint8).reshape(response[0].height, response[0].width, 3)
                 # image = cv2.resize(image, (320, 240))  #(1080, 720) : Resize to 320x240 for performance
-                from matplotlib import pyplot as plt
 
-                plt.imshow(image, interpolation='nearest')
+                plt.imshow(image[:, :, ::-1], interpolation='nearest', )
                 plt.show()
-            quit()
-            img=False
+            plt.close()
+            of = of_geo(client=client, camera_name='front', vehicle_name='', FOVx=None)
+            of = np.transpose(of, axes=(1, 2, 0))
+            if np.max(of) == np.min(of):
+                of = np.zeros_like(of)
+            else:
+                of = (of - np.min(of))/(np.max(of) - np.min(of))*255  # to byte
+            for dim in range(2):
+                temp = np.zeros((*of.shape[:2], 3), dtype=np.uint8)
+                temp[:, :, :] = np.ndarray.astype(of[:, :, dim:dim + 1],
+                                                  dtype=np.uint8)
+
+                plt.imshow(temp, interpolation='nearest', )
+                plt.show()
+            img = False
     if game_interface:
         disconnect_client(client=client)
