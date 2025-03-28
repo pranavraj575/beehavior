@@ -201,7 +201,11 @@ def get_of_geo_shape(client: airsim.MultirotorClient, camera_name='front'):
 
 def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name='', FOVx=None):
     """
-    optic flow array caluclated from geometric data
+    PROJECTED optic flow array caluclated from geometric data
+        imagines projection (shadow) of every point on a sphere around observer
+            each point has a projected relative velocity on this sphere
+            consider a FOV rectangle cut out of the sphere, and take the x and y relative velocity of each point
+            use these relative velocities to calculate optic flow of each point
     assumes STATIC obstacles, can redo this with dynamic obstacles, but it would be much more annoying
     uses drone's velocity and depth image captured to obtain distance/relative velocity of every point in FOV
         from this, can calculate optic flow
@@ -213,6 +217,7 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name=''
             if None, obtains value in /Documents/Airsim/settings.json, or wherever this file is (set in airsim_interface/settings.txt)
     Returns:
         optic flow array, shaped (2,H,W) for better use in CNNs
+        x component, y component
     """
     if FOVx is None:
         FOVx = get_fov(camera_settings=CAMERA_SETTINGS,

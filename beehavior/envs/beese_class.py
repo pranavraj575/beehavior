@@ -319,10 +319,9 @@ class BeeseClass(gym.Env):
 class OFBeeseClass(BeeseClass):
     """
     observation is optic flow data, with a vector (self.get_obs_vector()) appended to every pixel
-        observation is specifically magnitude of translational optic flow
+        observation is specifically magnitude of optic flow of points projected onto sphere around observer
     the reason we do it this way is because gym.space.Tuple is not supported by stable_baselines3
         we could make our own networks, but just appending is easier
-    we also only use translational OF, tangential is not important apparently
     """
 
     def __init__(self,
@@ -383,7 +382,7 @@ class OFBeeseClass(BeeseClass):
 
     def get_obs(self):
         of = of_geo(client=self.client, camera_name='front', vehicle_name=self.vehicle_name, )
-        of = np.abs(of[0, :, :])  # only use translational, not tangential, and use magnitude
+        of = np.linalg.norm(of, axis=0)  # magnitude of x and y components of projected optic flow
 
         # H, W = of.shape
 

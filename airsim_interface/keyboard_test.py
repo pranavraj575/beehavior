@@ -152,22 +152,38 @@ if __name__ == '__main__':
                 plt.show()
             plt.close()
             of = of_geo(client=client, camera_name='front', vehicle_name='', FOVx=None)
-            of = np.abs(np.transpose(of, axes=(1, 2, 0)))
+            of = np.transpose(of, axes=(1, 2, 0))
 
-            for dim in range(2):
-                thingy = of[:, :, dim:dim + 1]
+
+            def disp(thingy):
+                temp = np.zeros((*of.shape[:2], 3), dtype=np.uint8)
+
                 mx = np.max(thingy)
                 mn = np.min(thingy)
                 if mx == mn:
                     thingy = np.zeros_like(thingy)
                 else:
                     thingy = (thingy - mn)/(mx - mn)*255  # to byte
-                temp = np.zeros((*of.shape[:2], 3), dtype=np.uint8)
+
                 temp[:, :, :] = np.ndarray.astype(thingy, dtype=np.uint8)
 
                 plt.imshow(temp, interpolation='nearest', )
-                plt.title('max: '+str(mx)+'; min: '+str(mn))
+
+                def fmt(num):
+                    if num >= 1 and num <= 1000:
+                        return '{:.2f}'.format(num)
+                    if num > 1000:
+                        return '{:.0f}'.format(num)
+                    return '{:.2E}'.format(num)
+
+                plt.title('black: ' + fmt(mn) + '; white: ' + fmt(mx))
                 plt.show()
+
+
+            for dim in range(2):
+                disp(np.abs(of)[:, :, dim:dim + 1])
+
+            disp(np.linalg.norm(of, axis=-1, keepdims=True))
             img = False
     if game_interface:
         disconnect_client(client=client)

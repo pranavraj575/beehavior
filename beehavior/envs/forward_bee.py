@@ -23,7 +23,7 @@ class ForwardBee(OFBeeseClass):
                  bounds=((-5., 27), (-2.5, 2.5), (-5., 0.)),
                  goal_x=24.,
                  img_stack_size=3,
-                 velocity_ctrl=True,
+                 velocity_ctrl=False,
                  fix_z_to=None,
                  ):
         """

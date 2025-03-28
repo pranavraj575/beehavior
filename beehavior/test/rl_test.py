@@ -11,12 +11,16 @@ class CustomCNN(CNN):
         This corresponds to the number of unit for the last layer.
     """
 
-    def __init__(self, observation_space: gym.spaces.Box, features_dim: int = 256):
+    def __init__(self, observation_space: gym.spaces.Box, features_dim: int = 256, layers=4):
+        channels = (32,) + tuple(64 for _ in range(layers))
+        kernels = (8,) + tuple(3 for _ in range(layers))
+        strides = (4,) + tuple(1 for _ in range(layers))
+        paddings = (0,) + tuple(1 for _ in range(layers))
         super().__init__(observation_space=observation_space,
-                         channels=(32, 64, 64),
-                         kernels=(8, 4, 3),
-                         strides=(4, 2, 1),
-                         paddings=(0, 0, 1),
+                         channels=channels,
+                         kernels=kernels,
+                         strides=strides,
+                         paddings=paddings,
                          features_dim=features_dim,
                          )
 
@@ -44,7 +48,7 @@ if __name__ == '__main__':
     )
 
     model = MODEL('CnnPolicy', env, verbose=1, policy_kwargs=policy_kwargs,
-                  # buffer_size=1000,  # for replay buffer methods
+                  # buffer_size=2048,  # for replay buffer methods
                   n_steps=256,
                   )
     model.learn(total_timesteps=args.timesteps)

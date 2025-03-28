@@ -12,6 +12,7 @@ class CNN(BaseFeaturesExtractor):
     :param kernels: sequence of kernel sizes
     :param strides: sequence of strides
     :param paddings: sequence of paddings
+    :param maxpools: sequence of whether to maxpool at each layer
     :param features_dim: (int) Number of features extracted.
         This corresponds to the number of unit for the last layer.
     """
@@ -23,6 +24,7 @@ class CNN(BaseFeaturesExtractor):
                  strides=(4, 2),
                  paddings=(0, 0),
                  features_dim: int = 256,
+                 maxpools=True,
                  ):
         super().__init__(observation_space, features_dim)
         # We assume CxHxW images (channels first)
@@ -30,7 +32,9 @@ class CNN(BaseFeaturesExtractor):
         n_input_channels = observation_space.shape[0]
         layers = []
         chanl_in = n_input_channels
-        for chanl_out, kernel, stride, padding in zip(channels, kernels, strides, paddings):
+        if type(maxpools) == bool:
+            maxpools = (maxpools for _ in channels)
+        for chanl_out, kernel, stride, padding, maxpool in zip(channels, kernels, strides, paddings, maxpools):
             layers.append(nn.Conv2d(chanl_in,
                                     chanl_out,
                                     kernel_size=kernel,
@@ -39,7 +43,9 @@ class CNN(BaseFeaturesExtractor):
                                     )
                           )
             layers.append(nn.ReLU())
-            chanl_in=chanl_out
+            if maxpool:
+                layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+            chanl_in = chanl_out
         layers.append(nn.Flatten())
 
         self.cnn = nn.Sequential(*layers)
@@ -61,4 +67,4 @@ class CNN(BaseFeaturesExtractor):
 
 if __name__ == '__main__':
     cnn = CNN(observation_space=gym.spaces.Box(-float('inf'), float('inf'), (3, 100, 100)))
-    print(cnn.forward(observations=torch.rand((23,3,100,100))).shape)
+    print(cnn.forward(observations=torch.rand((23, 3, 100, 100))).shape)
