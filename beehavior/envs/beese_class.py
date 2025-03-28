@@ -336,6 +336,7 @@ class OFBeeseClass(BeeseClass):
                  img_stack_size=3,
                  velocity_ctrl=False,
                  fix_z_to=None,
+                 of_mapping=lambda x: np.log(np.clip(x, 10e-3, np.inf)),
                  ):
         """
         Args:
@@ -348,10 +349,12 @@ class OFBeeseClass(BeeseClass):
             initial_position:
             timeout:
             img_stack_size: number of images to show at each time step
+            of_mapping: mapping to apply to optic flow
         """
         self.obs_shape = None
         self.img_stack_size = img_stack_size
         self.img_stack = None
+        self.of_mapping = of_mapping
         super().__init__(
             client=client,
             dt=dt,
@@ -383,6 +386,7 @@ class OFBeeseClass(BeeseClass):
     def get_obs(self):
         of = of_geo(client=self.client, camera_name='front', vehicle_name=self.vehicle_name, )
         of = np.linalg.norm(of, axis=0)  # magnitude of x and y components of projected optic flow
+        of = self.of_mapping(of)
 
         # H, W = of.shape
 

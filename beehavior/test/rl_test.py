@@ -11,7 +11,7 @@ class CustomCNN(CNN):
         This corresponds to the number of unit for the last layer.
     """
 
-    def __init__(self, observation_space: gym.spaces.Box, features_dim: int = 256, layers=4):
+    def __init__(self, observation_space: gym.spaces.Box, features_dim: int = 256, layers=2):
         channels = (32,) + tuple(64 for _ in range(layers))
         kernels = (8,) + tuple(3 for _ in range(layers))
         strides = (4,) + tuple(1 for _ in range(layers))

@@ -155,7 +155,7 @@ if __name__ == '__main__':
             of = np.transpose(of, axes=(1, 2, 0))
 
 
-            def disp(thingy):
+            def disp(thingy, title=None):
                 temp = np.zeros((*of.shape[:2], 3), dtype=np.uint8)
 
                 mx = np.max(thingy)
@@ -167,23 +167,33 @@ if __name__ == '__main__':
 
                 temp[:, :, :] = np.ndarray.astype(thingy, dtype=np.uint8)
 
-                plt.imshow(temp, interpolation='nearest', )
+                plt.imshow(temp, interpolation='nearest',)
 
                 def fmt(num):
-                    if num >= 1 and num <= 1000:
+                    if abs(num) >= 1 and abs(num) <= 1000:
                         return '{:.2f}'.format(num)
-                    if num > 1000:
+                    if abs(num) > 1000:
                         return '{:.0f}'.format(num)
                     return '{:.2E}'.format(num)
 
                 plt.title('black: ' + fmt(mn) + '; white: ' + fmt(mx))
+                if title is not None:
+                    plt.suptitle(title)
+
+                plt.tight_layout()
                 plt.show()
 
 
             for dim in range(2):
                 disp(np.abs(of)[:, :, dim:dim + 1])
 
-            disp(np.linalg.norm(of, axis=-1, keepdims=True))
+            for mapping, title in (
+                    (lambda x: x, 'Raw Optic Flow'),
+                    (np.log, 'Log Optic Flow'),
+                    #(lambda x: np.clip(np.log(x),-1,np.inf), 'Clipped Log Optic Flow'),
+                    (np.sqrt, 'Sqrt Optic Flow'),
+            ):
+                disp(mapping(np.linalg.norm(of, axis=-1, keepdims=True)), title=title)
             img = False
     if game_interface:
         disconnect_client(client=client)

@@ -22,6 +22,7 @@ class HiBee(OFBeeseClass):
                  img_stack_size=3,
                  velocity_ctrl=False,
                  fix_z_to=None,
+                 of_mapping=lambda x: np.log(np.clip(x, 10e-3, np.inf)),
                  ):
         """
         Args:
@@ -38,6 +39,7 @@ class HiBee(OFBeeseClass):
                          img_stack_size=img_stack_size,
                          velocity_ctrl=velocity_ctrl,
                          fix_z_to=fix_z_to,
+                         of_mapping=of_mapping,
                          )
         self.ht_rng = height_range
         # shoot for average

@@ -22,9 +22,10 @@ class ForwardBee(OFBeeseClass):
                  timeout=30,
                  bounds=((-5., 27), (-2.5, 2.5), (-5., 0.)),
                  goal_x=24.,
-                 img_stack_size=3,
-                 velocity_ctrl=False,
+                 img_stack_size=2,
+                 velocity_ctrl=True,
                  fix_z_to=None,
+                 of_mapping=lambda x: np.log(np.clip(x, 10e-3, np.inf)),
                  ):
         """
         Args:
@@ -41,6 +42,7 @@ class ForwardBee(OFBeeseClass):
                          img_stack_size=img_stack_size,
                          velocity_ctrl=velocity_ctrl,
                          fix_z_to=fix_z_to,
+                         of_mapping=of_mapping,
                          )
         self.bounds = bounds
         self.goal_x = goal_x
