@@ -56,6 +56,13 @@ class CNN(BaseFeaturesExtractor):
                 torch.as_tensor(observation_space.sample()[None]).float()
             ).shape[1]
 
+            if False: # print out shapes
+                b = torch.as_tensor(observation_space.sample()[None]).float()
+                print(b.shape)
+                for layer in layers:
+                    b = layer.forward(b)
+                    print(b.shape,layer)
+
         self.linear = nn.Sequential(
             nn.Linear(n_flatten, features_dim),
             nn.ReLU(),

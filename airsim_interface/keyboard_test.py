@@ -167,7 +167,7 @@ if __name__ == '__main__':
 
                 temp[:, :, :] = np.ndarray.astype(thingy, dtype=np.uint8)
 
-                plt.imshow(temp, interpolation='nearest',)
+                plt.imshow(temp, interpolation='nearest', )
 
                 def fmt(num):
                     if abs(num) >= 1 and abs(num) <= 1000:
@@ -189,11 +189,27 @@ if __name__ == '__main__':
 
             for mapping, title in (
                     (lambda x: x, 'Raw Optic Flow'),
-                    (np.log, 'Log Optic Flow'),
-                    #(lambda x: np.clip(np.log(x),-1,np.inf), 'Clipped Log Optic Flow'),
+                    (lambda x: np.log(np.clip(x, 10e-10, np.inf)), 'Log Optic Flow'),
+                    # (lambda x: np.clip(np.log(x),-1,np.inf), 'Clipped Log Optic Flow'),
                     (np.sqrt, 'Sqrt Optic Flow'),
             ):
                 disp(mapping(np.linalg.norm(of, axis=-1, keepdims=True)), title=title)
+
+            if img_data:
+                image = np.frombuffer(img_data, dtype=np.uint8).reshape(response[0].height, response[0].width, 3)
+                # image = cv2.resize(image, (320, 240))  #(1080, 720) : Resize to 320x240 for performance
+
+                plt.imshow(image[:, :, ::-1], interpolation='nearest', )
+                h, w = np.meshgrid(np.arange(of.shape[0]), np.arange(of.shape[1]))
+                ss = 10
+                of_disp = np.transpose(of, axes=(1, 0, 2))  # inverted from image (height is top down) to np plot (y dim  bottom up)
+
+                plt.quiver(w[::ss, ::ss], h[::ss, ::ss],
+                           of_disp[::ss, ::ss, 0],
+                           -of_disp[::ss, ::ss, 1],
+                           color='red',
+                           )
+                plt.show()
             img = False
     if game_interface:
         disconnect_client(client=client)

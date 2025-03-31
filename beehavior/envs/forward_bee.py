@@ -22,7 +22,8 @@ class ForwardBee(OFBeeseClass):
                  timeout=30,
                  bounds=((-5., 27), (-2.5, 2.5), (-5., 0.)),
                  goal_x=24.,
-                 img_stack_size=2,
+                 img_history_steps=2,
+                 see_of_orientation=False,
                  velocity_ctrl=True,
                  fix_z_to=None,
                  of_mapping=lambda x: np.log(np.clip(x, 10e-3, np.inf)),
@@ -39,8 +40,9 @@ class ForwardBee(OFBeeseClass):
                          collision_grace=collision_grace,
                          initial_position=initial_position,
                          timeout=timeout,
-                         img_stack_size=img_stack_size,
+                         img_history_steps=img_history_steps,
                          velocity_ctrl=velocity_ctrl,
+                         see_of_orientation=see_of_orientation,
                          fix_z_to=fix_z_to,
                          of_mapping=of_mapping,
                          )
@@ -50,7 +52,8 @@ class ForwardBee(OFBeeseClass):
 
     def get_obs_vector(self):
         """
-        get height, a single real number
+        get obs vector, including roll, pitch, yaw (yaw is encoded as its sine and cosine components,
+            to remove the discontinuity at +-pi). this is not an issue for roll,pitch since they will never get this large
         """
         pose = self.get_pose()
         ht = -pose.position.z_val
@@ -59,12 +62,14 @@ class ForwardBee(OFBeeseClass):
                                                             pose.orientation.z_val,
                                                             pose.orientation.w_val,
                                                             ))
-
+        cy=np.cos(y)
+        sy=np.sin(y)
         return np.array([
             r,
             p,
-            y,
-            ht,
+            cy,
+            sy,
+            #ht,
         ])
 
     def get_obs_vector_dim(self):

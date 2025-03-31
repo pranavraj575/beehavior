@@ -333,7 +333,8 @@ class OFBeeseClass(BeeseClass):
                  collision_grace=1,
                  initial_position=None,
                  timeout=300,
-                 img_stack_size=3,
+                 img_history_steps=2,
+                 see_of_orientation=False,
                  velocity_ctrl=False,
                  fix_z_to=None,
                  of_mapping=lambda x: np.log(np.clip(x, 10e-3, np.inf)),
@@ -348,13 +349,15 @@ class OFBeeseClass(BeeseClass):
             collision_grace:
             initial_position:
             timeout:
-            img_stack_size: number of images to show at each time step
+            img_history_steps: number of images to show at each time step
             of_mapping: mapping to apply to optic flow
+            see_of_orientation: whether bee can see the orientation of OF
         """
         self.obs_shape = None
-        self.img_stack_size = img_stack_size
         self.img_stack = None
         self.of_mapping = of_mapping
+        self.see_of_orientation = see_of_orientation
+        self.img_stack_size = img_history_steps*3 if self.see_of_orientation else img_history_steps
         super().__init__(
             client=client,
             dt=dt,
@@ -376,31 +379,49 @@ class OFBeeseClass(BeeseClass):
         C = self.img_stack_size  # stack this many images on top of each other
         shape = self.get_obs_shape()
         arr = np.ones(shape)
-        low = -np.inf*arr
-        low[C:, :, :] = -np.inf
-        high = np.inf*arr
-        high[C:, :, :] = np.inf
+        if self.see_of_orientation:
+            # sees (magnitude, scaled x component, scaled y component, magnitude, ...)
+            # (scaled) magnitude is from -inf to inf
+            # components are -1 to 1
+            low = -1*arr
+            low[:C:3, :, :] = -np.inf
 
+            high = 1*arr
+            high[:C:3, :, :] = np.inf
+        else:
+            # sees (magnitude, magnitude, ...)
+            # each is -inf to inf
+            low = -np.inf*arr
+            high = np.inf*arr
+        low[C:, :, :] = -np.inf
+        high[C:, :, :] = np.inf
         return gym.spaces.Box(low=low, high=high, shape=shape, dtype=np.float64)
 
     def get_obs(self):
         of = of_geo(client=self.client, camera_name='front', vehicle_name=self.vehicle_name, )
-        of = np.linalg.norm(of, axis=0)  # magnitude of x and y components of projected optic flow
-        of = self.of_mapping(of)
+        of_magnitude = np.linalg.norm(of, axis=0)  # magnitude of x and y components of projected optic flow
 
         # H, W = of.shape
 
         # (_,H,W) optic flow data
-        if len(self.img_stack) == 0:
-            self.img_stack = deque([of for _ in range(self.img_stack_size)], maxlen=self.img_stack_size)
-        self.img_stack.append(of)
+        self.img_stack.append(self.of_mapping(of_magnitude))
+
+        if self.see_of_orientation: # add x and y
+            clipped_mag = np.clip(of_magnitude, 10e-4, np.inf)  # avoid division by zero
+            self.img_stack.append(of[0]/clipped_mag)
+            self.img_stack.append(of[1]/clipped_mag)
+
+        while len(self.img_stack) < self.img_stack_size:
+            if self.see_of_orientation:
+                self.img_stack.extend([self.img_stack[i] for i in range(3)]) # copy the first 3 elements
+            else:
+                self.img_stack.append(self.img_stack[0])  # copy the first (only) element
 
         vec = self.get_obs_vector()
         # (m,) sized vector, goal conditioning
         obs = np.zeros(self.get_obs_shape())
         # (C+m,H,W)
         C = self.img_stack_size  # number of of images
-
         obs[:C, :, :] = np.stack(self.img_stack, axis=0)  # this is a (C,H,W) history of optic flow data
         obs[C:, :, :] = np.expand_dims(vec, axis=(1, 2))  # (m,1,1)
 

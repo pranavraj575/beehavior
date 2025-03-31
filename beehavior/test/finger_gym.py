@@ -87,6 +87,7 @@ if __name__ == '__main__':
                    dt=args.dt,
                    max_tilt=args.radian_ctrl*args.max_ctrl,
                    real_time=args.real_time,
+                   velocity_ctrl=False,
                    )
 
     env.reset()
