@@ -18,10 +18,19 @@ class ForwardBee(OFBeeseClass):
                  vehicle_name='',
                  real_time=False,
                  collision_grace=1,
-                 initial_position=((-1., 0.), (-1., 1.), (-1., -1.5)),
+                 initial_position={
+                     ((-5., -1.), yrng, (-1., -1.5)): 1/6
+                     for yrng in ((-1., 1.),  # -1.8,1.8
+                                  (4.20, 7.0),  # 3.14, 8.8
+                                  (10.5, 11.),  # 10,11.7
+                                  (13.5, 15.5),  # 12.7,16.5
+                                  (18.5, 25.8),  # 17.69, 26.8
+                                  (29., 34.),  # 28,35.3
+                                  )
+                 },
                  timeout=30,
-                 bounds=((-5., 27), (-2.5, 2.5), (-5., 0.)),
-                 goal_x=24.,
+                 bounds=((-7., 27), None, (-7.5, 0.)),
+                 goal_x=20.,
                  img_history_steps=2,
                  see_of_orientation=False,
                  velocity_ctrl=True,
@@ -62,14 +71,14 @@ class ForwardBee(OFBeeseClass):
                                                             pose.orientation.z_val,
                                                             pose.orientation.w_val,
                                                             ))
-        cy=np.cos(y)
-        sy=np.sin(y)
+        cy = np.cos(y)
+        sy = np.sin(y)
         return np.array([
             r,
             p,
             cy,
             sy,
-            #ht,
+            # ht,
         ])
 
     def get_obs_vector_dim(self):
@@ -80,10 +89,13 @@ class ForwardBee(OFBeeseClass):
 
     def out_of_bounds(self, pose):
 
-        for val, (low, high) in zip(
+        for val, t in zip(
                 (pose.position.x_val, pose.position.y_val, pose.position.z_val),
                 self.bounds,
         ):
+            if t is None:
+                continue
+            low, high = t
             if val < low or val > high:
                 return True
         return False

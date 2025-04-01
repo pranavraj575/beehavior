@@ -5,6 +5,7 @@ import numpy as np
 import math
 from collections import deque
 
+from airsim import Vector3r, Pose
 from airsim_interface.interface import connect_client, disconnect_client, step, of_geo, get_of_geo_shape
 
 
@@ -40,7 +41,9 @@ class BeeseClass(gym.Env):
             vehicle_name: name of vehicle
             real_time: if true, does not pause simulation after each step
             collision_grace: number of timesteps to forgive collisions after reset
-            initial_position: initial position to go to after reset
+            initial_position: initial position to go to after reset, box of ((x low, x high),(y low, y high), (z low, z high))
+                each dim can be replaced by a value instead of a range
+                also can be a dict of (initial pos box: prob), where the probs add to 1
             velocity_ctrl: output velocity command (x,y,z) instead of r,p,thrust
             fix_z_to: if velocity_ctrl, fixes the height to a certin value, if None, doesnt do this
             timeout: seconds until env timeout
@@ -156,8 +159,13 @@ class BeeseClass(gym.Env):
         self.col_cnt = self.collision_grace
         self.env_time = 0
         if self.initial_pos is not None:
-            if type(self.initial_pos) == set or type(self.initial_pos) == list:
-                initial_pos = np.random.choice(list(self.initial_pos))
+            if type(self.initial_pos) == dict:
+                r = np.random.rand()
+                initial_pos = None
+                for (initial_pos, rp) in self.initial_pos.items():
+                    r -= rp
+                    if r < 0:
+                        break
             else:
                 initial_pos = self.initial_pos
 
@@ -166,11 +174,23 @@ class BeeseClass(gym.Env):
                            ]
             x, y, z = initial_pos
 
-            step(self.client,
-                 seconds=None,
-                 cmd=lambda: self.client.moveToZAsync(z, 1, ).join(),
-                 pause_after=not self.real_time,
-                 )
+            position = Vector3r(x, y, z)
+            # heading = AirSimClientBase.toQuaternion(roll, pitch, yaw)
+            heading = None
+            pose = Pose(position, heading)
+            self.client.simSetVehiclePose(pose, ignore_collision=True, vehicle_name=self.vehicle_name)
+
+            # have a non-zero initial velocity to prevent weird teleportation errors
+            for _ in range(2):
+                step(self.client,
+                     seconds=None,
+                     cmd=lambda: self.client.moveByVelocityAsync(np.random.rand() - .5,
+                                                                 np.random.rand() - .5,
+                                                                 np.random.rand() - .5,
+                                                                 duration=self.dt,
+                                                                 ).join(),
+                     pause_after=not self.real_time,
+                     )
             step(self.client,
                  seconds=None,
                  cmd=lambda: self.client.moveToPositionAsync(x, y, z, 1, ).join(),
@@ -406,14 +426,14 @@ class OFBeeseClass(BeeseClass):
         # (_,H,W) optic flow data
         self.img_stack.append(self.of_mapping(of_magnitude))
 
-        if self.see_of_orientation: # add x and y
+        if self.see_of_orientation:  # add x and y
             clipped_mag = np.clip(of_magnitude, 10e-4, np.inf)  # avoid division by zero
             self.img_stack.append(of[0]/clipped_mag)
             self.img_stack.append(of[1]/clipped_mag)
 
         while len(self.img_stack) < self.img_stack_size:
             if self.see_of_orientation:
-                self.img_stack.extend([self.img_stack[i] for i in range(3)]) # copy the first 3 elements
+                self.img_stack.extend([self.img_stack[i] for i in range(3)])  # copy the first 3 elements
             else:
                 self.img_stack.append(self.img_stack[0])  # copy the first (only) element
 
