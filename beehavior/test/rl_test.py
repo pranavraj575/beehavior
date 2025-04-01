@@ -11,7 +11,7 @@ class CustomCNN(CNN):
         This corresponds to the number of unit for the last layer.
     """
 
-    def __init__(self, observation_space: gym.spaces.Box, features_dim: int = 256):
+    def __init__(self, observation_space: gym.spaces.Box, ffn_hidden=(), features_dim: int = 128):
         channels = (64, 128, 128, 64, 32)
         kernels = (9, 5, 3, 3, 3)
         strides = (3, 1, 1, 1, 1)
@@ -22,6 +22,7 @@ class CustomCNN(CNN):
                          kernels=kernels,
                          strides=strides,
                          paddings=paddings,
+                         ffn_hidden_layers=ffn_hidden,
                          features_dim=features_dim,
                          maxpools=maxpools,
                          )
@@ -50,9 +51,10 @@ if __name__ == '__main__':
     )
 
     model = MODEL('CnnPolicy', env, verbose=1, policy_kwargs=policy_kwargs,
-                  # buffer_size=2048,  # for replay buffer methods
-                  n_steps=256,
+                  #buffer_size=2048,  # for replay buffer methods
+                  n_steps=512,
                   )
+    print(model.policy)
     model.learn(total_timesteps=args.timesteps)
     while True:
         obs, _ = env.reset()
@@ -60,6 +62,7 @@ if __name__ == '__main__':
         done = False
         while not done:
             action, _ = model.predict(observation=obs, deterministic=False)
+
             obs, rwd, done, term, info = env.step(action)
             rwds.append(rwd)
         print('ep length:', len(rwds))

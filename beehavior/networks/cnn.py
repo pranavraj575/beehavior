@@ -23,6 +23,7 @@ class CNN(BaseFeaturesExtractor):
                  kernels=(8, 4),
                  strides=(4, 2),
                  paddings=(0, 0),
+                 ffn_hidden_layers=(),
                  features_dim: int = 256,
                  maxpools=True,
                  ):
@@ -56,17 +57,21 @@ class CNN(BaseFeaturesExtractor):
                 torch.as_tensor(observation_space.sample()[None]).float()
             ).shape[1]
 
-            if False: # print out shapes
+            if False:  # print out shapes
                 b = torch.as_tensor(observation_space.sample()[None]).float()
                 print(b.shape)
                 for layer in layers:
                     b = layer.forward(b)
-                    print(b.shape,layer)
-
-        self.linear = nn.Sequential(
-            nn.Linear(n_flatten, features_dim),
-            nn.ReLU(),
-        )
+                    print(b.shape, layer)
+        temp = n_flatten
+        layers_ffn = []
+        for hidden in ffn_hidden_layers:
+            layers_ffn.append(nn.Linear(temp, hidden))
+            layers_ffn.append(nn.ReLU())
+            temp = hidden
+        layers_ffn.append(nn.Linear(temp, features_dim))
+        layers_ffn.append(nn.ReLU())
+        self.linear = nn.Sequential(*layers_ffn)
 
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
         return self.linear(self.cnn(observations))

@@ -354,7 +354,7 @@ class OFBeeseClass(BeeseClass):
                  initial_position=None,
                  timeout=300,
                  img_history_steps=2,
-                 see_of_orientation=False,
+                 see_of_orientation=True,
                  velocity_ctrl=False,
                  fix_z_to=None,
                  of_mapping=lambda x: np.log(np.clip(x, 10e-3, np.inf)),

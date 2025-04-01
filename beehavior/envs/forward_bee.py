@@ -32,7 +32,7 @@ class ForwardBee(OFBeeseClass):
                  bounds=((-7., 27), None, (-7.5, 0.)),
                  goal_x=20.,
                  img_history_steps=2,
-                 see_of_orientation=False,
+                 see_of_orientation=True,
                  velocity_ctrl=True,
                  fix_z_to=None,
                  of_mapping=lambda x: np.log(np.clip(x, 10e-3, np.inf)),
