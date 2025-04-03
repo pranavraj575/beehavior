@@ -158,6 +158,7 @@ class BeeseClass(gym.Env):
         self.update_recent_colision()
         self.col_cnt = self.collision_grace
         self.env_time = 0
+        initial_pos = None
         if self.initial_pos is not None:
             if type(self.initial_pos) == dict:
                 r = np.random.rand()
@@ -168,7 +169,10 @@ class BeeseClass(gym.Env):
                         break
             else:
                 initial_pos = self.initial_pos
+        if options is not None and 'initial_pos' in options:
+            initial_pos = options['initial_pos']
 
+        if initial_pos is not None:
             initial_pos = [d[0] + np.random.rand()*(d[1] - d[0]) if type(d) == tuple else d
                            for d in initial_pos
                            ]

@@ -29,7 +29,7 @@ class ForwardBee(OFBeeseClass):
                                   )
                  },
                  timeout=30,
-                 bounds=((-7., 27), None, (-7.5, 0.)),
+                 bounds=((-7., 27), None, None),
                  goal_x=20.,
                  img_history_steps=2,
                  see_of_orientation=True,
@@ -118,7 +118,7 @@ class ForwardBee(OFBeeseClass):
         -1 for colliding, .5 for correct height, (0,.5) for incorrect height
         """
         if collided:
-            return -1.
+            return -10.
         pose = self.client.simGetVehiclePose(vehicle_name=self.vehicle_name)
 
         if self.out_of_bounds(pose=pose):
