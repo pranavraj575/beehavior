@@ -135,8 +135,11 @@ class BeeseClass(gym.Env):
         self.col_cnt = max(0, self.col_cnt - 1)
         term, trunc = self.get_termination(collided)
 
+        info = {
+            'collided': collided,
+        }
         # observation, reward, termination, truncation, info
-        return obs, r, term, trunc, {}
+        return obs, r, term, trunc, info
 
     def reset(
             self,
@@ -160,19 +163,21 @@ class BeeseClass(gym.Env):
         self.env_time = 0
         initial_pos = None
         if self.initial_pos is not None:
-            if type(self.initial_pos) == dict:
-                r = np.random.rand()
-                initial_pos = None
-                for (initial_pos, rp) in self.initial_pos.items():
-                    r -= rp
-                    if r < 0:
-                        break
-            else:
-                initial_pos = self.initial_pos
+            initial_pos = self.initial_pos
         if options is not None and 'initial_pos' in options:
+            # overrides default
             initial_pos = options['initial_pos']
 
         if initial_pos is not None:
+            if type(initial_pos) == dict: # if initial_pos is a probability dict of boxes, choose which one to use
+                r = np.random.rand()
+                temp = None
+                for (temp, rp) in initial_pos.items():
+                    r -= rp
+                    if r < 0:
+                        break
+                initial_pos = temp
+
             initial_pos = [d[0] + np.random.rand()*(d[1] - d[0]) if type(d) == tuple else d
                            for d in initial_pos
                            ]

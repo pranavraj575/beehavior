@@ -107,7 +107,7 @@ class ForwardBee(OFBeeseClass):
         term, trunc = super().get_termination(collided=collided)
         if term:
             return term, trunc
-        pose = self.client.simGetVehiclePose(vehicle_name=self.vehicle_name)
+        pose = self.get_pose()
         term = self.out_of_bounds(pose=pose)
         if pose.position.x_val > self.goal_x:
             term = True
@@ -119,8 +119,7 @@ class ForwardBee(OFBeeseClass):
         """
         if collided:
             return -10.
-        pose = self.client.simGetVehiclePose(vehicle_name=self.vehicle_name)
-
+        pose = self.get_pose()
         if self.out_of_bounds(pose=pose):
             return -.5
         if pose.position.x_val > self.goal_x:
@@ -143,7 +142,7 @@ class ForwardBee(OFBeeseClass):
             options: Optional[dict] = None,
     ) -> Tuple[ObsType, dict]:
         stuff = super().reset(seed=seed, options=options, )
-        self.farthest_reached = self.client.simGetVehiclePose(vehicle_name=self.vehicle_name).position.x_val
+        self.farthest_reached = self.get_pose().position.x_val
         return stuff
 
 
