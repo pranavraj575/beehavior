@@ -122,7 +122,7 @@ if __name__ == '__main__':
 
     for epoch in range(args.epochs):
         fname = os.path.join(output_dir, 'epoch_info' + str(epoch) + '.pkl')
-        f = open(fname, 'wb')
+        f = open(fname, 'rb')
         epoch_infos.append(pkl.load(f))
         f.close()
     fname = os.path.join(output_dir, 'all_trajectories.pkl')
