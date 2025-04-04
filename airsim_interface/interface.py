@@ -257,6 +257,7 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name=''
 
     X_dot, Y_dot, Z_dot = T  # Linear velocities
     p, q, r = omega  # Angular velocities
+    # TODO: set these to zero, print p,q,r, etc
 
     # Combine velocities and rotations into a single state vector
     state_vector = np.array([X_dot, Y_dot, Z_dot, p, q, r])
