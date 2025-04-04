@@ -219,6 +219,7 @@ def of_geo(client: airsim.MultirotorClient, camera_name='front', vehicle_name=''
         optic flow array, shaped (2,H,W) for better use in CNNs
         x component, y component
     """
+    # TODO : rotate and check if we correctly ignore orientation
     if FOVx is None:
         FOVx = get_fov(camera_settings=CAMERA_SETTINGS,
                        camera_name=camera_name,

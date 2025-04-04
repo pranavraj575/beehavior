@@ -64,6 +64,7 @@ class ForwardBee(OFBeeseClass):
         get obs vector, including roll, pitch, yaw (yaw is encoded as its sine and cosine components,
             to remove the discontinuity at +-pi). this is not an issue for roll,pitch since they will never get this large
         """
+        #TODO: ignore rpy
         pose = self.get_pose()
         ht = -pose.position.z_val
         r, p, y = self.get_orientation_eulerian(quaternion=(pose.orientation.x_val,

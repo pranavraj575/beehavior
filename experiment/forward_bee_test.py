@@ -43,13 +43,13 @@ if __name__ == '__main__':
     # PARSER.add_argument("--env", action='store', required=False, default='HiBee-v0',
     #                    choices=('Beese-v0', 'HiBee-v0', 'ForwardBee-v0'),
     #                   help="RL gym class to run")
-    PARSER.add_argument("--timesteps-per-epoch", type=int, required=False, default=1024,
+    PARSER.add_argument("--timesteps-per-epoch", type=int, required=False, default=512,
                         help="number of timesteps to train for each epoch")
     PARSER.add_argument("--epochs", type=int, required=False, default=100,
                         help="number of epochs")
     PARSER.add_argument("--nsteps", type=int, required=False, default=512,
                         help="number of steps before learning step")
-    PARSER.add_argument("--testjectories", type=int, required=False, default=100,
+    PARSER.add_argument("--testjectories", type=int, required=False, default=32,
                         help="number of trajectories to collect each epoch")
     PARSER.add_argument("--dt", type=float, required=False, default=.1,
                         help="simulation timestep")
@@ -73,7 +73,9 @@ if __name__ == '__main__':
     print(model.policy)
     for epoch in range(args.epochs):
         print('doing epoch', epoch)
-        model.learn(total_timesteps=args.timesteps_per_epoch)
+        model.learn(total_timesteps=args.timesteps_per_epoch,
+                    reset_num_timesteps=False,
+                    progress_bar=True)
         print('finished training, getting trajectories')
         trajectories = []
         for _ in range(args.testjectories):
