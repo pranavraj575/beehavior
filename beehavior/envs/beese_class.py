@@ -138,6 +138,9 @@ class BeeseClass(gym.Env):
         info = {
             'collided': collided,
         }
+        if type(r) == tuple:
+            r, temp_dic = r
+            info.update(temp_dic)
         # observation, reward, termination, truncation, info
         return obs, r, term, trunc, info
 
@@ -341,8 +344,9 @@ class BeeseClass(gym.Env):
             collided: wthr the agent has collided with a wall (no need to recalculate for both termination and reward)
             obs: observation
         Returns:
+            either a float, or a (float, dic) pair where dic is used to update info_dic
         """
-        return -float(collided)
+        return -float(collided), dict()
 
 
 class OFBeeseClass(BeeseClass):

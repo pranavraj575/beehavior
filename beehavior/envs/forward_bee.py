@@ -66,7 +66,7 @@ class ForwardBee(OFBeeseClass):
         get obs vector, including roll, pitch, yaw (yaw is encoded as its sine and cosine components,
             to remove the discontinuity at +-pi). this is not an issue for roll,pitch since they will never get this large
         """
-        #TODO: ignore rpy
+        # TODO: ignore rpy
         pose = self.get_pose()
         ht = -pose.position.z_val
         r, p, y = self.get_orientation_eulerian(quaternion=(pose.orientation.x_val,
@@ -120,13 +120,15 @@ class ForwardBee(OFBeeseClass):
         """
         -1 for colliding, .5 for correct height, (0,.5) for incorrect height
         """
+        info_dic = {'succ': False}
         if collided:
-            return -10.
+            return -1., info_dic
         pose = self.get_pose()
         if self.out_of_bounds(pose=pose):
-            return -.5
+            return -.5, info_dic
         if pose.position.x_val > self.goal_x:
-            return 10.
+            info_dic['succ'] = True
+            return 1., info_dic
 
         if pose.position.x_val > self.farthest_reached:
             val = pose.position.x_val - self.farthest_reached
@@ -136,7 +138,7 @@ class ForwardBee(OFBeeseClass):
             self.farthest_reached,
             pose.position.x_val,
         )
-        return val
+        return val, info_dic
 
     def reset(
             self,

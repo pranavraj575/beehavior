@@ -142,6 +142,12 @@ if __name__ == '__main__':
         if img and game_interface:
             from matplotlib import pyplot as plt
 
+            of = of_geo(client=client,
+                        camera_name='front',
+                        vehicle_name='',
+                        FOVx=None,
+                        ignore_angular_velocity=True,
+                        )
             response = client.simGetImages([airsim.ImageRequest('front', airsim.ImageType.Scene, False, False)])
             img_data = response[0].image_data_uint8
             if img_data:
@@ -151,7 +157,6 @@ if __name__ == '__main__':
                 plt.imshow(image[:, :, ::-1], interpolation='nearest', )
                 plt.show()
             plt.close()
-            of = of_geo(client=client, camera_name='front', vehicle_name='', FOVx=None)
             of = np.transpose(of, axes=(1, 2, 0))
 
 

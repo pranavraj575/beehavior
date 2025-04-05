@@ -71,6 +71,23 @@ if __name__ == '__main__':
                   n_steps=args.nsteps,
                   )
     print(model.policy)
+
+
+    def pose_to_dic(pose):
+        return {'position':
+                    np.array((pose.position.x_val,
+                              pose.position.y_val,
+                              pose.position.z_val,
+                              )),
+                'orientation':
+                    np.array((pose.orientation.x_val,
+                              pose.orientation.y_val,
+                              pose.orientation.z_val,
+                              pose.orientation.w_val,
+                              ))
+                }
+
+
     for epoch in range(args.epochs):
         print('doing epoch', epoch)
         model.learn(total_timesteps=args.timesteps_per_epoch,
@@ -79,43 +96,34 @@ if __name__ == '__main__':
         print('finished training, getting trajectories')
         trajectories = []
         for _ in range(args.testjectories):
-            poses = []
-            obs, _ = env.reset(options={
-                'initial_pos': ((-3., -2.), (-.5, .5), (-1., -1.5)) # tighter box
+            steps = []
+            obs, info = env.reset(options={
+                'initial_pos': ((-3., -2.), (-.5, .5), (-1., -1.5))  # tighter box
             })
-            rwds = []
+            old_pose = env.unwrapped.get_pose()
             done = False
-            info = None
             while not done:
                 action, _ = model.predict(observation=obs, deterministic=False)
 
                 obs, rwd, done, term, info = env.step(action)
-                rwds.append(rwd)
-                poses.append(env.unwrapped.get_pose())
-
+                pose = env.unwrapped.get_pose()
+                steps.append({
+                    'old_pose': pose_to_dic(old_pose),
+                    'action': action,
+                    'reward': rwd,
+                    'pose': pose_to_dic(pose),
+                    'info': info,
+                })
+                old_pose = pose
+            rwds = [dic['reward'] for dic in steps]
             print('ep length:', len(rwds))
             print('rwd mean:', sum(rwds)/len(rwds))
 
-            trajectories.append({
-                # 'poses': poses,
-                'collided': info['collided'],
-                'rewards': rwds,
-                'positions': [np.array((pose.position.x_val, pose.position.y_val, pose.position.z_val))
-                              for pose in poses],
-                'orientations': [np.array((pose.orientation.x_val,
-                                           pose.orientation.y_val,
-                                           pose.orientation.z_val,
-                                           pose.orientation.w_val,
-                                           ))
-                                 for pose in poses]
-            })
-        epoch_info = {
-            'trajectories': trajectories
-        }
+            trajectories.append(steps)
         print('saving epoch', epoch, 'info')
-        fname = os.path.join(output_dir, 'epoch_info' + str(epoch) + '.pkl')
+        fname = os.path.join(output_dir, 'traj_' + str(epoch) + '.pkl')
         f = open(fname, 'wb')
-        pkl.dump(epoch_info, f)
+        pkl.dump(trajectories, f)
         f.close()
         print('saved epoch')
 

@@ -17,7 +17,7 @@ else:
     epoch_infos = []
     i = 0
     while True:
-        fn = os.path.join(traj_dir, 'epoch_info' + str(i) + '.pkl')
+        fn = os.path.join(traj_dir, 'traj_' + str(i) + '.pkl')
         if not os.path.exists(fn):
             break
         f = open(fn, 'rb')
@@ -29,9 +29,8 @@ means = []
 maxes = []
 xlim = (-5, 15)
 # fig, ax = plt.subplots()
-for epoch, epoch_info in enumerate(epoch_infos):
+for epoch, trajs in enumerate(epoch_infos):
     for all_traj in True, False:
-        trajs = epoch_info['trajectories']
         # plot by swapping x and y
         fig, ax = plt.subplots()
         plt.xlabel('x axis')
@@ -51,12 +50,24 @@ for epoch, epoch_info in enumerate(epoch_infos):
 
 
         def get_dist_traveled(traj):
-            return traj['positions'][-1][0] - traj['positions'][0][0]
+            return traj[-1]['pose']['position'][0] - traj[0]['pose']['position'][0]
 
 
         trajs.sort(key=get_dist_traveled)
         if all_traj:
-            plot_stuff = ((traj, {'color': 'purple'}) for traj in trajs)
+            plot_stuff = []
+            for traj in trajs:
+                kwargs = dict()
+                last_info = traj[-1]['info']
+                collided = last_info['collided']
+                succ = last_info['succ']
+                rewards = np.array([dic['reward'] for dic in traj])
+                kwargs['color'] = 'red'
+                if not collided:
+                    kwargs['color'] = 'yellow'
+                if succ:
+                    kwargs['color'] = 'green'
+                plot_stuff.append((traj, kwargs))
         else:
             medians.append(get_dist_traveled(trajs[len(trajs)//2]))
             maxes.append(get_dist_traveled(trajs[-1]))
@@ -66,11 +77,9 @@ for epoch, epoch_info in enumerate(epoch_infos):
                 (trajs[-1], {'color': 'green', 'label': 'best'})
             )
         for traj, kwargs in plot_stuff:
-            collided = traj['collided']
-            rewards = np.array(traj['rewards'])
-
-            positions = np.stack(traj['positions'], axis=0)
-
+            positions = np.stack([traj[0]['old_pose']['position']] +
+                                 [dic['pose']['position'] for dic in traj],
+                                 axis=0)
             plt.plot(positions[:, 0], positions[:, 1], alpha=alpha, **kwargs)
         if not all_traj:
             plt.legend(loc='upper right', bbox_to_anchor=(.9, -.25))
