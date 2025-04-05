@@ -169,7 +169,7 @@ class BeeseClass(gym.Env):
             initial_pos = options['initial_pos']
 
         if initial_pos is not None:
-            if type(initial_pos) == dict: # if initial_pos is a probability dict of boxes, choose which one to use
+            if type(initial_pos) == dict:  # if initial_pos is a probability dict of boxes, choose which one to use
                 r = np.random.rand()
                 temp = None
                 for (temp, rp) in initial_pos.items():
@@ -367,6 +367,7 @@ class OFBeeseClass(BeeseClass):
                  velocity_ctrl=False,
                  fix_z_to=None,
                  of_mapping=lambda x: np.log(np.clip(x, 10e-3, np.inf)),
+                 of_ignore_angular_velocity=True,
                  ):
         """
         Args:
@@ -381,12 +382,15 @@ class OFBeeseClass(BeeseClass):
             img_history_steps: number of images to show at each time step
             of_mapping: mapping to apply to optic flow
             see_of_orientation: whether bee can see the orientation of OF
+            of_ignore_angular_velocity: whether to ignore angular velocity in OF calc
+                if true, pretends camera is on chicken head
         """
         self.obs_shape = None
         self.img_stack = None
         self.of_mapping = of_mapping
         self.see_of_orientation = see_of_orientation
         self.img_stack_size = img_history_steps*3 if self.see_of_orientation else img_history_steps
+        self.of_ignore_angular_velocity = of_ignore_angular_velocity
         super().__init__(
             client=client,
             dt=dt,
@@ -427,7 +431,11 @@ class OFBeeseClass(BeeseClass):
         return gym.spaces.Box(low=low, high=high, shape=shape, dtype=np.float64)
 
     def get_obs(self):
-        of = of_geo(client=self.client, camera_name='front', vehicle_name=self.vehicle_name, )
+        of = of_geo(client=self.client,
+                    camera_name='front',
+                    vehicle_name=self.vehicle_name,
+                    ignore_angular_velocity=self.of_ignore_angular_velocity,
+                    )
         of_magnitude = np.linalg.norm(of, axis=0)  # magnitude of x and y components of projected optic flow
 
         # H, W = of.shape

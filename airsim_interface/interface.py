@@ -202,7 +202,7 @@ def get_of_geo_shape(client: airsim.MultirotorClient, camera_name='front'):
 def of_geo(client: airsim.MultirotorClient,
            camera_name='front',
            vehicle_name='',
-           consider_angular_velocity=False,
+           ignore_angular_velocity=True,
            FOVx=None,
            ):
     """
@@ -218,8 +218,8 @@ def of_geo(client: airsim.MultirotorClient,
         client: client
         camera_name: name of camera
         vehicle_name: guess
-        consider_angular_velocity: whether to consider angular velocity in calculation
-            if False, calculated as if camera is on chicken head
+        ignore_angular_velocity: whether to ignore angular velocity in calculation
+            if True, calculated as if camera is on chicken head
         FOVx: in DEGREES set to a specific value because client.simGetFieldOfView is wrong
             if None, obtains value in /Documents/Airsim/settings.json, or wherever this file is (set in airsim_interface/settings.txt)
     Returns:
@@ -264,9 +264,8 @@ def of_geo(client: airsim.MultirotorClient,
 
     X_dot, Y_dot, Z_dot = T  # Linear velocities
     p, q, r = omega  # Angular velocities
-    if not consider_angular_velocity:
-        p, q, r = 0., 0., 0. # ignore angular motion of drone
-
+    if ignore_angular_velocity:
+        p, q, r = 0., 0., 0.  # ignore angular motion of drone
     # Combine velocities and rotations into a single state vector
     state_vector = np.array([X_dot, Y_dot, Z_dot, p, q, r])
 

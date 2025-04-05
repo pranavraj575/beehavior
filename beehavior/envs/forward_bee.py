@@ -36,6 +36,7 @@ class ForwardBee(OFBeeseClass):
                  velocity_ctrl=True,
                  fix_z_to=None,
                  of_mapping=lambda x: np.log(np.clip(x, 10e-3, np.inf)),
+                 of_ignore_angular_velocity=True,
                  ):
         """
         Args:
@@ -54,6 +55,7 @@ class ForwardBee(OFBeeseClass):
                          see_of_orientation=see_of_orientation,
                          fix_z_to=fix_z_to,
                          of_mapping=of_mapping,
+                         of_ignore_angular_velocity=of_ignore_angular_velocity,
                          )
         self.bounds = bounds
         self.goal_x = goal_x
