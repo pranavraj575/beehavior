@@ -164,14 +164,11 @@ def OF_cal_worker(calculation_queue, result_queue):
         result_queue.put((row1, row2))  # Send a copy
 
 
-def controller(flow_x):   
-    gain_x_1 = 1
-    gain_x_2 = 0.1
-    T = 1/24
-    # Acce_x = (sum(flow_x[-1])-T) * gain_x_1 + (flow_x[-2] - flow_x[-1])* gain_x_2 # - dragx
-    Acce_x = (sum(flow_x[-1]) - T) * gain_x_1 + np.array(flow_x[-2]) - np.array(flow_x[-1]) * gain_x_2
+def controller(flow_x):
+    input=np.hstack(flow_x[-1],flow_x[-2])
+    ax=
     # Set initial conditions
-    return Acce_x
+    return ax,ay
        
 
 
@@ -225,7 +222,11 @@ while time.time() - start_time < 5:
         ###control things happen
     # Retrieve results from the worker process
     if len(all_avg_flow_x) > 2:
-        controller(all_avg_flow_x)
+        x_acc, y_acc=controller(all_avg_flow_x)
+        x_vel=x_acc
+        y_vel=y_acc
+        client.moveByVelocityAsync(x_vel, y_vel, 0, 1)
+
     prev_img = curr_img
     frame_count += 1
 

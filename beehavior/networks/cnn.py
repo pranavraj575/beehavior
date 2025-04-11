@@ -57,7 +57,7 @@ class CNN(BaseFeaturesExtractor):
                 torch.as_tensor(observation_space.sample()[None]).float()
             ).shape[1]
 
-            if False:  # print out shapes
+            if True:  # print out shapes
                 b = torch.as_tensor(observation_space.sample()[None]).float()
                 print(b.shape)
                 for layer in layers:

@@ -6,7 +6,7 @@ import math
 from collections import deque
 
 from airsim import Vector3r, Pose
-from airsim_interface.interface import connect_client, disconnect_client, step, of_geo, get_of_geo_shape
+from airsim_interface.interface import connect_client, disconnect_client, step, of_geo, get_of_geo_shape, get_depth_img
 
 
 class BeeseClass(gym.Env):
@@ -368,6 +368,7 @@ class OFBeeseClass(BeeseClass):
                  timeout=300,
                  img_history_steps=2,
                  see_of_orientation=True,
+                 cheat_with_inv_depth_img=False,
                  velocity_ctrl=False,
                  fix_z_to=None,
                  of_mapping=lambda x: np.log(np.clip(x, 10e-3, np.inf)),
@@ -388,13 +389,17 @@ class OFBeeseClass(BeeseClass):
             see_of_orientation: whether bee can see the orientation of OF
             of_ignore_angular_velocity: whether to ignore angular velocity in OF calc
                 if true, pretends camera is on chicken head
+            cheat_with_inv_depth_img: give agent 1/depth image
+                used to confirm whether a learning task is possible with depth information
         """
         self.obs_shape = None
         self.img_stack = None
         self.of_mapping = of_mapping
-        self.see_of_orientation = see_of_orientation
-        self.img_stack_size = img_history_steps*3 if self.see_of_orientation else img_history_steps
         self.of_ignore_angular_velocity = of_ignore_angular_velocity
+        self.cheat_with_depth_img = cheat_with_inv_depth_img
+        self.see_of_orientation = see_of_orientation
+        self.imgs_per_step = 1 + 2*int(self.see_of_orientation) + int(self.cheat_with_depth_img)
+        self.img_stack_size = img_history_steps*self.imgs_per_step
         super().__init__(
             client=client,
             dt=dt,
@@ -416,20 +421,22 @@ class OFBeeseClass(BeeseClass):
         C = self.img_stack_size  # stack this many images on top of each other
         shape = self.get_obs_shape()
         arr = np.ones(shape)
-        if self.see_of_orientation:
-            # sees (magnitude, scaled x component, scaled y component, magnitude, ...)
-            # (scaled) magnitude is from -inf to inf
-            # components are -1 to 1
-            low = -1*arr
-            low[:C:3, :, :] = -np.inf
 
-            high = 1*arr
-            high[:C:3, :, :] = np.inf
-        else:
-            # sees (magnitude, magnitude, ...)
-            # each is -inf to inf
-            low = -np.inf*arr
-            high = np.inf*arr
+        # (scaled) magnitudes are from -inf to inf
+        low = -np.inf*arr
+        high = np.inf*arr
+
+        if self.see_of_orientation:
+            # sees (magnitude, scaled x component, scaled y component,...) at each timestep
+            # components are -1 to 1
+            for dim in range(1, 3):
+                low[dim:C:self.imgs_per_step, :, :] = -1
+                high[dim:C:self.imgs_per_step, :, :] = 1
+        if self.cheat_with_depth_img:
+            # sees (magnitude,...,depth_img) at each timestep
+            # depth image is [0,inf)
+            low[self.imgs_per_step - 1:C:self.imgs_per_step, :, :] = 0
+            high[self.imgs_per_step - 1:C:self.imgs_per_step, :, :] = np.inf
         low[C:, :, :] = -np.inf
         high[C:, :, :] = np.inf
         return gym.spaces.Box(low=low, high=high, shape=shape, dtype=np.float64)
@@ -451,12 +458,16 @@ class OFBeeseClass(BeeseClass):
             clipped_mag = np.clip(of_magnitude, 10e-4, np.inf)  # avoid division by zero
             self.img_stack.append(of[0]/clipped_mag)
             self.img_stack.append(of[1]/clipped_mag)
-
+        if self.cheat_with_depth_img:
+            depth = get_depth_img(client=self.client,
+                                  camera_name='front',
+                                  numpee=True,
+                                  )
+            self.img_stack.append(1/depth)
         while len(self.img_stack) < self.img_stack_size:
-            if self.see_of_orientation:
-                self.img_stack.extend([self.img_stack[i] for i in range(3)])  # copy the first 3 elements
-            else:
-                self.img_stack.append(self.img_stack[0])  # copy the first (only) element
+            # copy the first however many elements
+            extensor = [self.img_stack[i] for i in range(self.imgs_per_step)]
+            self.img_stack.extend(extensor)
 
         vec = self.get_obs_vector()
         # (m,) sized vector, goal conditioning

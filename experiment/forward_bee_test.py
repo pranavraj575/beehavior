@@ -60,7 +60,9 @@ if __name__ == '__main__':
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    env = gym.make('ForwardBee-v0', dt=args.dt, )
+    env = gym.make('ForwardBee-v0', dt=args.dt,
+                   cheat_with_inv_depth_img=True,
+                   )
     policy_kwargs = dict(
         features_extractor_class=CustomCNN,
         features_extractor_kwargs=dict(features_dim=128),
@@ -131,7 +133,7 @@ if __name__ == '__main__':
     epoch_infos = []
 
     for epoch in range(args.epochs):
-        fname = os.path.join(output_dir, 'epoch_info' + str(epoch) + '.pkl')
+        fname = os.path.join(output_dir, 'traj_' + str(epoch) + '.pkl')
         f = open(fname, 'rb')
         epoch_infos.append(pkl.load(f))
         f.close()

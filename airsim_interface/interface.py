@@ -176,7 +176,9 @@ def get_depth_img(client: airsim.MultirotorClient, camera_name='front', numpee=F
         print('IMG CAPTURE FAILED SOMEHOW? trying to capture image again')
         depth_image = client.simGetImages([
             airsim.ImageRequest(camera_name,
-                                airsim.ImageType.DepthPerspective, True)
+                                img_type,
+                                True,
+                                )
         ])[0]
     if numpee:
         image_height = depth_image.height
