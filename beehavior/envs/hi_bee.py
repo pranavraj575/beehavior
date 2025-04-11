@@ -20,12 +20,10 @@ class HiBee(OFBeeseClass):
                  initial_position=((-1., 0.), (-1., 1.), (-1., -1.5)),
                  timeout=30,
                  img_history_steps=2,
-                 see_of_orientation=True,
+                 input_img_space=(OFBeeseClass.LOG_OF, OFBeeseClass.OF_ORIENTATION,),
                  velocity_ctrl=False,
                  fix_z_to=None,
-                 of_mapping=lambda x: np.log(np.clip(x, 10e-3, np.inf)),
                  of_ignore_angular_velocity=True,
-                 cheat_with_inv_depth_img=False,
                  ):
         """
         Args:
@@ -40,12 +38,10 @@ class HiBee(OFBeeseClass):
                          initial_position=initial_position,
                          timeout=timeout,
                          img_history_steps=img_history_steps,
-                         see_of_orientation=see_of_orientation,
+                         input_img_space=input_img_space,
                          velocity_ctrl=velocity_ctrl,
                          fix_z_to=fix_z_to,
-                         of_mapping=of_mapping,
                          of_ignore_angular_velocity=of_ignore_angular_velocity,
-                         cheat_with_inv_depth_img=cheat_with_inv_depth_img,
                          )
         self.ht_rng = height_range
         # shoot for average

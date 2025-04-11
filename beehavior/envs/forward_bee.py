@@ -32,12 +32,10 @@ class ForwardBee(OFBeeseClass):
                  bounds=((-7., 27), None, None),
                  goal_x=20.,
                  img_history_steps=2,
-                 see_of_orientation=True,
+                 input_img_space=(OFBeeseClass.LOG_OF, OFBeeseClass.OF_ORIENTATION,),
                  velocity_ctrl=True,
                  fix_z_to=None,
-                 of_mapping=lambda x: np.log(np.clip(x, 10e-3, np.inf)),
                  of_ignore_angular_velocity=True,
-                 cheat_with_inv_depth_img=False,
                  ):
         """
         Args:
@@ -52,12 +50,10 @@ class ForwardBee(OFBeeseClass):
                          initial_position=initial_position,
                          timeout=timeout,
                          img_history_steps=img_history_steps,
+                         input_img_space=input_img_space,
                          velocity_ctrl=velocity_ctrl,
-                         see_of_orientation=see_of_orientation,
                          fix_z_to=fix_z_to,
-                         of_mapping=of_mapping,
                          of_ignore_angular_velocity=of_ignore_angular_velocity,
-                         cheat_with_inv_depth_img=cheat_with_inv_depth_img,
                          )
         self.bounds = bounds
         self.goal_x = goal_x

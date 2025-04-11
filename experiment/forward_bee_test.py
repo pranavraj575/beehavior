@@ -35,6 +35,7 @@ if __name__ == '__main__':
     import os
     import pickle as pkl
     import beehavior
+    from beehavior.envs.forward_bee import ForwardBee
 
     PARSER = argparse.ArgumentParser(
         description='run RL on envionrment'
@@ -61,7 +62,10 @@ if __name__ == '__main__':
         os.makedirs(output_dir)
 
     env = gym.make('ForwardBee-v0', dt=args.dt,
-                   cheat_with_inv_depth_img=True,
+                   input_img_space=(ForwardBee.LOG_OF,
+                                    ForwardBee.OF_ORIENTATION,
+                                    ForwardBee.INV_DEPTH_IMG,
+                                    ),
                    )
     policy_kwargs = dict(
         features_extractor_class=CustomCNN,

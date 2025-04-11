@@ -356,6 +356,17 @@ class OFBeeseClass(BeeseClass):
     the reason we do it this way is because gym.space.Tuple is not supported by stable_baselines3
         we could make our own networks, but just appending is easier
     """
+    # these are used to specify what the agent can sense as an image
+    RAW_OF = 'RAW_OF'
+    # geometric optic flow
+    LOG_OF = 'LOG_OF'
+    # geometric optic flow, scaled by log
+    OF_ORIENTATION = 'OF_ORIENTATION'
+    #  whether bee can see the orientation of OF
+    INV_DEPTH_IMG = 'INV_DEPTH_IMG'
+
+    # give agent 1/depth image
+    #   used to confirm whether a learning task is possible with depth information
 
     def __init__(self,
                  client=None,
@@ -367,11 +378,9 @@ class OFBeeseClass(BeeseClass):
                  initial_position=None,
                  timeout=300,
                  img_history_steps=2,
-                 see_of_orientation=True,
-                 cheat_with_inv_depth_img=False,
+                 input_img_space=(LOG_OF, OF_ORIENTATION,),
                  velocity_ctrl=False,
                  fix_z_to=None,
-                 of_mapping=lambda x: np.log(np.clip(x, 10e-3, np.inf)),
                  of_ignore_angular_velocity=True,
                  ):
         """
@@ -386,6 +395,8 @@ class OFBeeseClass(BeeseClass):
             timeout:
             img_history_steps: number of images to show at each time step
             of_mapping: mapping to apply to optic flow
+            input_img_space: list of keys that determines what the agent can visually see, keys are
+                RAW_OF, LOG_OF, OF_ORIENTATION, INV_DEPTH_IMG
             see_of_orientation: whether bee can see the orientation of OF
             of_ignore_angular_velocity: whether to ignore angular velocity in OF calc
                 if true, pretends camera is on chicken head
@@ -394,11 +405,13 @@ class OFBeeseClass(BeeseClass):
         """
         self.obs_shape = None
         self.img_stack = None
-        self.of_mapping = of_mapping
         self.of_ignore_angular_velocity = of_ignore_angular_velocity
-        self.cheat_with_depth_img = cheat_with_inv_depth_img
-        self.see_of_orientation = see_of_orientation
-        self.imgs_per_step = 1 + 2*int(self.see_of_orientation) + int(self.cheat_with_depth_img)
+        self.input_img_space = set(input_img_space)
+        self.imgs_per_step = (int(self.RAW_OF in self.input_img_space) +
+                              int(self.LOG_OF in self.input_img_space) +
+                              2*int(self.OF_ORIENTATION in self.input_img_space) +
+                              int(self.cheat_with_depth_img)
+                              )
         self.img_stack_size = img_history_steps*self.imgs_per_step
         super().__init__(
             client=client,
@@ -425,18 +438,29 @@ class OFBeeseClass(BeeseClass):
         # (scaled) magnitudes are from -inf to inf
         low = -np.inf*arr
         high = np.inf*arr
-
-        if self.see_of_orientation:
-            # sees (magnitude, scaled x component, scaled y component,...) at each timestep
+        i = 0
+        if self.RAW_OF in self.input_img_space:
+            # sees (...,raw_OF,...) at each timestep
+            # OF is on [0,inf)
+            low[i:C:self.imgs_per_step, :, :] = 0
+            i += 1
+        if self.LOG_OF in self.input_img_space:
+            # sees (log(OF),...) at each timestep
+            # log(OF) is on (-inf,inf) (we clip to avoid log(0) error)
+            i += 1
+        if self.OF_ORIENTATION in self.input_img_space:
+            # sees (..., scaled x component, scaled y component,...) at each timestep
             # components are -1 to 1
-            for dim in range(1, 3):
-                low[dim:C:self.imgs_per_step, :, :] = -1
-                high[dim:C:self.imgs_per_step, :, :] = 1
-        if self.cheat_with_depth_img:
-            # sees (magnitude,...,depth_img) at each timestep
-            # depth image is [0,inf)
-            low[self.imgs_per_step - 1:C:self.imgs_per_step, :, :] = 0
-            high[self.imgs_per_step - 1:C:self.imgs_per_step, :, :] = np.inf
+            for dim in range(2):
+                low[i:C:self.imgs_per_step, :, :] = -1
+                high[i:C:self.imgs_per_step, :, :] = 1
+                i += 1
+        if self.INV_DEPTH_IMG in self.input_img_space:
+            # sees (...,depth_img,...) at each timestep
+            # depth image and inv depth img is [0,inf)
+            low[i:C:self.imgs_per_step, :, :] = 0
+            high[i:C:self.imgs_per_step, :, :] = np.inf
+            i += 1
         low[C:, :, :] = -np.inf
         high[C:, :, :] = np.inf
         return gym.spaces.Box(low=low, high=high, shape=shape, dtype=np.float64)
@@ -448,22 +472,30 @@ class OFBeeseClass(BeeseClass):
                     ignore_angular_velocity=self.of_ignore_angular_velocity,
                     )
         of_magnitude = np.linalg.norm(of, axis=0)  # magnitude of x and y components of projected optic flow
-
         # H, W = of.shape
-
-        # (_,H,W) optic flow data
-        self.img_stack.append(self.of_mapping(of_magnitude))
-
-        if self.see_of_orientation:  # add x and y
+        if self.RAW_OF in self.input_img_space:
+            # (H,W) optic flow magnitude  on [0,inf)
+            self.img_stack.append(of_magnitude.copy())
+        if self.LOG_OF in self.input_img_space:
+            # (H,W) log(optic flow magnitude)  on (-inf,inf)
+            # clipped to avoid log(0) error
+            self.img_stack.append(np.log(np.clip(of_magnitude, 10e-3, np.inf)))
+        if self.OF_ORIENTATION in self.input_img_space:
+            # 2x (H,W) for x and y components of optic flow orientation
+            #  each component is -1 to 1
             clipped_mag = np.clip(of_magnitude, 10e-4, np.inf)  # avoid division by zero
             self.img_stack.append(of[0]/clipped_mag)
             self.img_stack.append(of[1]/clipped_mag)
-        if self.cheat_with_depth_img:
+        if self.INV_DEPTH_IMG in self.input_img_space:
+            # sees (...,inv_depth_img,...) at each timestep
+            # depth image and inv depth img are on (0,inf)
             depth = get_depth_img(client=self.client,
                                   camera_name='front',
                                   numpee=True,
                                   )
-            self.img_stack.append(1/depth)
+            # clip depth to avoid 1/0 error, this means minimum visible depth is .001m which is resonable
+            self.img_stack.append(1/np.clip(depth, 10e-3, np.inf))
+
         while len(self.img_stack) < self.img_stack_size:
             # copy the first however many elements
             extensor = [self.img_stack[i] for i in range(self.imgs_per_step)]
