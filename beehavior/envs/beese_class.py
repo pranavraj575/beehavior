@@ -400,8 +400,6 @@ class OFBeeseClass(BeeseClass):
             see_of_orientation: whether bee can see the orientation of OF
             of_ignore_angular_velocity: whether to ignore angular velocity in OF calc
                 if true, pretends camera is on chicken head
-            cheat_with_inv_depth_img: give agent 1/depth image
-                used to confirm whether a learning task is possible with depth information
         """
         self.obs_shape = None
         self.img_stack = None
@@ -410,7 +408,7 @@ class OFBeeseClass(BeeseClass):
         self.imgs_per_step = (int(self.RAW_OF in self.input_img_space) +
                               int(self.LOG_OF in self.input_img_space) +
                               2*int(self.OF_ORIENTATION in self.input_img_space) +
-                              int(self.cheat_with_depth_img)
+                              int(self.INV_DEPTH_IMG in self.input_img_space)
                               )
         self.img_stack_size = img_history_steps*self.imgs_per_step
         super().__init__(

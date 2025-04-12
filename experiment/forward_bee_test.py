@@ -54,18 +54,33 @@ if __name__ == '__main__':
                         help="number of trajectories to collect each epoch")
     PARSER.add_argument("--dt", type=float, required=False, default=.1,
                         help="simulation timestep")
+    PARSER.add_argument("--include-raw-of", action='store_true', required=False,
+                        help="include raw OF in input")
+    PARSER.add_argument("--include-depth", action='store_true', required=False,
+                        help="include depth in input")
 
     args = PARSER.parse_args()
+    img_input_space = [ForwardBee.LOG_OF,
+                       ForwardBee.OF_ORIENTATION,
+                       ]
+    if args.include_raw_of:
+        img_input_space.append(ForwardBee.RAW_OF)
+    if args.include_depth:
+        img_input_space.append(ForwardBee.INV_DEPTH_IMG)
+    ident = 'forw_bee_test'
+    ident += '_input_'
+    for key in (ForwardBee.RAW_OF, ForwardBee.LOG_OF, ForwardBee.OF_ORIENTATION, ForwardBee.INV_DEPTH_IMG):
+        if key in img_input_space:
+            ident += 'y'
+        else:
+            ident += 'n'
     DIR = os.path.dirname(os.path.dirname(__file__))
-    output_dir = os.path.join(DIR, 'output', 'forw_bee_test')
+    output_dir = os.path.join(DIR, 'output', ident)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-
+    print('saving trajectories to', output_dir)
     env = gym.make('ForwardBee-v0', dt=args.dt,
-                   input_img_space=(ForwardBee.LOG_OF,
-                                    ForwardBee.OF_ORIENTATION,
-                                    ForwardBee.INV_DEPTH_IMG,
-                                    ),
+                   input_img_space=img_input_space,
                    )
     policy_kwargs = dict(
         features_extractor_class=CustomCNN,
