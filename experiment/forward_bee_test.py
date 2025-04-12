@@ -56,17 +56,26 @@ if __name__ == '__main__':
                         help="simulation timestep")
     PARSER.add_argument("--include-raw-of", action='store_true', required=False,
                         help="include raw OF in input")
+    PARSER.add_argument("--include-log-of", action='store_true', required=False,
+                        help="include log OF in input")
+    PARSER.add_argument("--include-of-orientation", action='store_true', required=False,
+                        help="include OF orientation in input")
     PARSER.add_argument("--include-depth", action='store_true', required=False,
                         help="include depth in input")
 
     args = PARSER.parse_args()
-    img_input_space = [ForwardBee.LOG_OF,
-                       ForwardBee.OF_ORIENTATION,
-                       ]
+
+    img_input_space = []
+    if args.include_log_of:
+        img_input_space.append(ForwardBee.LOG_OF)
+    if args.include_of_orientation:
+        img_input_space.append(ForwardBee.OF_ORIENTATION)
     if args.include_raw_of:
         img_input_space.append(ForwardBee.RAW_OF)
     if args.include_depth:
         img_input_space.append(ForwardBee.INV_DEPTH_IMG)
+    if not img_input_space:
+        raise Exception('need to add at least one image input')
     ident = 'forw_bee_test'
     ident += '_input_'
     for key in (ForwardBee.RAW_OF, ForwardBee.LOG_OF, ForwardBee.OF_ORIENTATION, ForwardBee.INV_DEPTH_IMG):
