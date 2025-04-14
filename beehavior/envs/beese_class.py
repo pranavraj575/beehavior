@@ -18,17 +18,21 @@ class BeeseClass(gym.Env):
     reward is just -1 for collisions
     terminates upon collision
     """
+    ACTION_ROLL_PITCH_YAW = 'rpy'  # action bounds about np.pi/18 (10 degrees tilt)
+    ACTION_VELOCITY = 'vel'  # action bounds about 1.5 m/s
+    ACTION_VELOCITY_XY = 'vel_xy'  # action bounds aboutn 1.5 m/s
+    ACTION_ACCELERATION = 'acc'  # action bounds about 3 m/s^2
 
     def __init__(self,
                  client=None,
                  dt=.25,
-                 max_tilt=np.pi/18,
+                 action_bounds=None,
                  vehicle_name='',
-                 of_camera='front',
                  real_time=False,
                  collision_grace=1,
                  initial_position=None,
-                 velocity_ctrl=False,
+                 action_type=ACTION_VELOCITY,
+                 velocity_bounds=1.5,
                  fix_z_to=None,
                  timeout=300,
                  ):
@@ -37,14 +41,20 @@ class BeeseClass(gym.Env):
             client: airsim interface client
                 if None, makes own client
             dt: actions run for this amount of time
-            max_tilt: maximum RADIANS that agent can roll/pitch
+            action_bounds: maximum action magnitude that agent can take
+                if action is ROLL_PITCH_YAW, this is max RADIANS that agent can roll/pitch
+                if action is VELOCITY, this is maximum velocity (m/s) in each dimension
+                if action is ACCELERATION, this is maximum acceleration (m/s^2) in each dimension
+                    at each timestep, the acceleration*dt is added to the velocity
+                if None, this will be the default bounds for each action type
             vehicle_name: name of vehicle
             real_time: if true, does not pause simulation after each step
             collision_grace: number of timesteps to forgive collisions after reset
             initial_position: initial position to go to after reset, box of ((x low, x high),(y low, y high), (z low, z high))
                 each dim can be replaced by a value instead of a range
                 also can be a dict of (initial pos box: prob), where the probs add to 1
-            velocity_ctrl: output velocity command (x,y,z) instead of r,p,thrust
+            velocity_bounds:
+                if acceleration ctrl, this is the maximum velocity magnitude on each dimension
             fix_z_to: if velocity_ctrl, fixes the height to a certin value, if None, doesnt do this
             timeout: seconds until env timeout
         """
@@ -54,31 +64,56 @@ class BeeseClass(gym.Env):
         self.client = client
 
         self.vehicle_name = vehicle_name
-        self.of_camera = of_camera
         self.dt = dt
-        self.max_tilt = max_tilt
+        self.action_bounds = action_bounds
         self.real_time = real_time
         self.collision_grace = collision_grace
         self.initial_pos = initial_position
         self.timeout = timeout
         self.env_time = 0  # count environment time in intervals of dt
-        self.velocity_ctrl = velocity_ctrl
+        self.action_type = action_type
         self.fix_z_to = fix_z_to
+        self.velocity_bounds = velocity_bounds
 
-        if self.velocity_ctrl:
+        if self.action_type == self.ACTION_VELOCITY:
+            if self.action_bounds is None:
+                self.action_bounds = 1.5
             self.action_space = gym.spaces.Box(
-                low=np.array([-1, -1, -1]),
-                high=np.array([1, 1, 1]),
+                low=-self.action_bounds,
+                high=self.action_bounds,
+                shape=(3,),
+                dtype=np.float64,
+            )
+        elif self.action_type == self.ACTION_VELOCITY_XY:
+            if self.action_bounds is None:
+                self.action_bounds = 1.5
+            self.action_space = gym.spaces.Box(
+                low=-self.action_bounds,
+                high=self.action_bounds,
+                shape=(2,),
+                dtype=np.float64,
+            )
+        elif self.action_type == self.ACTION_ACCELERATION:
+            if self.action_bounds is None:
+                self.action_bounds = 3.
+            self.velocity_target = np.zeros(3)
+            self.action_space = gym.spaces.Box(
+                low=-self.action_bounds,
+                high=self.action_bounds,
+                shape=(3,),
+                dtype=np.float64,
+            )
+        elif self.action_type == self.ACTION_ROLL_PITCH_YAW:
+            if self.action_bounds is None:
+                self.action_bounds = np.pi/18
+            self.action_space = gym.spaces.Box(
+                low=np.array([-self.action_bounds, -self.action_bounds, 0]),
+                high=np.array([self.action_bounds, self.action_bounds, 1]),
                 shape=(3,),
                 dtype=np.float64,
             )
         else:
-            self.action_space = gym.spaces.Box(
-                low=np.array([-self.max_tilt, -self.max_tilt, 0]),
-                high=np.array([self.max_tilt, self.max_tilt, 1]),
-                shape=(3,),
-                dtype=np.float64,
-            )
+            raise NotImplementedError
         self.observation_space = self.define_observation_space()
 
     def step(self, action: ActType) -> Tuple[ObsType, float, bool, bool, dict]:
@@ -90,24 +125,35 @@ class BeeseClass(gym.Env):
             (observation, reward, termination,
                     truncation, info)
         """
-        if self.velocity_ctrl:
+        if self.action_type == self.ACTION_VELOCITY:
             vx, vy, vz = action
-            if self.fix_z_to is not None:
-                cmd = lambda: self.client.moveByVelocityZAsync(vx=vx,
-                                                               vy=vy,
-                                                               z=self.fix_z_to,
-                                                               duration=self.dt,
-                                                               vehicle_name=self.vehicle_name,
-                                                               )
-            else:
-                cmd = lambda: self.client.moveByVelocityAsync(vx=vx,
-                                                              vy=vy,
-                                                              vz=vz,
-                                                              duration=self.dt,
-                                                              vehicle_name=self.vehicle_name,
-                                                              )
-
-        else:
+            cmd = lambda: self.client.moveByVelocityAsync(vx=vx,
+                                                          vy=vy,
+                                                          vz=vz,
+                                                          duration=self.dt,
+                                                          vehicle_name=self.vehicle_name,
+                                                          )
+        elif self.action_type == self.ACTION_VELOCITY_XY:
+            target_ht = self.fix_z_to if self.fix_z_to is not None else self.get_pose().position.z_val
+            cmd = lambda: self.client.moveByVelocityZAsync(vx=vx,
+                                                           vy=vy,
+                                                           z=target_ht,
+                                                           duration=self.dt,
+                                                           vehicle_name=self.vehicle_name,
+                                                           )
+        elif self.action_type == self.ACTION_ACCELERATION:
+            self.velocity_target = np.clip(self.velocity_target + action*self.dt,
+                                           -self.velocity_bounds,
+                                           self.velocity_bounds,
+                                           )
+            vx, vy, vz = self.velocity_target
+            cmd = lambda: self.client.moveByVelocityAsync(vx=vx,
+                                                          vy=vy,
+                                                          vz=vz,
+                                                          duration=self.dt,
+                                                          vehicle_name=self.vehicle_name,
+                                                          )
+        elif self.action_type == self.ACTION_ROLL_PITCH_YAW:
             roll, pitch, thrust = action
             cmd = lambda: self.client.moveByRollPitchYawrateThrottleAsync(roll=roll,
                                                                           pitch=pitch,
@@ -116,6 +162,8 @@ class BeeseClass(gym.Env):
                                                                           duration=self.dt,
                                                                           vehicle_name=self.vehicle_name,
                                                                           )
+        else:
+            raise NotImplementedError
         step(client=self.client,
              seconds=self.dt,
              cmd=cmd,
@@ -288,19 +336,6 @@ class BeeseClass(gym.Env):
 
         return rl, ptch, yw
 
-    def get_of_data(self):
-        """
-        gets np array of optic flow from last completed step()
-        """
-        return of_geo(client=self.client, camera_name=self.of_camera, vehicle_name=self.vehicle_name)
-
-    def get_of_data_shape(self):
-        """
-        shape of self.get_of_data()
-        costly, should not be run too many times, as we can either save this shape or just look at the last observation
-        """
-        return get_of_geo_shape(client=self.client, camera_name=self.of_camera)
-
     def get_obs_vector(self):
         """
         gets observation vector from last completed step()
@@ -357,13 +392,13 @@ class OFBeeseClass(BeeseClass):
         we could make our own networks, but just appending is easier
     """
     # these are used to specify what the agent can sense as an image
-    RAW_OF = 'RAW_OF'
+    INPUT_RAW_OF = 'INPUT_RAW_OF'
     # geometric optic flow
-    LOG_OF = 'LOG_OF'
+    INPUT_LOG_OF = 'INPUT_LOG_OF'
     # geometric optic flow, scaled by log
-    OF_ORIENTATION = 'OF_ORIENTATION'
+    INPUT_OF_ORIENTATION = 'INPUT_OF_ORIENTATION'
     #  whether bee can see the orientation of OF
-    INV_DEPTH_IMG = 'INV_DEPTH_IMG'
+    INPUT_INV_DEPTH_IMG = 'INPUT_INV_DEPTH_IMG'
 
     # give agent 1/depth image
     #   used to confirm whether a learning task is possible with depth information
@@ -371,15 +406,17 @@ class OFBeeseClass(BeeseClass):
     def __init__(self,
                  client=None,
                  dt=.25,
-                 max_tilt=np.pi/18,
+                 action_bounds=1.5,
                  vehicle_name='',
                  real_time=False,
                  collision_grace=1,
+                 of_camera='front',
                  initial_position=None,
                  timeout=300,
                  img_history_steps=2,
-                 input_img_space=(LOG_OF, OF_ORIENTATION,),
-                 velocity_ctrl=False,
+                 input_img_space=(INPUT_LOG_OF, INPUT_OF_ORIENTATION,),
+                 velocity_bounds=1.5,
+                 action_type=BeeseClass.ACTION_VELOCITY,
                  fix_z_to=None,
                  of_ignore_angular_velocity=True,
                  ):
@@ -387,11 +424,10 @@ class OFBeeseClass(BeeseClass):
         Args:
             client:
             dt:
-            max_tilt:
+            action_bounds:
             vehicle_name:
             real_time:
-            collision_grace:
-            initial_position:
+            of_camera: camera to take OF information from
             timeout:
             img_history_steps: number of images to show at each time step
             of_mapping: mapping to apply to optic flow
@@ -404,24 +440,26 @@ class OFBeeseClass(BeeseClass):
         self.obs_shape = None
         self.img_stack = None
         self.of_ignore_angular_velocity = of_ignore_angular_velocity
+        self.of_camera = of_camera
         self.input_img_space = set(input_img_space)
-        self.imgs_per_step = (int(self.RAW_OF in self.input_img_space) +
-                              int(self.LOG_OF in self.input_img_space) +
-                              2*int(self.OF_ORIENTATION in self.input_img_space) +
-                              int(self.INV_DEPTH_IMG in self.input_img_space)
+        self.imgs_per_step = (int(self.INPUT_RAW_OF in self.input_img_space) +
+                              int(self.INPUT_LOG_OF in self.input_img_space) +
+                              2*int(self.INPUT_OF_ORIENTATION in self.input_img_space) +
+                              int(self.INPUT_INV_DEPTH_IMG in self.input_img_space)
                               )
         self.img_stack_size = img_history_steps*self.imgs_per_step
         super().__init__(
             client=client,
             dt=dt,
-            max_tilt=max_tilt,
+            action_bounds=action_bounds,
             vehicle_name=vehicle_name,
             real_time=real_time,
             collision_grace=collision_grace,
             initial_position=initial_position,
-            timeout=timeout,
-            velocity_ctrl=velocity_ctrl,
+            action_type=action_type,
+            velocity_bounds=velocity_bounds,
             fix_z_to=fix_z_to,
+            timeout=timeout,
         )
 
     def define_observation_space(self):
@@ -437,23 +475,23 @@ class OFBeeseClass(BeeseClass):
         low = -np.inf*arr
         high = np.inf*arr
         i = 0
-        if self.RAW_OF in self.input_img_space:
+        if self.INPUT_RAW_OF in self.input_img_space:
             # sees (...,raw_OF,...) at each timestep
             # OF is on [0,inf)
             low[i:C:self.imgs_per_step, :, :] = 0
             i += 1
-        if self.LOG_OF in self.input_img_space:
+        if self.INPUT_LOG_OF in self.input_img_space:
             # sees (log(OF),...) at each timestep
             # log(OF) is on (-inf,inf) (we clip to avoid log(0) error)
             i += 1
-        if self.OF_ORIENTATION in self.input_img_space:
+        if self.INPUT_OF_ORIENTATION in self.input_img_space:
             # sees (..., scaled x component, scaled y component,...) at each timestep
             # components are -1 to 1
             for dim in range(2):
                 low[i:C:self.imgs_per_step, :, :] = -1
                 high[i:C:self.imgs_per_step, :, :] = 1
                 i += 1
-        if self.INV_DEPTH_IMG in self.input_img_space:
+        if self.INPUT_INV_DEPTH_IMG in self.input_img_space:
             # sees (...,depth_img,...) at each timestep
             # depth image and inv depth img is [0,inf)
             low[i:C:self.imgs_per_step, :, :] = 0
@@ -471,20 +509,20 @@ class OFBeeseClass(BeeseClass):
                     )
         of_magnitude = np.linalg.norm(of, axis=0)  # magnitude of x and y components of projected optic flow
         # H, W = of.shape
-        if self.RAW_OF in self.input_img_space:
+        if self.INPUT_RAW_OF in self.input_img_space:
             # (H,W) optic flow magnitude  on [0,inf)
             self.img_stack.append(of_magnitude.copy())
-        if self.LOG_OF in self.input_img_space:
+        if self.INPUT_LOG_OF in self.input_img_space:
             # (H,W) log(optic flow magnitude)  on (-inf,inf)
             # clipped to avoid log(0) error
             self.img_stack.append(np.log(np.clip(of_magnitude, 10e-3, np.inf)))
-        if self.OF_ORIENTATION in self.input_img_space:
+        if self.INPUT_OF_ORIENTATION in self.input_img_space:
             # 2x (H,W) for x and y components of optic flow orientation
             #  each component is -1 to 1
             clipped_mag = np.clip(of_magnitude, 10e-4, np.inf)  # avoid division by zero
             self.img_stack.append(of[0]/clipped_mag)
             self.img_stack.append(of[1]/clipped_mag)
-        if self.INV_DEPTH_IMG in self.input_img_space:
+        if self.INPUT_INV_DEPTH_IMG in self.input_img_space:
             # sees (...,inv_depth_img,...) at each timestep
             # depth image and inv depth img are on (0,inf)
             depth = get_depth_img(client=self.client,
@@ -529,6 +567,23 @@ class OFBeeseClass(BeeseClass):
         self.img_stack = deque(maxlen=self.img_stack_size)
         stuf = super().reset(seed=seed, options=options)
         return stuf
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    # OF STUFF
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    def get_of_data(self):
+        """
+        gets np array of optic flow from last completed step()
+        """
+        return of_geo(client=self.client, camera_name=self.of_camera, vehicle_name=self.vehicle_name)
+
+    def get_of_data_shape(self):
+        """
+        shape of self.get_of_data()
+        costly, should not be run too many times, as we can either save this shape or just look at the last observation
+        """
+        return get_of_geo_shape(client=self.client, camera_name=self.of_camera)
 
 
 if __name__ == '__main__':

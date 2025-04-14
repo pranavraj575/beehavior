@@ -10,6 +10,7 @@ if __name__ == '__main__':
 
     from curtsies import Input
     import beehavior
+    from beehavior.envs.beese_class import BeeseClass
 
     PARSER = argparse.ArgumentParser(
         description='Control gym enviornment drone with keyboard: '
@@ -22,7 +23,7 @@ if __name__ == '__main__':
     )
 
     PARSER.add_argument("--env", action='store', required=False, default='Beese-v0',
-                        choices=('Beese-v0', 'HiBee-v0','ForwardBee-v0'),
+                        choices=('Beese-v0', 'HiBee-v0', 'ForwardBee-v0'),
                         help="RL gym class to run")
     PARSER.add_argument("--dt", type=float, required=False, default=.25,
                         help="time in between commands sent to simulation")
@@ -85,9 +86,9 @@ if __name__ == '__main__':
 
     env = gym.make(args.env,
                    dt=args.dt,
-                   max_tilt=args.radian_ctrl*args.max_ctrl,
+                   action_bounds=args.radian_ctrl*args.max_ctrl,
                    real_time=args.real_time,
-                   velocity_ctrl=False,
+                   action_type=BeeseClass.ACTION_ROLL_PITCH_YAW,
                    )
 
     env.reset()

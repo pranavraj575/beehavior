@@ -54,6 +54,13 @@ if __name__ == '__main__':
                         help="number of trajectories to collect each epoch")
     PARSER.add_argument("--dt", type=float, required=False, default=.1,
                         help="simulation timestep")
+    PARSER.add_argument('--action-type', action='store', required=False, default=ForwardBee.ACTION_VELOCITY,
+                        choices=(ForwardBee.ACTION_VELOCITY,
+                                 ForwardBee.ACTION_VELOCITY_XY,
+                                 ForwardBee.ACTION_ACCELERATION,
+                                 ForwardBee.ACTION_ROLL_PITCH_YAW,
+                                 ),
+                        help='action space to use: velocity, acceleration, or rpy')
     PARSER.add_argument("--include-raw-of", action='store_true', required=False,
                         help="include raw OF in input")
     PARSER.add_argument("--include-log-of", action='store_true', required=False,
@@ -67,29 +74,36 @@ if __name__ == '__main__':
 
     img_input_space = []
     if args.include_log_of:
-        img_input_space.append(ForwardBee.LOG_OF)
+        img_input_space.append(ForwardBee.INPUT_LOG_OF)
     if args.include_of_orientation:
-        img_input_space.append(ForwardBee.OF_ORIENTATION)
+        img_input_space.append(ForwardBee.INPUT_OF_ORIENTATION)
     if args.include_raw_of:
-        img_input_space.append(ForwardBee.RAW_OF)
+        img_input_space.append(ForwardBee.INPUT_RAW_OF)
     if args.include_depth:
-        img_input_space.append(ForwardBee.INV_DEPTH_IMG)
+        img_input_space.append(ForwardBee.INPUT_INV_DEPTH_IMG)
     if not img_input_space:
         raise Exception('need to add at least one image input')
     ident = 'forw_bee_test'
     ident += '_input_'
-    for key in (ForwardBee.RAW_OF, ForwardBee.LOG_OF, ForwardBee.OF_ORIENTATION, ForwardBee.INV_DEPTH_IMG):
+    for key in (ForwardBee.INPUT_RAW_OF,
+                ForwardBee.INPUT_LOG_OF,
+                ForwardBee.INPUT_OF_ORIENTATION,
+                ForwardBee.INPUT_INV_DEPTH_IMG,
+                ):
         if key in img_input_space:
             ident += 'y'
         else:
             ident += 'n'
+    ident += '_action_' + args.action_type
     DIR = os.path.dirname(os.path.dirname(__file__))
     output_dir = os.path.join(DIR, 'output', ident)
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     print('saving trajectories to', output_dir)
-    env = gym.make('ForwardBee-v0', dt=args.dt,
+    env = gym.make('ForwardBee-v0',
+                   dt=args.dt,
                    input_img_space=img_input_space,
+                   action_type=args.action_type,
                    )
     policy_kwargs = dict(
         features_extractor_class=CustomCNN,

@@ -14,10 +14,11 @@ class ForwardBee(OFBeeseClass):
     def __init__(self,
                  client=None,
                  dt=.25,
-                 max_tilt=np.pi/18,
+                 action_bounds=None,
                  vehicle_name='',
                  real_time=False,
                  collision_grace=1,
+                 of_camera='front',
                  initial_position={
                      ((-5., -1.), yrng, (-1., -1.5)): 1/6
                      for yrng in ((-1., 1.),  # -1.8,1.8
@@ -32,8 +33,9 @@ class ForwardBee(OFBeeseClass):
                  bounds=((-7., 27), None, None),
                  goal_x=20.,
                  img_history_steps=2,
-                 input_img_space=(OFBeeseClass.LOG_OF, OFBeeseClass.OF_ORIENTATION,),
-                 velocity_ctrl=True,
+                 input_img_space=(OFBeeseClass.INPUT_LOG_OF, OFBeeseClass.INPUT_OF_ORIENTATION,),
+                 velocity_bounds=1.5,
+                 action_type=OFBeeseClass.ACTION_VELOCITY,
                  fix_z_to=None,
                  of_ignore_angular_velocity=True,
                  ):
@@ -41,20 +43,23 @@ class ForwardBee(OFBeeseClass):
         Args:
             height_range: height goal
         """
-        super().__init__(client=client,
-                         dt=dt,
-                         max_tilt=max_tilt,
-                         vehicle_name=vehicle_name,
-                         real_time=real_time,
-                         collision_grace=collision_grace,
-                         initial_position=initial_position,
-                         timeout=timeout,
-                         img_history_steps=img_history_steps,
-                         input_img_space=input_img_space,
-                         velocity_ctrl=velocity_ctrl,
-                         fix_z_to=fix_z_to,
-                         of_ignore_angular_velocity=of_ignore_angular_velocity,
-                         )
+        super().__init__(
+            client=client,
+            dt=dt,
+            action_bounds=action_bounds,
+            vehicle_name=vehicle_name,
+            real_time=real_time,
+            collision_grace=collision_grace,
+            of_camera=of_camera,
+            initial_position=initial_position,
+            timeout=timeout,
+            img_history_steps=img_history_steps,
+            input_img_space=input_img_space,
+            velocity_bounds=velocity_bounds,
+            action_type=action_type,
+            fix_z_to=fix_z_to,
+            of_ignore_angular_velocity=of_ignore_angular_velocity,
+        )
         self.bounds = bounds
         self.goal_x = goal_x
         self.farthest_reached = None
