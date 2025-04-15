@@ -1,18 +1,38 @@
-import os
+import os,shutil
 import pickle as pkl
 import matplotlib.pyplot as plt
 import numpy as np
 import argparse
+from PIL import Image
+
+
+def create_gif(image_paths, output_gif_path, duration=200):
+    images = [Image.open(image_path) for image_path in image_paths]
+    # Save as GIF
+    images[0].save(
+        output_gif_path,
+        save_all=True,
+        append_images=images[1:],
+        duration=duration,
+        loop=0,  # 0 means infinite loop
+    )
+
 
 DIR = os.path.dirname(os.path.dirname(__file__))
 
 PARSER = argparse.ArgumentParser()
 PARSER.add_argument('--traj-dir', action='store', required=False, default=os.path.join(DIR, 'output', 'forw_bee_test'),
                     help='place to look for traj files')
+PARSER.add_argument('--keep-individuals', action='store_true', required=False,
+                    help='Dont delete individual traj files')
 args = PARSER.parse_args()
 traj_dir = args.traj_dir
 print('analing trajectories from', traj_dir)
 plot_dir = os.path.join(traj_dir, 'plots')
+
+individual_traj_dir = os.path.join(plot_dir, 'individual_trajectories_obtained_from_testing')
+if not os.path.exists(individual_traj_dir):
+    os.makedirs(individual_traj_dir)
 if not os.path.exists(plot_dir):
     os.makedirs(plot_dir)
 
@@ -42,8 +62,9 @@ rwd_maxes = []
 rwd_mins = []
 xlim = (-5, 15)
 # fig, ax = plt.subplots()
-for epoch, trajs in enumerate(epoch_infos):
-    for all_traj in True, False:
+for all_traj in True, False:
+    fnames = []
+    for epoch, trajs in enumerate(epoch_infos):
         # plot by swapping x and y
         fig, ax = plt.subplots()
         plt.xlabel('x axis')
@@ -93,7 +114,7 @@ for epoch, trajs in enumerate(epoch_infos):
             mins.append(np.min(dists))
             plot_stuff = (
                 (trajs[len(trajs)//2], {'color': 'orange', 'label': 'median', }),
-                (trajs[-1], {'color': 'green', 'label': 'best'})
+                (trajs[-1], {'color': 'purple', 'label': 'best'})
             )
             rwds = np.array([sum(t['reward'] for t in traj) for traj in trajs])
 
@@ -106,13 +127,25 @@ for epoch, trajs in enumerate(epoch_infos):
                                  [dic['pose']['position'] for dic in traj],
                                  axis=0)
             plt.plot(positions[:, 0], positions[:, 1], alpha=alpha, **kwargs)
-        if not all_traj:
-            plt.legend(loc='upper right', bbox_to_anchor=(.9, -.25))
+        if all_traj:
+            plt.plot([],[],color='green',label='successful')
+            plt.plot([], [], color='yellow',label='timed out')
+            plt.plot([], [], color='red',label='crashed')
+
+        plt.legend(loc='center left', bbox_to_anchor=(1., .5))
         plt.title('epoch ' + str(epoch))
         plt.xlim(xlim)
-        plt.savefig(os.path.join(plot_dir, ('all_' if all_traj else '') +
-                                 'epoch_' + str(epoch) + '_trajectories.png'), bbox_inches='tight')
+        fname = os.path.join(individual_traj_dir, ('all_' if all_traj else '') +
+                             'epoch_' + str(epoch) + '_trajectories.png')
+        plt.savefig(fname, bbox_inches='tight')
         plt.close()
+        fnames.append(fname)
+    fname = os.path.join(plot_dir, ('all_' if all_traj else '') +
+                         'traj_summary_gifed.gif')
+    create_gif(image_paths=fnames,
+               output_gif_path=fname,
+               duration=200,
+               )
 
 plt.plot(means, color='blue', label='means')
 plt.plot(medians, color='orange', label='median')
@@ -140,3 +173,5 @@ plt.legend()
 plt.ylim(ylim)
 plt.savefig(os.path.join(plot_dir, 'rwd_summary.png'))
 plt.close()
+if not args.keep_individuals:
+    shutil.rmtree(individual_traj_dir)
