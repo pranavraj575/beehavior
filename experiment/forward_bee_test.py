@@ -54,6 +54,8 @@ if __name__ == '__main__':
                         help="number of trajectories to collect each epoch")
     PARSER.add_argument("--dt", type=float, required=False, default=.1,
                         help="simulation timestep")
+    PARSER.add_argument("--history-steps", type=int, required=False, default=2,
+                        help="steps to see in history")
     PARSER.add_argument('--action-type', action='store', required=False, default=ForwardBee.ACTION_VELOCITY,
                         choices=(ForwardBee.ACTION_VELOCITY,
                                  ForwardBee.ACTION_VELOCITY_XY,
@@ -84,7 +86,7 @@ if __name__ == '__main__':
     if not img_input_space:
         raise Exception('need to add at least one image input')
     ident = 'forw_bee_test'
-    ident += '_input_'
+    ident += '_in_'
     for key in (ForwardBee.INPUT_RAW_OF,
                 ForwardBee.INPUT_LOG_OF,
                 ForwardBee.INPUT_OF_ORIENTATION,
@@ -94,7 +96,10 @@ if __name__ == '__main__':
             ident += 'y'
         else:
             ident += 'n'
-    ident += '_action_' + args.action_type
+    ident += '_act_' + args.action_type
+    ident += '_k_' + str(args.history_steps)
+    ident += '_dt_' + str(args.dt).replace('.', '_')
+
     DIR = os.path.dirname(os.path.dirname(__file__))
     output_dir = os.path.join(DIR, 'output', ident)
     if not os.path.exists(output_dir):
@@ -104,6 +109,7 @@ if __name__ == '__main__':
                    dt=args.dt,
                    input_img_space=img_input_space,
                    action_type=args.action_type,
+                   img_history_steps=args.history_steps,
                    )
     policy_kwargs = dict(
         features_extractor_class=CustomCNN,

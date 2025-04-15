@@ -34,7 +34,7 @@ class ForwardBee(OFBeeseClass):
                  goal_x=20.,
                  img_history_steps=2,
                  input_img_space=(OFBeeseClass.INPUT_LOG_OF, OFBeeseClass.INPUT_OF_ORIENTATION,),
-                 velocity_bounds=1.5,
+                 velocity_bounds=1.,
                  action_type=OFBeeseClass.ACTION_VELOCITY,
                  fix_z_to=None,
                  of_ignore_angular_velocity=True,
@@ -69,6 +69,7 @@ class ForwardBee(OFBeeseClass):
         get obs vector, including roll, pitch, yaw (yaw is encoded as its sine and cosine components,
             to remove the discontinuity at +-pi). this is not an issue for roll,pitch since they will never get this large
         """
+        raise NotImplementedError
         # TODO: ignore rpy
         pose = self.get_pose()
         ht = -pose.position.z_val
@@ -91,7 +92,7 @@ class ForwardBee(OFBeeseClass):
         """
         shape of obs vector is (4,)
         """
-        return 4
+        return 0
 
     def out_of_bounds(self, pose):
 

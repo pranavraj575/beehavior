@@ -22,7 +22,7 @@ class HiBee(OFBeeseClass):
                  timeout=30,
                  img_history_steps=2,
                  input_img_space=(OFBeeseClass.INPUT_LOG_OF, OFBeeseClass.INPUT_OF_ORIENTATION,),
-                 velocity_bounds=1.5,
+                 velocity_bounds=1.,
                  action_type=OFBeeseClass.ACTION_VELOCITY,
                  fix_z_to=None,
                  of_ignore_angular_velocity=True,

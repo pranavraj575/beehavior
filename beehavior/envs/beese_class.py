@@ -32,7 +32,7 @@ class BeeseClass(gym.Env):
                  collision_grace=1,
                  initial_position=None,
                  action_type=ACTION_VELOCITY,
-                 velocity_bounds=1.5,
+                 velocity_bounds=1.,
                  fix_z_to=None,
                  timeout=300,
                  ):
@@ -43,8 +43,8 @@ class BeeseClass(gym.Env):
             dt: actions run for this amount of time
             action_bounds: maximum action magnitude that agent can take
                 if action is ROLL_PITCH_YAW, this is max RADIANS that agent can roll/pitch
-                if action is VELOCITY, this is maximum velocity (m/s) in each dimension
-                if action is ACCELERATION, this is maximum acceleration (m/s^2) in each dimension
+                if action is VELOCITY, this is maximum velocity (m/s)
+                if action is ACCELERATION, this is maximum acceleration (m/s^2)
                     at each timestep, the acceleration*dt is added to the velocity
                 if None, this will be the default bounds for each action type
             vehicle_name: name of vehicle
@@ -75,21 +75,23 @@ class BeeseClass(gym.Env):
         self.fix_z_to = fix_z_to
         self.velocity_bounds = velocity_bounds
 
+        # in euclidean cases, we make the output on a [-1,1] box, then scale it to a radius action_bounds ball later
+        # in roll, pitch, yaw, we do not scale as it doesnt really make (non euclidean)
         if self.action_type == self.ACTION_VELOCITY:
             if self.action_bounds is None:
-                self.action_bounds = 1.5
+                self.action_bounds = 1.
             self.action_space = gym.spaces.Box(
-                low=-self.action_bounds,
-                high=self.action_bounds,
+                low=-1,
+                high=1,
                 shape=(3,),
                 dtype=np.float64,
             )
         elif self.action_type == self.ACTION_VELOCITY_XY:
             if self.action_bounds is None:
-                self.action_bounds = 1.5
+                self.action_bounds = 1.
             self.action_space = gym.spaces.Box(
-                low=-self.action_bounds,
-                high=self.action_bounds,
+                low=-1,
+                high=1,
                 shape=(2,),
                 dtype=np.float64,
             )
@@ -98,8 +100,8 @@ class BeeseClass(gym.Env):
                 self.action_bounds = 3.
             self.velocity_target = np.zeros(3)
             self.action_space = gym.spaces.Box(
-                low=-self.action_bounds,
-                high=self.action_bounds,
+                low=-1,
+                high=1,
                 shape=(3,),
                 dtype=np.float64,
             )
@@ -126,7 +128,10 @@ class BeeseClass(gym.Env):
                     truncation, info)
         """
         if self.action_type == self.ACTION_VELOCITY:
-            vx, vy, vz = action
+            vx, vy, vz = self.map_vec_to_ball(vector=action,
+                                              radius=self.action_bounds,
+                                              idxs=None,
+                                              )
             cmd = lambda: self.client.moveByVelocityAsync(vx=vx,
                                                           vy=vy,
                                                           vz=vz,
@@ -135,6 +140,10 @@ class BeeseClass(gym.Env):
                                                           )
         elif self.action_type == self.ACTION_VELOCITY_XY:
             target_ht = self.fix_z_to if self.fix_z_to is not None else self.get_pose().position.z_val
+            vx, vy = self.map_vec_to_ball(vector=action,
+                                          radius=self.action_bounds,
+                                          idxs=None,
+                                          )
             cmd = lambda: self.client.moveByVelocityZAsync(vx=vx,
                                                            vy=vy,
                                                            z=target_ht,
@@ -142,10 +151,14 @@ class BeeseClass(gym.Env):
                                                            vehicle_name=self.vehicle_name,
                                                            )
         elif self.action_type == self.ACTION_ACCELERATION:
-            self.velocity_target = np.clip(self.velocity_target + action*self.dt,
-                                           -self.velocity_bounds,
-                                           self.velocity_bounds,
-                                           )
+            acc = self.map_vec_to_ball(vector=action,
+                                       radius=self.action_bounds,
+                                       idxs=None,
+                                       )
+            self.velocity_target = self.velocity_target + acc*self.dt
+            speed = np.linalg.norm(self.velocity_target)
+            if speed > self.velocity_bounds:
+                self.velocity_target = self.velocity_target*(self.velocity_bounds/speed)
             vx, vy, vz = self.velocity_target
             cmd = lambda: self.client.moveByVelocityAsync(vx=vx,
                                                           vy=vy,
@@ -383,6 +396,34 @@ class BeeseClass(gym.Env):
         """
         return -float(collided), dict()
 
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    # UTIL STUFF
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    def map_vec_to_ball(self, vector, radius=1., idxs=None, ):
+        """
+        assumes a vector (np array) is in a [-1,1] box on certian indices
+        rescales these indices to a ball of specified radius
+        i.e. vector (1,-1) in 2d becomes (1/sqrt(2),-1/sqrt(2)) for radius 1
+            vector (1/2,-1/2) becomes (1/2sqrt(2),-1/2sqrt(2))
+        does this by linearly squishing each possible direction
+        Args:
+            vector: 1 dim np array to be rescaled, assumed each relevant index is within [-1,1]
+            radius: radius of ball to rescale to
+            idxs: list of indices to consider, if None, considers all
+        """
+        if idxs is None:
+            idxs = list(range(len(vector)))
+        mag = np.linalg.norm(vector[idxs])
+        if mag == 0:
+            # vector is zero on these dims
+            return vector
+        united = vector[idxs]/mag
+        scale = np.max(np.abs(united))
+        # unit vector/scale will be on boundary of [-1,1] box
+        # then original vector * scale will be within unit circle
+        vector[idxs] = vector[idxs]*scale*radius
+        return vector
+
 
 class OFBeeseClass(BeeseClass):
     """
@@ -536,18 +577,19 @@ class OFBeeseClass(BeeseClass):
             # copy the first however many elements
             extensor = [self.img_stack[i] for i in range(self.imgs_per_step)]
             self.img_stack.extend(extensor)
-
-        vec = self.get_obs_vector()
-        # (m,) sized vector, goal conditioning
         obs = np.zeros(self.get_obs_shape())
-        # (C+m,H,W)
+        # (C+m,H,W) where m is additional vector size
         C = self.img_stack_size  # number of of images
         obs[:C, :, :] = np.stack(self.img_stack, axis=0)  # this is a (C,H,W) history of optic flow data
-        obs[C:, :, :] = np.expand_dims(vec, axis=(1, 2))  # (m,1,1)
 
-        # places copies of vec at every pixel
-        # can technically use gym.spaces.Tuple, and return (of, vec)
-        #  unfortunately Tuple space is not supported in stable_baselines
+        if self.get_obs_vector_dim() > 0:
+            # m>0
+            vec = self.get_obs_vector()
+            # (m,) sized vector, used for goal conditioning
+            obs[C:, :, :] = np.expand_dims(vec, axis=(1, 2))  # (m,1,1)
+            # places copies of vec at every pixel
+            # can technically use gym.spaces.Tuple, and return (of, vec)
+            #  unfortunately Tuple space is not supported in stable_baselines
         return obs
 
     def get_obs_shape(self):
