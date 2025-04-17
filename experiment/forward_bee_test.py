@@ -44,6 +44,9 @@ if __name__ == '__main__':
     # PARSER.add_argument("--env", action='store', required=False, default='HiBee-v0',
     #                    choices=('Beese-v0', 'HiBee-v0', 'ForwardBee-v0'),
     #                   help="RL gym class to run")
+
+    PARSER.add_argument("--ident", action='store', required=False, default='forw_bee_test',
+                        help="test identification")
     PARSER.add_argument("--timesteps-per-epoch", type=int, required=False, default=512,
                         help="number of timesteps to train for each epoch")
     PARSER.add_argument("--epochs", type=int, required=False, default=100,
@@ -71,7 +74,10 @@ if __name__ == '__main__':
                         help="include OF orientation in input")
     PARSER.add_argument("--include-depth", action='store_true', required=False,
                         help="include depth in input")
-
+    PARSER.add_argument("--save-model-history", type=int, required=False, default=1,
+                        help="number of past models to save (-1 for all)")
+    PARSER.add_argument("--reset", action='store_true', required=False,
+                        help="reset training")
     args = PARSER.parse_args()
 
     img_input_space = []
@@ -85,7 +91,7 @@ if __name__ == '__main__':
         img_input_space.append(ForwardBee.INPUT_INV_DEPTH_IMG)
     if not img_input_space:
         raise Exception('need to add at least one image input')
-    ident = 'forw_bee_test'
+    ident = args.ident
     ident += '_in_'
     for key in (ForwardBee.INPUT_RAW_OF,
                 ForwardBee.INPUT_LOG_OF,
@@ -101,10 +107,12 @@ if __name__ == '__main__':
     ident += '_dt_' + str(args.dt).replace('.', '_')
 
     DIR = os.path.dirname(os.path.dirname(__file__))
-    output_dir = os.path.join(DIR, 'output', ident)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    print('saving trajectories to', output_dir)
+    output_dir: str = os.path.join(DIR, 'output', ident)
+    traj_dir = os.path.join(output_dir, 'trajectories')
+    model_dir = os.path.join(output_dir, 'past_models')
+    for d in (output_dir, traj_dir, model_dir):
+        if not os.path.exists(d): os.makedirs(d)
+    print('saving to', output_dir)
     env = gym.make('ForwardBee-v0',
                    dt=args.dt,
                    input_img_space=img_input_space,
@@ -116,10 +124,30 @@ if __name__ == '__main__':
         features_extractor_kwargs=dict(features_dim=128),
     )
 
+
+    def get_model_history_srt():
+        past_models = sorted(os.listdir(model_dir),
+                             key=lambda fn: int(fn[12:-4]),  # model name is model_epoch_<number>.pkl
+                             )
+        return [os.path.join(model_dir, fn) for fn in past_models]
+
+
+    def clear_model_history():
+        past_models = get_model_history_srt()
+        if args.save_model_history > -1 and len(past_models) > args.save_model_history:
+            for fn in past_models[:len(past_models) - args.save_model_history]:
+                os.remove(fn)
+
+
     model = MODEL('CnnPolicy', env, verbose=1, policy_kwargs=policy_kwargs,
                   # buffer_size=2048,  # for replay buffer methods
                   n_steps=args.nsteps,
                   )
+    if not args.reset:
+        past_models = get_model_history_srt()
+        if past_models:
+            model.load(past_models[-1])
+
     print(model.policy)
 
 
@@ -149,6 +177,7 @@ if __name__ == '__main__':
             steps = []
             obs, info = env.reset(options={
                 'initial_pos': ((-3., -2.), (-.5, .5), (-1., -1.5))  # tighter box
+                # 'initial_pos': ((-3., -2.), (38.5, 39.5), (-1., -1.5))  # empty tunnel
             })
             old_pose = env.unwrapped.get_pose()
             done = False
@@ -170,27 +199,18 @@ if __name__ == '__main__':
             print('rwd mean:', sum(rwds)/len(rwds))
 
             trajectories.append(steps)
-        print('saving epoch', epoch, 'info')
-        fname = os.path.join(output_dir, 'traj_' + str(epoch) + '.pkl')
+        print('saving trajectories of epoch', epoch, 'info')
+        fname = os.path.join(traj_dir, 'traj_' + str(epoch) + '.pkl')
         f = open(fname, 'wb')
         pkl.dump(trajectories, f)
         f.close()
-        print('saved epoch')
+        print('saved trajectory')
+        print('saving model and training info')
+        model.save(os.path.join(model_dir, 'model_epoch_' + str(epoch) + '.pkl'))
+        clear_model_history()
+        print('saved model and training info')
 
-    print('saving all epochs')
-    epoch_infos = []
-
-    for epoch in range(args.epochs):
-        fname = os.path.join(output_dir, 'traj_' + str(epoch) + '.pkl')
-        f = open(fname, 'rb')
-        epoch_infos.append(pkl.load(f))
-        f.close()
-    fname = os.path.join(output_dir, 'all_trajectories.pkl')
-    f = open(fname, 'wb')
-    pkl.dump(epoch_infos, f)
-    f.close()
-    print('saved epochs')
-    while True:
+    while False:
         obs, _ = env.reset()
         rwds = []
         done = False

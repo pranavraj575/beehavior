@@ -1,6 +1,7 @@
-import os,shutil
+import os, shutil
 import pickle as pkl
 import matplotlib.pyplot as plt
+from matplotlib.patches import Ellipse
 import numpy as np
 import argparse
 from PIL import Image
@@ -21,14 +22,15 @@ def create_gif(image_paths, output_gif_path, duration=200):
 DIR = os.path.dirname(os.path.dirname(__file__))
 
 PARSER = argparse.ArgumentParser()
-PARSER.add_argument('--traj-dir', action='store', required=False, default=os.path.join(DIR, 'output', 'forw_bee_test'),
-                    help='place to look for traj files')
+PARSER.add_argument('--load-dir', action='store', required=True,
+                    help='place that model saved')
 PARSER.add_argument('--keep-individuals', action='store_true', required=False,
                     help='Dont delete individual traj files')
 args = PARSER.parse_args()
-traj_dir = args.traj_dir
+load_dir = args.load_dir
+traj_dir = os.path.join(load_dir, 'trajectories')
 print('analing trajectories from', traj_dir)
-plot_dir = os.path.join(traj_dir, 'plots')
+plot_dir = os.path.join(load_dir, 'plots')
 
 individual_traj_dir = os.path.join(plot_dir, 'individual_trajectories_obtained_from_testing')
 if not os.path.exists(individual_traj_dir):
@@ -36,21 +38,18 @@ if not os.path.exists(individual_traj_dir):
 if not os.path.exists(plot_dir):
     os.makedirs(plot_dir)
 
-if os.path.exists(os.path.join(traj_dir, 'all_trajectories.pkl')):
-    f = open(os.path.join(traj_dir, 'all_trajectories.pkl'), 'rb')
-    epoch_infos = pkl.load(f)
+epoch_infos = []
+i = 0
+while True:
+    fn = os.path.join(traj_dir, 'traj_' + str(i) + '.pkl')
+    if not os.path.exists(fn):
+        break
+    f = open(fn, 'rb')
+    epoch_infos.append(pkl.load(f))
     f.close()
-else:
-    epoch_infos = []
-    i = 0
-    while True:
-        fn = os.path.join(traj_dir, 'traj_' + str(i) + '.pkl')
-        if not os.path.exists(fn):
-            break
-        f = open(fn, 'rb')
-        epoch_infos.append(pkl.load(f))
-        f.close()
-        i += 1
+    i += 1
+if not epoch_infos:
+    raise Exception('empty directory:', traj_dir)
 medians = []
 means = []
 maxes = []
@@ -60,7 +59,27 @@ rwd_medians = []
 rwd_means = []
 rwd_maxes = []
 rwd_mins = []
-xlim = (-5, 15)
+
+# for basic tunnel
+test_tunnel_info = {
+    'walls': (-2, 2),
+    'xlim': (-5, 15),
+    # list of (center, width, height (for ellipse, x axis, y axis))
+    'obs': [((-92.30, 1.04), (1, 1)),
+            ((-81.40, -.66), (1, 1))
+            ],
+}
+
+# for empty tunnel at end
+test_tunnel_info_empty = {
+    'walls': (36.52, 41.39),
+    'xlim': (-5, 15),
+    # list of (center, width, height (for ellipse, x axis, y axis))
+    'obs': [],
+}
+
+walls = test_tunnel_info['walls']
+xlim = test_tunnel_info['xlim']
 # fig, ax = plt.subplots()
 for all_traj in True, False:
     fnames = []
@@ -70,16 +89,27 @@ for all_traj in True, False:
         plt.xlabel('x axis')
         plt.ylabel('y axis')
         plt.gca().set_aspect('equal')
-        ax.plot(xlim, [-2., -2.], color='black', linewidth=4)
-        ax.plot(xlim, [2., 2.], color='black', linewidth=4)
-        for c, r, alpha in (
-                ((-92.30, 1.04), .5, 1),
-                ((-92.30, 1.04), 1, .3),
-                ((-81.40, -.66), .5, 1),
-                ((-81.40, -.66), 1, .3),
-        ):
-            c = c[0] + 94., -c[1]
-            ax.add_patch(plt.Circle(c, r, alpha=alpha))
+        for wall_y in walls:
+            ax.plot(xlim, [wall_y, wall_y], color='black', linewidth=4)
+        for effective_bnd in (False, True):
+            alpha = [1, .5][int(effective_bnd)]
+            for c, (w, h) in test_tunnel_info['obs']:
+                if effective_bnd:
+                    # drone has a radius of about 1m, so obstacles need to be elongated by a radius of .5,
+                    #   representing a crash if drone COM is within this area
+                    # thus, increase width and height (diameter) by 1 each
+
+                    w += 1
+                    h += 1
+                c = c[0] + 94., -c[1]
+                # ax.add_patch(plt.Circle(c, r, alpha=alpha))
+                ax.add_patch(Ellipse(xy=c,
+                                     width=w,
+                                     height=h,
+                                     angle=0,
+                                     alpha=alpha,
+                                     ))
+
         alpha = 1
 
 
@@ -128,9 +158,9 @@ for all_traj in True, False:
                                  axis=0)
             plt.plot(positions[:, 0], positions[:, 1], alpha=alpha, **kwargs)
         if all_traj:
-            plt.plot([],[],color='green',label='successful')
-            plt.plot([], [], color='yellow',label='timed out')
-            plt.plot([], [], color='red',label='crashed')
+            plt.plot([], [], color='green', label='successful')
+            plt.plot([], [], color='yellow', label='timed out')
+            plt.plot([], [], color='red', label='crashed')
 
         plt.legend(loc='center left', bbox_to_anchor=(1., .5))
         plt.title('epoch ' + str(epoch))

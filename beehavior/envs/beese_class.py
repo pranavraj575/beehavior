@@ -411,6 +411,11 @@ class BeeseClass(gym.Env):
             radius: radius of ball to rescale to
             idxs: list of indices to consider, if None, considers all
         """
+        # TODO: REMOVE THESE LINES ONCE DONE TESTING
+        #  map to a [-radius, radius] box for testing
+        vector[idxs] = vector[idxs]*radius
+        return vector
+
         if idxs is None:
             idxs = list(range(len(vector)))
         mag = np.linalg.norm(vector[idxs])
