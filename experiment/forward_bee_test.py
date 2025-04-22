@@ -76,9 +76,12 @@ if __name__ == '__main__':
                         help="include depth in input")
     PARSER.add_argument("--save-model-history", type=int, required=False, default=1,
                         help="number of past models to save (-1 for all)")
+    PARSER.add_argument("--testing-tunnel", type=int, nargs='+', required=False, default=[1],
+                        help="index of tunnels to test in, 1 is the normal one")
     PARSER.add_argument("--reset", action='store_true', required=False,
                         help="reset training")
     args = PARSER.parse_args()
+    testing_tunnels = sorted(set(args.testing_tunnel))
 
     img_input_space = []
     if args.include_log_of:
@@ -105,6 +108,7 @@ if __name__ == '__main__':
     ident += '_act_' + args.action_type
     ident += '_k_' + str(args.history_steps)
     ident += '_dt_' + str(args.dt).replace('.', '_')
+    ident += '_tst_' + '_'.join([str(t) for t in testing_tunnels])
 
     DIR = os.path.dirname(os.path.dirname(__file__))
     output_dir: str = os.path.join(DIR, 'output', ident)
@@ -125,28 +129,56 @@ if __name__ == '__main__':
     )
 
 
+    def epoch_from_name(basename) -> int:
+        if basename.startswith('model_'):
+            return int(basename[12:-4])  # model name is model_epoch_<number>.pkl
+        elif basename.startswith('info_'):
+            return int(basename[11:-4])  # info name is info_epoch_<number>.pkl
+        else:
+            raise Exception('does not match known model or info files:', basename)
+
+
     def get_model_history_srt():
-        past_models = sorted(os.listdir(model_dir),
-                             key=lambda fn: int(fn[12:-4]),  # model name is model_epoch_<number>.pkl
-                             )
-        return [os.path.join(model_dir, fn) for fn in past_models]
+        filenames = os.listdir(model_dir)
+        if not filenames:
+            return ()
+        largest = max(map(epoch_from_name, filenames))
+        stuff = [[None, None] for _ in range(largest + 1)]
+        for fn in filenames:
+            idx = epoch_from_name(fn)
+            if fn.startswith('model_'):
+                stuff[idx][0] = os.path.join(model_dir, fn)
+            elif fn.startswith('info_'):
+                stuff[idx][1] = os.path.join(model_dir, fn)
+        return tuple(tuple(s) for s in stuff if s[0] is not None)
 
 
     def clear_model_history():
         past_models = get_model_history_srt()
         if args.save_model_history > -1 and len(past_models) > args.save_model_history:
-            for fn in past_models[:len(past_models) - args.save_model_history]:
-                os.remove(fn)
+            for model_name, info_name in past_models[:len(past_models) - args.save_model_history]:
+                os.remove(model_name)
+                os.remove(info_name)
 
 
     model = MODEL('CnnPolicy', env, verbose=1, policy_kwargs=policy_kwargs,
                   # buffer_size=2048,  # for replay buffer methods
                   n_steps=args.nsteps,
                   )
+    epoch_init = 0
     if not args.reset:
+        # TODO: LOADING AND SAVING DO NOT WORK
         past_models = get_model_history_srt()
         if past_models:
-            model.load(past_models[-1])
+            model_file, info_file = past_models[-1]
+            model = MODEL.load(model_file, env=env)
+            f = open(info_file, 'rb')
+            info = pkl.load(f)
+            f.close()
+            epoch_init = info['epochs_trained']
+
+            print('loading from', model_file)
+            print('epochs already trained:', epoch_init)
 
     print(model.policy)
 
@@ -166,7 +198,17 @@ if __name__ == '__main__':
                 }
 
 
-    for epoch in range(args.epochs):
+    initial_positions = [
+        ((-3., -2.), (-4.8, -5.8), (-1., -1.5)),  # converging/diverging tunnel
+        ((-3., -2.), (-.5, .5), (-1., -1.5)),  # normal tunnel
+        ((-3., -2.), (5.5, 6.5), (-1., -1.5)),
+        ((-3., -2.), (10.7, 11.3), (-1., -1.5)),  # narrow tunnel
+        ((-3., -2.), (14.7, 15.3), (-1., -1.5)),
+        ((-3., -2.), (19, 25), (-1., -1.5)),
+        ((-3., -2.), (30, 33), (-1., -1.5)),
+        ((-3., -2.), (38.5, 39.5), (-1., -1.5))  # empty tunnel
+    ]
+    for epoch in range(epoch_init, args.epochs):
         print('doing epoch', epoch)
         model.learn(total_timesteps=args.timesteps_per_epoch,
                     reset_num_timesteps=False,
@@ -174,31 +216,31 @@ if __name__ == '__main__':
         print('finished training, getting trajectories')
         trajectories = []
         for _ in range(args.testjectories):
-            steps = []
-            obs, info = env.reset(options={
-                'initial_pos': ((-3., -2.), (-.5, .5), (-1., -1.5))  # tighter box
-                # 'initial_pos': ((-3., -2.), (38.5, 39.5), (-1., -1.5))  # empty tunnel
-            })
-            old_pose = env.unwrapped.get_pose()
-            done = False
-            while not done:
-                action, _ = model.predict(observation=obs, deterministic=False)
-
-                obs, rwd, done, term, info = env.step(action)
-                pose = env.unwrapped.get_pose()
-                steps.append({
-                    'old_pose': pose_to_dic(old_pose),
-                    'action': action,
-                    'reward': rwd,
-                    'pose': pose_to_dic(pose),
-                    'info': info,
+            for tunnel_idx in testing_tunnels:
+                steps = []
+                obs, info = env.reset(options={
+                    'initial_pos': initial_positions[tunnel_idx]
                 })
-                old_pose = pose
-            rwds = [dic['reward'] for dic in steps]
-            print('ep length:', len(rwds))
-            print('rwd mean:', sum(rwds)/len(rwds))
+                old_pose = env.unwrapped.get_pose()
+                done = False
+                while not done:
+                    action, _ = model.predict(observation=obs, deterministic=False)
 
-            trajectories.append(steps)
+                    obs, rwd, done, term, info = env.step(action)
+                    pose = env.unwrapped.get_pose()
+                    steps.append({
+                        'old_pose': pose_to_dic(old_pose),
+                        'action': action,
+                        'reward': rwd,
+                        'pose': pose_to_dic(pose),
+                        'info': info,
+                    })
+                    old_pose = pose
+                rwds = [dic['reward'] for dic in steps]
+                print('ep length:', len(rwds))
+                print('rwd sum:', sum(rwds))
+
+                trajectories.append(steps)
         print('saving trajectories of epoch', epoch, 'info')
         fname = os.path.join(traj_dir, 'traj_' + str(epoch) + '.pkl')
         f = open(fname, 'wb')
@@ -207,6 +249,10 @@ if __name__ == '__main__':
         print('saved trajectory')
         print('saving model and training info')
         model.save(os.path.join(model_dir, 'model_epoch_' + str(epoch) + '.pkl'))
+        fname = os.path.join(model_dir, 'info_epoch_' + str(epoch) + '.pkl')
+        f = open(fname, 'wb')
+        pkl.dump({'epochs_trained': epoch + 1}, f)
+        f.close()
         clear_model_history()
         print('saved model and training info')
 

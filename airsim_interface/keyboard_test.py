@@ -27,6 +27,7 @@ if __name__ == '__main__':
                     'c clears roll/pitch; '
                     'r to reset simulation; '
                     'i to display camera images; '
+                    'p to display pose data; '
                     'Q (shift + q) to stop python script'
     )
 
@@ -58,6 +59,7 @@ if __name__ == '__main__':
     reset = False
     close = False
     img = False
+    pose_data = False
 
 
     def get_cmd():
@@ -67,7 +69,7 @@ if __name__ == '__main__':
 
 
     def record():
-        global bf, lr, thrust, none_step, reset, close, img
+        global bf, lr, thrust, none_step, reset, close, img, pose_data
         with Input(keynames='curses') as input_generator:
             for e in input_generator:
                 k = repr(e).replace("'", '')
@@ -90,6 +92,8 @@ if __name__ == '__main__':
                     reset = True
                 if k == 'i':
                     img = True
+                if k == 'p':
+                    pose_data = True
                 if k == 'Q':
                     close = True
                     return
@@ -139,6 +143,11 @@ if __name__ == '__main__':
             lr = 0  # whether left key or right key is being held
             bf = 0
             none_step = False
+
+        if pose_data and game_interface:
+            pose = client.simGetVehiclePose()
+            print(pose)
+            pose_data = False
         if img and game_interface:
             from matplotlib import pyplot as plt
 
@@ -207,7 +216,8 @@ if __name__ == '__main__':
                 plt.imshow(image[:, :, ::-1], interpolation='nearest', )
                 h, w = np.meshgrid(np.arange(of.shape[0]), np.arange(of.shape[1]))
                 ss = 10
-                of_disp = np.transpose(of, axes=(1, 0, 2))  # inverted from image (height is top down) to np plot (y dim  bottom up)
+                of_disp = np.transpose(of, axes=(
+                    1, 0, 2))  # inverted from image (height is top down) to np plot (y dim  bottom up)
 
                 plt.quiver(w[::ss, ::ss], h[::ss, ::ss],
                            of_disp[::ss, ::ss, 0],

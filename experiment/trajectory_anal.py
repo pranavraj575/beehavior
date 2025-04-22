@@ -65,8 +65,8 @@ test_tunnel_info = {
     'walls': (-2, 2),
     'xlim': (-5, 15),
     # list of (center, width, height (for ellipse, x axis, y axis))
-    'obs': [((-92.30, 1.04), (1, 1)),
-            ((-81.40, -.66), (1, 1))
+    'obs': [((-9230, -22250), (1, 1)),
+            ((-8140, -22080), (1, 1))
             ],
 }
 
@@ -101,7 +101,7 @@ for all_traj in True, False:
 
                     w += 1
                     h += 1
-                c = c[0] + 94., -c[1]
+                c = (c[0] + 9390)/100, (c[1]+22145)/100
                 # ax.add_patch(plt.Circle(c, r, alpha=alpha))
                 ax.add_patch(Ellipse(xy=c,
                                      width=w,
