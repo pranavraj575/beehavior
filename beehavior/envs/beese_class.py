@@ -18,7 +18,7 @@ class BeeseClass(gym.Env):
     reward is just -1 for collisions
     terminates upon collision
     """
-    ACTION_ROLL_PITCH_YAW = 'rpy'  # action bounds about np.pi/18 (10 degrees tilt)
+    ACTION_ROLL_PITCH_THRUST = 'rpt'  # action bounds about np.pi/18 (10 degrees tilt)
     ACTION_VELOCITY = 'vel'  # action bounds about 1.5 m/s
     ACTION_VELOCITY_XY = 'vel_xy'  # action bounds aboutn 1.5 m/s
     ACTION_ACCELERATION = 'acc'  # action bounds about 3 m/s^2
@@ -105,7 +105,7 @@ class BeeseClass(gym.Env):
                 shape=(3,),
                 dtype=np.float64,
             )
-        elif self.action_type == self.ACTION_ROLL_PITCH_YAW:
+        elif self.action_type == self.ACTION_ROLL_PITCH_THRUST:
             if self.action_bounds is None:
                 self.action_bounds = np.pi/18
             self.action_space = gym.spaces.Box(
@@ -127,6 +127,10 @@ class BeeseClass(gym.Env):
             (observation, reward, termination,
                     truncation, info)
         """
+        pose = self.get_pose()
+        # orient_eulerian = self.get_orientation_eulerian(
+        #    quaternion=(pose.orientation.x_val, pose.orientation.y_val, pose.orientation.z_val, pose.orientation.w_val)
+        # )
         if self.action_type == self.ACTION_VELOCITY:
             vx, vy, vz = self.map_vec_to_ball(vector=action,
                                               radius=self.action_bounds,
@@ -139,7 +143,7 @@ class BeeseClass(gym.Env):
                                                           vehicle_name=self.vehicle_name,
                                                           )
         elif self.action_type == self.ACTION_VELOCITY_XY:
-            target_ht = self.fix_z_to if self.fix_z_to is not None else self.get_pose().position.z_val
+            target_ht = self.fix_z_to if self.fix_z_to is not None else pose.position.z_val
             vx, vy = self.map_vec_to_ball(vector=action,
                                           radius=self.action_bounds,
                                           idxs=None,
@@ -166,7 +170,7 @@ class BeeseClass(gym.Env):
                                                           duration=self.dt,
                                                           vehicle_name=self.vehicle_name,
                                                           )
-        elif self.action_type == self.ACTION_ROLL_PITCH_YAW:
+        elif self.action_type == self.ACTION_ROLL_PITCH_THRUST:
             roll, pitch, thrust = action
             cmd = lambda: self.client.moveByRollPitchYawrateThrottleAsync(roll=roll,
                                                                           pitch=pitch,
@@ -465,6 +469,7 @@ class OFBeeseClass(BeeseClass):
                  action_type=BeeseClass.ACTION_VELOCITY,
                  fix_z_to=None,
                  of_ignore_angular_velocity=True,
+                 central_strip_width=None,
                  ):
         """
         Args:
@@ -482,6 +487,7 @@ class OFBeeseClass(BeeseClass):
             see_of_orientation: whether bee can see the orientation of OF
             of_ignore_angular_velocity: whether to ignore angular velocity in OF calc
                 if true, pretends camera is on chicken head
+            central_strip_width: if specified, gives it a radius of n pixels (0<=n)
         """
         self.obs_shape = None
         self.img_stack = None
@@ -494,6 +500,7 @@ class OFBeeseClass(BeeseClass):
                               int(self.INPUT_INV_DEPTH_IMG in self.input_img_space)
                               )
         self.img_stack_size = img_history_steps*self.imgs_per_step
+        self.central_strip_width = central_strip_width
         super().__init__(
             client=client,
             dt=dt,
@@ -553,6 +560,10 @@ class OFBeeseClass(BeeseClass):
                     vehicle_name=self.vehicle_name,
                     ignore_angular_velocity=self.of_ignore_angular_velocity,
                     )
+        if self.central_strip_width is not None:
+            (_, H, _) = of.shape
+            of = of[:, H//2 - self.central_strip_width:H//2 + self.central_strip_width, :]
+
         of_magnitude = np.linalg.norm(of, axis=0)  # magnitude of x and y components of projected optic flow
         # H, W = of.shape
         if self.INPUT_RAW_OF in self.input_img_space:
@@ -575,6 +586,10 @@ class OFBeeseClass(BeeseClass):
                                   camera_name='front',
                                   numpee=True,
                                   )
+
+            if self.central_strip_width is not None:
+                (H, _) = depth.shape
+                depth = depth[H//2 - self.central_strip_width:H//2 + self.central_strip_width, :]
             # clip depth to avoid 1/0 error, this means minimum visible depth is .001m which is resonable
             self.img_stack.append(1/np.clip(depth, 10e-3, np.inf))
 
@@ -630,7 +645,12 @@ class OFBeeseClass(BeeseClass):
         shape of self.get_of_data()
         costly, should not be run too many times, as we can either save this shape or just look at the last observation
         """
-        return get_of_geo_shape(client=self.client, camera_name=self.of_camera)
+        shape = get_of_geo_shape(client=self.client, camera_name=self.of_camera)
+        if self.central_strip_width is not None:
+            (C, H, W) = shape
+            return C, 2*self.central_strip_width, W
+        else:
+            return shape
 
 
 if __name__ == '__main__':

@@ -26,6 +26,7 @@ class HiBee(OFBeeseClass):
                  action_type=OFBeeseClass.ACTION_VELOCITY,
                  fix_z_to=None,
                  of_ignore_angular_velocity=True,
+                 central_strip_width=None,
                  ):
         """
         Args:
@@ -47,6 +48,7 @@ class HiBee(OFBeeseClass):
             action_type=action_type,
             fix_z_to=fix_z_to,
             of_ignore_angular_velocity=of_ignore_angular_velocity,
+            central_strip_width=central_strip_width,
         )
         self.ht_rng = height_range
         # shoot for average

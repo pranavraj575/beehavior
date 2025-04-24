@@ -99,35 +99,6 @@ common_info = {
     'finish_x': 20,
 }
 
-# for basic tunnel
-test_tunnel_info = {
-    # list of vertex lists
-    'walls': [[(-5, -2), (15, -2)], [(-5, 2), (15, 2)]],
-    'xlim': (-5, 21),
-    # list of (center, width, height (for ellipse, x axis, y axis))
-    'obs': [((-9230, -22250), (1, 1)),
-            ((-8140, -22080), (1, 1))
-            ],
-    'finish_x': 20,
-}
-
-# for squished tunnel
-test_tunnel_info = {
-    'walls': [[(-5, -7.45), (3.85, -7.45), (9.35, -6.), (15.05, -7.45), (20.85, -6.)],
-              [(-5, -3.15), (3.85, -3.15), (9.35, -4.6), (15.05, -3.15), (20.85, -4.6)]],
-    'xlim': (-3, 21),
-    'obs': [],
-    'finish_x': 20,
-}
-
-# for empty tunnel at end
-test_tunnel_info_empty = {
-    'walls': [[(-5, 36.52), (15, 36.52)], [(-5, 41.39), (15, 41.39)]],
-    'xlim': (-5, 21),
-    # list of (center, width, height (for ellipse, x axis, y axis))
-    'obs': [],
-    'finish_x': 20,
-}
 for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
     if test_tunnel_info is None:
         continue

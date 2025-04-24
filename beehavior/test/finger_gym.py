@@ -88,7 +88,7 @@ if __name__ == '__main__':
                    dt=args.dt,
                    action_bounds=args.radian_ctrl*args.max_ctrl,
                    real_time=args.real_time,
-                   action_type=BeeseClass.ACTION_ROLL_PITCH_YAW,
+                   action_type=BeeseClass.ACTION_ROLL_PITCH_THRUST,
                    )
 
     env.reset()

@@ -38,11 +38,15 @@ class ForwardBee(OFBeeseClass):
                  action_type=OFBeeseClass.ACTION_VELOCITY,
                  fix_z_to=None,
                  of_ignore_angular_velocity=True,
+                 input_velocity_with_noise=None,
+                 central_strip_width=None,
                  ):
         """
         Args:
             height_range: height goal
+            input_velocity_with_noise: whether to include noisy velocity in input
         """
+        self.input_vel_w_noise = input_velocity_with_noise
         super().__init__(
             client=client,
             dt=dt,
@@ -59,6 +63,7 @@ class ForwardBee(OFBeeseClass):
             action_type=action_type,
             fix_z_to=fix_z_to,
             of_ignore_angular_velocity=of_ignore_angular_velocity,
+            central_strip_width=central_strip_width,
         )
         self.bounds = bounds
         self.goal_x = goal_x
@@ -69,6 +74,14 @@ class ForwardBee(OFBeeseClass):
         get obs vector, including roll, pitch, yaw (yaw is encoded as its sine and cosine components,
             to remove the discontinuity at +-pi). this is not an issue for roll,pitch since they will never get this large
         """
+        if self.get_obs_vector_dim() == 0:
+            raise NotImplementedError
+        kinematics = self.client.simGetGroundTruthKinematics(vehicle_name=self.vehicle_name)
+        vel = np.array([kinematics.linear_velocity.x_val,
+                        kinematics.linear_velocity.y_val,
+                        kinematics.linear_velocity.z_val])
+        return vel + np.random.normal(scale=self.input_vel_w_noise, size=3)
+
         raise NotImplementedError
         # TODO: ignore rpy
         pose = self.get_pose()
@@ -92,7 +105,10 @@ class ForwardBee(OFBeeseClass):
         """
         shape of obs vector is (4,)
         """
-        return 0
+        if self.input_vel_w_noise is not None:
+            return 3
+        else:
+            return 0
 
     def out_of_bounds(self, pose):
 

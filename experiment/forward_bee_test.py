@@ -1,32 +1,6 @@
 import gymnasium as gym
 
-from beehavior.networks.cnn import CNN
-
-
-class CustomCNN(CNN):
-    """
-    https://stable-baselines3.readthedocs.io/en/master/guide/custom_policy.html
-    :param observation_space: (gym.Space)
-    :param features_dim: (int) Number of features extracted.
-        This corresponds to the number of unit for the last layer.
-    """
-
-    def __init__(self, observation_space: gym.spaces.Box, ffn_hidden=(), features_dim: int = 128):
-        channels = (64, 128, 128, 64, 32)
-        kernels = (9, 5, 3, 3, 3)
-        strides = (3, 1, 1, 1, 1)
-        paddings = (0, 2, 1, 1, 1)
-        maxpools = (True, True, False, False, True)
-        super().__init__(observation_space=observation_space,
-                         channels=channels,
-                         kernels=kernels,
-                         strides=strides,
-                         paddings=paddings,
-                         ffn_hidden_layers=ffn_hidden,
-                         features_dim=features_dim,
-                         maxpools=maxpools,
-                         )
-
+from beehavior.networks.nn_from_config import CustomNN
 
 if __name__ == '__main__':
     import argparse
@@ -36,6 +10,8 @@ if __name__ == '__main__':
     import pickle as pkl
     import beehavior
     from beehavior.envs.forward_bee import ForwardBee
+
+    DIR = os.path.dirname(os.path.dirname(__file__))
 
     PARSER = argparse.ArgumentParser(
         description='run RL on envionrment'
@@ -49,7 +25,7 @@ if __name__ == '__main__':
                         help="test identification")
     PARSER.add_argument("--timesteps-per-epoch", type=int, required=False, default=512,
                         help="number of timesteps to train for each epoch")
-    PARSER.add_argument("--epochs", type=int, required=False, default=100,
+    PARSER.add_argument("--epochs", type=int, required=False, default=50,
                         help="number of epochs")
     PARSER.add_argument("--nsteps", type=int, required=False, default=512,
                         help="number of steps before learning step")
@@ -63,9 +39,9 @@ if __name__ == '__main__':
                         choices=(ForwardBee.ACTION_VELOCITY,
                                  ForwardBee.ACTION_VELOCITY_XY,
                                  ForwardBee.ACTION_ACCELERATION,
-                                 ForwardBee.ACTION_ROLL_PITCH_YAW,
+                                 ForwardBee.ACTION_ROLL_PITCH_THRUST,
                                  ),
-                        help='action space to use: velocity, acceleration, or rpy')
+                        help='action space to use: velocity, acceleration, or rpt')
     PARSER.add_argument("--include-raw-of", action='store_true', required=False,
                         help="include raw OF in input")
     PARSER.add_argument("--include-log-of", action='store_true', required=False,
@@ -74,6 +50,11 @@ if __name__ == '__main__':
                         help="include OF orientation in input")
     PARSER.add_argument("--include-depth", action='store_true', required=False,
                         help="include depth in input")
+    PARSER.add_argument("--include-vel-with-noise", type=float, required=False, default=None,
+                        help="include noisy velocity in input (specify stdev of noise)")
+
+    PARSER.add_argument("--central-strip-width", type=int, required=False, default=None,
+                        help="if specified, only consider the central strip with this width")
     PARSER.add_argument("--save-model-history", type=int, required=False, default=1,
                         help="number of past models to save (-1 for all)")
     PARSER.add_argument("--testing-tunnel", type=int, nargs='+', required=False, default=[1],
@@ -81,6 +62,11 @@ if __name__ == '__main__':
     PARSER.add_argument("--reset", action='store_true', required=False,
                         help="reset training")
     args = PARSER.parse_args()
+    if args.central_strip_width is not None:
+        network_file = os.path.join(DIR, 'beehavior', 'networks', 'configs',
+                                    'central_strip_' + str(2*args.central_strip_width) + '.txt')
+    else:
+        network_file = os.path.join(DIR, 'beehavior', 'networks', 'configs', 'alexnet.txt')
     testing_tunnels = sorted(set(args.testing_tunnel))
 
     img_input_space = []
@@ -94,6 +80,7 @@ if __name__ == '__main__':
         img_input_space.append(ForwardBee.INPUT_INV_DEPTH_IMG)
     if not img_input_space:
         raise Exception('need to add at least one image input')
+
     ident = args.ident
     ident += '_in_'
     for key in (ForwardBee.INPUT_RAW_OF,
@@ -105,12 +92,15 @@ if __name__ == '__main__':
             ident += 'y'
         else:
             ident += 'n'
+    if args.include_vel_with_noise is not None:
+        ident += '_vel_noise_' + str(args.include_vel_with_noise).replace('.', '_')
+    if args.central_strip_width is not None:
+        ident += '_cen_stp_' + str(args.central_strip_width)
     ident += '_act_' + args.action_type
     ident += '_k_' + str(args.history_steps)
     ident += '_dt_' + str(args.dt).replace('.', '_')
     ident += '_tst_' + '_'.join([str(t) for t in testing_tunnels])
 
-    DIR = os.path.dirname(os.path.dirname(__file__))
     output_dir: str = os.path.join(DIR, 'output', ident)
     traj_dir = os.path.join(output_dir, 'trajectories')
     model_dir = os.path.join(output_dir, 'past_models')
@@ -122,10 +112,12 @@ if __name__ == '__main__':
                    input_img_space=img_input_space,
                    action_type=args.action_type,
                    img_history_steps=args.history_steps,
+                   input_velocity_with_noise=args.include_vel_with_noise,
+                   central_strip_width=args.central_strip_width,
                    )
     policy_kwargs = dict(
-        features_extractor_class=CustomCNN,
-        features_extractor_kwargs=dict(features_dim=128),
+        features_extractor_class=CustomNN,
+        features_extractor_kwargs=dict(config_file=network_file),
     )
 
 
@@ -241,13 +233,13 @@ if __name__ == '__main__':
                 print('rwd sum:', sum(rwds))
 
                 trajectories.append(steps)
-        print('saving trajectories of epoch', epoch, 'info')
         fname = os.path.join(traj_dir, 'traj_' + str(epoch) + '.pkl')
+        print('saving trajectories of epoch', epoch, 'info to ', fname)
         f = open(fname, 'wb')
         pkl.dump(trajectories, f)
         f.close()
         print('saved trajectory')
-        print('saving model and training info')
+        print('saving model and training info in ', model_dir)
         model.save(os.path.join(model_dir, 'model_epoch_' + str(epoch) + '.pkl'))
         fname = os.path.join(model_dir, 'info_epoch_' + str(epoch) + '.pkl')
         f = open(fname, 'wb')
