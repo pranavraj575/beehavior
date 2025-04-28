@@ -19,9 +19,12 @@ class BeeseClass(gym.Env):
     terminates upon collision
     """
     ACTION_ROLL_PITCH_THRUST = 'rpt'  # action bounds about np.pi/18 (10 degrees tilt)
+
     ACTION_VELOCITY = 'vel'  # action bounds about 1.5 m/s
     ACTION_VELOCITY_XY = 'vel_xy'  # action bounds aboutn 1.5 m/s
+
     ACTION_ACCELERATION = 'acc'  # action bounds about 3 m/s^2
+    ACTION_ACCELERATION_XY = 'acc_xy'  # action bounds about 3 m/s^2
 
     def __init__(self,
                  client=None,
@@ -32,7 +35,7 @@ class BeeseClass(gym.Env):
                  collision_grace=1,
                  initial_position=None,
                  action_type=ACTION_VELOCITY,
-                 velocity_bounds=1.,
+                 velocity_bounds=2.,
                  fix_z_to=None,
                  timeout=300,
                  ):
@@ -105,6 +108,16 @@ class BeeseClass(gym.Env):
                 shape=(3,),
                 dtype=np.float64,
             )
+        elif self.action_type == self.ACTION_ACCELERATION_XY:
+            if self.action_bounds is None:
+                self.action_bounds = 3.
+            self.velocity_target = np.zeros(2)
+            self.action_space = gym.spaces.Box(
+                low=-1,
+                high=1,
+                shape=(2,),
+                dtype=np.float64,
+            )
         elif self.action_type == self.ACTION_ROLL_PITCH_THRUST:
             if self.action_bounds is None:
                 self.action_bounds = np.pi/18
@@ -170,6 +183,23 @@ class BeeseClass(gym.Env):
                                                           duration=self.dt,
                                                           vehicle_name=self.vehicle_name,
                                                           )
+        elif self.action_type == self.ACTION_ACCELERATION_XY:
+            acc = self.map_vec_to_ball(vector=action,
+                                       radius=self.action_bounds,
+                                       idxs=None,
+                                       )
+            target_ht = self.fix_z_to if self.fix_z_to is not None else pose.position.z_val
+            self.velocity_target = self.velocity_target + acc*self.dt
+            speed = np.linalg.norm(self.velocity_target)
+            if speed > self.velocity_bounds:
+                self.velocity_target = self.velocity_target*(self.velocity_bounds/speed)
+            vx, vy = self.velocity_target
+            cmd = lambda: self.client.moveByVelocityZAsync(vx=vx,
+                                                           vy=vy,
+                                                           z=target_ht,
+                                                           duration=self.dt,
+                                                           vehicle_name=self.vehicle_name,
+                                                           )
         elif self.action_type == self.ACTION_ROLL_PITCH_THRUST:
             roll, pitch, thrust = action
             cmd = lambda: self.client.moveByRollPitchYawrateThrottleAsync(roll=roll,
@@ -465,7 +495,7 @@ class OFBeeseClass(BeeseClass):
                  timeout=300,
                  img_history_steps=2,
                  input_img_space=(INPUT_LOG_OF, INPUT_OF_ORIENTATION,),
-                 velocity_bounds=1.5,
+                 velocity_bounds=2.,
                  action_type=BeeseClass.ACTION_VELOCITY,
                  fix_z_to=None,
                  of_ignore_angular_velocity=True,

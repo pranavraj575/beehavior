@@ -26,6 +26,8 @@ PARSER.add_argument('--load-dir', action='store', required=True,
                     help='place that model saved')
 PARSER.add_argument('--keep-individuals', action='store_true', required=False,
                     help='Dont delete individual traj files')
+dx = .1
+dt = .1
 args = PARSER.parse_args()
 load_dir = args.load_dir
 traj_dir = os.path.join(load_dir, 'trajectories')
@@ -51,25 +53,15 @@ while True:
     i += 1
 if not epoch_infos:
     raise Exception('empty directory:', traj_dir)
-medians = []
-means = []
-maxes = []
-mins = []
-
-rwd_medians = []
-rwd_means = []
-rwd_maxes = []
-rwd_mins = []
 
 # set of tunnel infos, specifically walls and obstacles
 all_test_tunnel_infos = [
     # squished tunnel
     {
-        'walls': [[(-5, -7.45), (3.85, -7.45), (9.35, -6.), (15.05, -7.45), (20.85, -6.)],
+        'walls': [[(-5, -8.35), (3.85, -8.35), (9.35, -6.9), (15.05, -8.35), (20.85, -6.9)],
                   [(-5, -3.15), (3.85, -3.15), (9.35, -4.6), (15.05, -3.15), (20.85, -4.6)]],
         'xlim': (-3, 21),
         'obs': [],
-        'finish_x': 20,
     },
     # basic default tunnel with two obstacles
     {
@@ -88,9 +80,7 @@ all_test_tunnel_infos = [
     # empty tunnel
     {
         'walls': [[(-5, 36.52), (25, 36.52)], [(-5, 41.39), (25, 41.39)]],
-        'xlim': (-5, 21),
         'obs': [],
-        'finish_x': 20,
     }
 ]
 
@@ -102,6 +92,16 @@ common_info = {
 for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
     if test_tunnel_info is None:
         continue
+    medians = []
+    means = []
+    maxes = []
+    mins = []
+
+    rwd_medians = []
+    rwd_means = []
+    rwd_maxes = []
+    rwd_mins = []
+
     test_tunnel_info.update(common_info)
     walls = test_tunnel_info['walls']
     xlim = test_tunnel_info['xlim']
@@ -122,8 +122,11 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
         continue
 
     for all_traj in True, False:
+
         fnames = []
         for epoch, trajs in enumerate(epoch_infos):
+            xs = np.arange(test_tunnel_info['xlim'][0], test_tunnel_info['xlim'][1], dx)[:-1] # ignore the last bound
+            speed_bins = [[] for _ in range(len(xs))]
 
             # filter out the trajectories that are tested in this tunnel
 
@@ -134,7 +137,27 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
                      ]
             if not trajs:
                 continue
+            for traj in trajs:
+                for thingy in traj:
+                    x = thingy['old_pose']['position'][0]
+                    xp = thingy['pose']['position'][0]
+                    if x > test_tunnel_info['xlim'][0]:
+                        bindex = np.sum(x > xs) - 1 # subtract 1 to put it on the lower end
+                        speed_bins[bindex].append((xp - x)/dt)
+            plt.plot(xs[[len(b)>0 for b in speed_bins]],
+                     [np.mean(b) for b in speed_bins if len(b)>0])
+            plt.xlabel('x')
+            plt.ylabel('avg forward velocity')
+            plt.title('avg vel epoch ' + str(epoch))
+            plt.xlim(xlim)
 
+            fname = os.path.join(individual_traj_dir,
+                                 'avg_speed_'+
+                                 'tunnel_' + str(tunnel_idx) + '_' +
+                                 'epoch_' + str(epoch) + '.png'
+                                 )
+            plt.savefig(fname, bbox_inches='tight')
+            plt.close()
             fig, ax = plt.subplots()
             plt.xlabel('x axis')
             plt.ylabel('y axis')

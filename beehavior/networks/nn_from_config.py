@@ -9,7 +9,7 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 def layer_from_config_dict(dic, input_shape=None, only_shape=False):
     """
     returns nn layer from a layer config dict
-    handles Linear, flatten, relu, cnn, maxpool
+    handles Linear, flatten, relu, cnn, maxpool, avgpool
     Args:
         dic: layer config dict
         {
@@ -70,7 +70,7 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
 
     # image stuff has annoying output shape calculation
     # only need to write it once
-    elif typ in ['cnn', 'maxpool']:
+    elif typ in ['cnn', 'maxpool', 'avgpool']:
         (N, C, H, W) = input_shape
         kernel_size = dic['kernel']
         if type(kernel_size) == int: kernel_size = (kernel_size, kernel_size)
@@ -101,6 +101,14 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
                     padding=padding,
                 )
 
+            shape = (N, C, Hp, Wp)
+        elif typ == 'avgpool':
+            if not only_shape:
+                layer = nn.AvgPool2d(
+                    kernel_size=kernel_size,
+                    stride=stride,
+                    padding=padding,
+                )
             shape = (N, C, Hp, Wp)
         else:
             raise NotImplementedError
@@ -227,5 +235,12 @@ if __name__ == '__main__':
     print()
     print(CustomNN(
         observation_space=gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2, 240, 320)),
+        config_file=alex,
+    ))
+
+    alex = os.path.join(network_dir, 'configs', 'simp_alex.txt')
+
+    print(CustomNN(
+        observation_space=gym.spaces.Box(low=-np.inf, high=np.inf, shape=(8, 240, 320)),
         config_file=alex,
     ))

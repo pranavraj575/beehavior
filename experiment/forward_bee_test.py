@@ -39,6 +39,7 @@ if __name__ == '__main__':
                         choices=(ForwardBee.ACTION_VELOCITY,
                                  ForwardBee.ACTION_VELOCITY_XY,
                                  ForwardBee.ACTION_ACCELERATION,
+                                 ForwardBee.ACTION_ACCELERATION_XY,
                                  ForwardBee.ACTION_ROLL_PITCH_THRUST,
                                  ),
                         help='action space to use: velocity, acceleration, or rpt')
@@ -59,14 +60,15 @@ if __name__ == '__main__':
                         help="number of past models to save (-1 for all)")
     PARSER.add_argument("--testing-tunnel", type=int, nargs='+', required=False, default=[1],
                         help="index of tunnels to test in, 1 is the normal one")
+
+    PARSER.add_argument("--network", action='store', required=False,
+                        default=os.path.join(DIR, 'beehavior', 'networks', 'configs', 'simp_alex.txt'),
+                        help="network config file to use (look at beehavior/networks/nn_from_config.py)")
     PARSER.add_argument("--reset", action='store_true', required=False,
                         help="reset training")
     args = PARSER.parse_args()
-    if args.central_strip_width is not None:
-        network_file = os.path.join(DIR, 'beehavior', 'networks', 'configs',
-                                    'central_strip_' + str(2*args.central_strip_width) + '.txt')
-    else:
-        network_file = os.path.join(DIR, 'beehavior', 'networks', 'configs', 'alexnet.txt')
+    network_file = args.network
+
     testing_tunnels = sorted(set(args.testing_tunnel))
 
     img_input_space = []
@@ -95,10 +97,13 @@ if __name__ == '__main__':
     if args.include_vel_with_noise is not None:
         ident += '_vel_noise_' + str(args.include_vel_with_noise).replace('.', '_')
     if args.central_strip_width is not None:
-        ident += '_cen_stp_' + str(args.central_strip_width)
+        ident += '_cen_strp_' + str(args.central_strip_width)
     ident += '_act_' + args.action_type
     ident += '_k_' + str(args.history_steps)
     ident += '_dt_' + str(args.dt).replace('.', '_')
+    ident += '_epoch_stp_' + str(args.timesteps_per_epoch)
+    ident += '_nstep_' + str(args.nsteps)
+    ident += '_net_' + os.path.basename(network_file)[:os.path.basename(network_file).find('.')]
     ident += '_tst_' + '_'.join([str(t) for t in testing_tunnels])
 
     output_dir: str = os.path.join(DIR, 'output', ident)
