@@ -40,6 +40,7 @@ class ForwardBee(OFBeeseClass):
                  of_ignore_angular_velocity=True,
                  input_velocity_with_noise=None,
                  central_strip_width=None,
+                 global_actions=False,
                  ):
         """
         Args:
@@ -64,6 +65,7 @@ class ForwardBee(OFBeeseClass):
             fix_z_to=fix_z_to,
             of_ignore_angular_velocity=of_ignore_angular_velocity,
             central_strip_width=central_strip_width,
+            global_actions=global_actions,
         )
         self.bounds = bounds
         self.goal_x = goal_x
@@ -86,11 +88,7 @@ class ForwardBee(OFBeeseClass):
         # TODO: ignore rpy
         pose = self.get_pose()
         ht = -pose.position.z_val
-        r, p, y = self.get_orientation_eulerian(quaternion=(pose.orientation.x_val,
-                                                            pose.orientation.y_val,
-                                                            pose.orientation.z_val,
-                                                            pose.orientation.w_val,
-                                                            ))
+        r, p, y = self.get_orientation_eulerian(pose=pose)
         cy = np.cos(y)
         sy = np.sin(y)
         return np.array([

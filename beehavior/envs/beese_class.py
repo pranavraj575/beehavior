@@ -4,6 +4,7 @@ from gymnasium.core import ActType, ObsType
 import numpy as np
 import math
 from collections import deque
+from scipy.spatial.transform import Rotation
 
 from airsim import Vector3r, Pose
 from airsim_interface.interface import connect_client, disconnect_client, step, of_geo, get_of_geo_shape, get_depth_img
@@ -38,6 +39,7 @@ class BeeseClass(gym.Env):
                  velocity_bounds=2.,
                  fix_z_to=None,
                  timeout=300,
+                 global_actions=False,
                  ):
         """
         Args:
@@ -60,6 +62,7 @@ class BeeseClass(gym.Env):
                 if acceleration ctrl, this is the maximum velocity magnitude on each dimension
             fix_z_to: if velocity_ctrl, fixes the height to a certin value, if None, doesnt do this
             timeout: seconds until env timeout
+            global_actions: whether action vectors are in global frame
         """
         super().__init__()
         if client is None:
@@ -77,6 +80,7 @@ class BeeseClass(gym.Env):
         self.action_type = action_type
         self.fix_z_to = fix_z_to
         self.velocity_bounds = velocity_bounds
+        self.global_actions = global_actions
 
         # in euclidean cases, we make the output on a [-1,1] box, then scale it to a radius action_bounds ball later
         # in roll, pitch, yaw, we do not scale as it doesnt really make (non euclidean)
@@ -145,10 +149,13 @@ class BeeseClass(gym.Env):
         #    quaternion=(pose.orientation.x_val, pose.orientation.y_val, pose.orientation.z_val, pose.orientation.w_val)
         # )
         if self.action_type == self.ACTION_VELOCITY:
-            vx, vy, vz = self.map_vec_to_ball(vector=action,
-                                              radius=self.action_bounds,
-                                              idxs=None,
-                                              )
+            vec = self.map_vec_to_ball(vector=action,
+                                       radius=self.action_bounds,
+                                       idxs=None,
+                                       )
+            if not self.global_actions:
+                vec = self.to_global_vec(vec=vec, pose=pose)
+            vx, vy, vz = vec
             cmd = lambda: self.client.moveByVelocityAsync(vx=vx,
                                                           vy=vy,
                                                           vz=vz,
@@ -157,10 +164,13 @@ class BeeseClass(gym.Env):
                                                           )
         elif self.action_type == self.ACTION_VELOCITY_XY:
             target_ht = self.fix_z_to if self.fix_z_to is not None else pose.position.z_val
-            vx, vy = self.map_vec_to_ball(vector=action,
-                                          radius=self.action_bounds,
-                                          idxs=None,
-                                          )
+            vec = self.map_vec_to_ball(vector=action,
+                                       radius=self.action_bounds,
+                                       idxs=None,
+                                       )
+            if not self.global_actions:
+                vec = self.to_global_vec(vec=vec, pose=pose)
+            vx, vy = vec
             cmd = lambda: self.client.moveByVelocityZAsync(vx=vx,
                                                            vy=vy,
                                                            z=target_ht,
@@ -176,7 +186,10 @@ class BeeseClass(gym.Env):
             speed = np.linalg.norm(self.velocity_target)
             if speed > self.velocity_bounds:
                 self.velocity_target = self.velocity_target*(self.velocity_bounds/speed)
-            vx, vy, vz = self.velocity_target
+            vec = self.velocity_target
+            if not self.global_actions:
+                vec = self.to_global_vec(vec=vec, pose=pose)
+            vx, vy, vz = vec
             cmd = lambda: self.client.moveByVelocityAsync(vx=vx,
                                                           vy=vy,
                                                           vz=vz,
@@ -193,7 +206,11 @@ class BeeseClass(gym.Env):
             speed = np.linalg.norm(self.velocity_target)
             if speed > self.velocity_bounds:
                 self.velocity_target = self.velocity_target*(self.velocity_bounds/speed)
-            vx, vy = self.velocity_target
+            vec = self.velocity_target
+            if not self.global_actions:
+                vec = self.to_global_vec(vec=vec, pose=pose)
+
+            vx, vy = vec
             cmd = lambda: self.client.moveByVelocityZAsync(vx=vx,
                                                            vy=vy,
                                                            z=target_ht,
@@ -349,40 +366,6 @@ class BeeseClass(gym.Env):
     # OBSERVATION STUFF
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def get_pose(self):
-        """
-        gets pose of agent in environment, pose object has a .position and .orientation
-        """
-        return self.client.simGetVehiclePose(vehicle_name=self.vehicle_name)
-
-    def get_orientation_eulerian(self, quaternion=None):
-        """
-        returns roll,pitch,yaw
-        Args:
-            quaternion: if specified (x,y,z,w) uses this
-                else, uses self.get_pose()
-        """
-        if quaternion is None:
-            o = self.get_pose().orientation
-            quaternion = (o.x_val, o.y_val, o.z_val, o.w_val)
-        x, y, z, w = quaternion
-
-        # convert to rpy
-        t0 = +2.0*(w*x + y*z)
-        t1 = +1.0 - 2.0*(x*x + y*y)
-        rl = math.atan2(t0, t1)
-
-        t2 = +2.0*(w*y - z*x)
-        t2 = +1.0 if t2 > +1.0 else t2
-        t2 = -1.0 if t2 < -1.0 else t2
-        ptch = math.asin(t2)
-
-        t3 = +2.0*(w*z + x*y)
-        t4 = +1.0 - 2.0*(y*y + z*z)
-        yw = math.atan2(t3, t4)
-
-        return rl, ptch, yw
-
     def get_obs_vector(self):
         """
         gets observation vector from last completed step()
@@ -433,6 +416,49 @@ class BeeseClass(gym.Env):
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # UTIL STUFF
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    def get_pose(self):
+        """
+        gets pose of agent in environment, pose object has a .position and .orientation
+        """
+        return self.client.simGetVehiclePose(vehicle_name=self.vehicle_name)
+
+    def _get_rotation(self, pose=None):
+        """
+        gets scipy Rotation object from pose (if given) or self.get_pose()
+        """
+        if pose is None:
+            pose = self.get_pose()
+        o = pose.orientation
+
+        quaternion = (o.x_val, o.y_val, o.z_val, o.w_val)
+        return Rotation.from_quat(quat=quaternion, scalar_first=False)  # scalar (w) is ordered last, the default
+
+    def get_orientation_eulerian(self, pose=None):
+        """
+        returns roll,pitch,yaw
+        Args:
+            pose: if specified pose uses this
+                else, uses self.get_pose()
+        """
+        r = self._get_rotation(pose=pose)
+        return r.as_euler('xyz')
+
+    def to_global_vec(self, vec, pose=None):
+        """
+        rotates vector to global coordinates
+        i.e. a vector of (1,0) (positive x) will be rotated to the vector in the 'forward' drone direction
+        Args:
+            vec: 2d xy vector to rotate OR 3d xyz vector to rotate
+        """
+        r = self._get_rotation(pose=pose)
+        R = r.as_matrix()
+        if len(vec) == 2:
+            return R[:2, :2]@vec
+        elif len(vec) == 3:
+            return R@vec
+        else:
+            raise NotImplementedError
+
     def map_vec_to_ball(self, vector, radius=1., idxs=None, ):
         """
         assumes a vector (np array) is in a [-1,1] box on certian indices
@@ -447,8 +473,8 @@ class BeeseClass(gym.Env):
         """
         # TODO: REMOVE THESE LINES ONCE DONE TESTING
         #  map to a [-radius, radius] box for testing
-        vector[idxs] = vector[idxs]*radius
-        return vector
+        #vector[idxs] = vector[idxs]*radius
+        #return vector
 
         if idxs is None:
             idxs = list(range(len(vector)))
@@ -500,6 +526,7 @@ class OFBeeseClass(BeeseClass):
                  fix_z_to=None,
                  of_ignore_angular_velocity=True,
                  central_strip_width=None,
+                 global_actions=False,
                  ):
         """
         Args:
@@ -543,6 +570,7 @@ class OFBeeseClass(BeeseClass):
             velocity_bounds=velocity_bounds,
             fix_z_to=fix_z_to,
             timeout=timeout,
+            global_actions=global_actions,
         )
 
     def define_observation_space(self):

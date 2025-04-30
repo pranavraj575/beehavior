@@ -27,6 +27,7 @@ class HiBee(OFBeeseClass):
                  fix_z_to=None,
                  of_ignore_angular_velocity=True,
                  central_strip_width=None,
+                 global_actions=False,
                  ):
         """
         Args:
@@ -49,6 +50,7 @@ class HiBee(OFBeeseClass):
             fix_z_to=fix_z_to,
             of_ignore_angular_velocity=of_ignore_angular_velocity,
             central_strip_width=central_strip_width,
+            global_actions=global_actions,
         )
         self.ht_rng = height_range
         # shoot for average
@@ -60,11 +62,7 @@ class HiBee(OFBeeseClass):
         """
         pose = self.get_pose()
         ht = -pose.position.z_val
-        r, p, y = self.get_orientation_eulerian(quaternion=(pose.orientation.x_val,
-                                                            pose.orientation.y_val,
-                                                            pose.orientation.z_val,
-                                                            pose.orientation.w_val,
-                                                            ))
+        r, p, y = self.get_orientation_eulerian(pose=pose)
         return np.array([
             r,
             p,
