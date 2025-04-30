@@ -431,7 +431,7 @@ class BeeseClass(gym.Env):
         o = pose.orientation
 
         quaternion = (o.x_val, o.y_val, o.z_val, o.w_val)
-        return Rotation.from_quat(quat=quaternion, scalar_first=False)  # scalar (w) is ordered last, the default
+        return Rotation.from_quat(quaternion)  # scalar (w) is ordered last, the default
 
     def get_orientation_eulerian(self, pose=None):
         """
