@@ -26,6 +26,9 @@ PARSER.add_argument('--load-dir', action='store', required=True,
                     help='place that model saved')
 PARSER.add_argument('--keep-individuals', action='store_true', required=False,
                     help='Dont delete individual traj files')
+PARSER.add_argument('--avg-vel', action='store_true', required=False,
+                    help='calculate avg vel')
+
 dx = .1
 dt = .1
 args = PARSER.parse_args()
@@ -66,13 +69,22 @@ all_test_tunnel_infos = [
     # basic default tunnel with two obstacles
     {
         # list of vertex lists
-        'walls': [[(-5, -2), (25, -2)], [(-5, 2), (25, 2)]],
+        'walls': [[(-5, -2.1), (25, -2.1)], [(-5, 2.1), (25, 2.1)]],
         # list of (center, width, height (for ellipse, x axis, y axis))
         'obs': [((-9230, -22250), (1, 1)),
                 ((-8140, -22080), (1, 1))
                 ],
     },
-    None,
+    {
+        # list of vertex lists
+        'walls': [[(-5, 3.14), (25, 3.14)], [(-5, 8.8), (25, 8.8)], ],
+        # list of (center, width, height (for ellipse, x axis, y axis))
+        'obs': [
+            ((-9230, -21530), (1, 1)),
+            ((-8030, -21300), (1, 1)),
+            ((-7900, -21790), (1, 1)),
+        ],
+    },
     None,
     None,
     None,
@@ -125,8 +137,8 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
 
         fnames = []
         for epoch, trajs in enumerate(epoch_infos):
-            xs = np.arange(test_tunnel_info['xlim'][0], test_tunnel_info['xlim'][1], dx)[:-1] # ignore the last bound
-            speed_bins = [[] for _ in range(len(xs))]
+            xs = np.arange(test_tunnel_info['xlim'][0], test_tunnel_info['xlim'][1], dx)[:-1]  # ignore the last bound
+            vel_bins = [[] for _ in range(len(xs))]
 
             # filter out the trajectories that are tested in this tunnel
 
@@ -137,27 +149,28 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
                      ]
             if not trajs:
                 continue
-            for traj in trajs:
-                for thingy in traj:
-                    x = thingy['old_pose']['position'][0]
-                    xp = thingy['pose']['position'][0]
-                    if x > test_tunnel_info['xlim'][0]:
-                        bindex = np.sum(x > xs) - 1 # subtract 1 to put it on the lower end
-                        speed_bins[bindex].append((xp - x)/dt)
-            plt.plot(xs[[len(b)>0 for b in speed_bins]],
-                     [np.mean(b) for b in speed_bins if len(b)>0])
-            plt.xlabel('x')
-            plt.ylabel('avg forward velocity')
-            plt.title('avg vel epoch ' + str(epoch))
-            plt.xlim(xlim)
+            if args.avg_vel:
+                for traj in trajs:
+                    for thingy in traj:
+                        x = thingy['old_pose']['position'][0]
+                        xp = thingy['pose']['position'][0]
+                        if x > test_tunnel_info['xlim'][0]:
+                            bindex = np.sum(x > xs) - 1  # subtract 1 to put it on the lower end
+                            vel_bins[bindex].append((xp - x)/dt)
+                plt.plot(xs[[len(b) > 0 for b in vel_bins]],
+                         [np.mean(b) for b in vel_bins if len(b) > 0])
+                plt.xlabel('x')
+                plt.ylabel('avg forward velocity')
+                plt.title('avg vel epoch ' + str(epoch))
+                plt.xlim(xlim)
 
-            fname = os.path.join(individual_traj_dir,
-                                 'avg_speed_'+
-                                 'tunnel_' + str(tunnel_idx) + '_' +
-                                 'epoch_' + str(epoch) + '.png'
-                                 )
-            plt.savefig(fname, bbox_inches='tight')
-            plt.close()
+                fname = os.path.join(individual_traj_dir,
+                                     'avg_vel_' +
+                                     'tunnel_' + str(tunnel_idx) + '_' +
+                                     'epoch_' + str(epoch) + '.png'
+                                     )
+                plt.savefig(fname, bbox_inches='tight')
+                plt.close()
             fig, ax = plt.subplots()
             plt.xlabel('x axis')
             plt.ylabel('y axis')
@@ -167,6 +180,7 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
                         [wy for (wx, wy) in pt_list],
                         color='black', linewidth=4)
 
+            ylim = plt.ylim() # y limits should be bounded by walls
             for effective_bnd in (False, True):
                 alpha = [1, .5][int(effective_bnd)]
                 for c, (w, h) in test_tunnel_info['obs']:
@@ -238,9 +252,8 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
                 plt.plot([], [], color='yellow', label='timed out')
                 plt.plot([], [], color='red', label='crashed')
 
-            ylim = plt.ylim()
             xbnd = test_tunnel_info['finish_x']
-            plt.plot([xbnd, xbnd], ylim,
+            plt.plot([xbnd, xbnd], plt.ylim(),
                      color='black', linewidth=2, linestyle='--'
                      )
             plt.ylim(ylim)
