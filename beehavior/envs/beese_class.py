@@ -473,8 +473,8 @@ class BeeseClass(gym.Env):
         """
         # TODO: REMOVE THESE LINES ONCE DONE TESTING
         #  map to a [-radius, radius] box for testing
-        #vector[idxs] = vector[idxs]*radius
-        #return vector
+        vector[idxs] = vector[idxs]*radius
+        return vector
 
         if idxs is None:
             idxs = list(range(len(vector)))
