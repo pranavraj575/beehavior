@@ -48,16 +48,16 @@ if not os.path.exists(plot_dir):
 
 epoch_infos = []
 i = 0
-last_seen=0
+last_seen = 0
 while True:
     fn = os.path.join(traj_dir, 'traj_' + str(i) + '.pkl')
-    if i-last_seen>args.traj_freq*10 and (not os.path.exists(fn)):
+    if i - last_seen > args.traj_freq*10 and (not os.path.exists(fn)):
         break
     if os.path.exists(fn):
         f = open(fn, 'rb')
         epoch_infos.append(pkl.load(f))
         f.close()
-        last_seen=i
+        last_seen = i
     else:
         epoch_infos.append(dict())
     i += 1
@@ -113,10 +113,10 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
         continue
 
     # filter out the trajectories that are tested in this tunnel
-    relevant_epoch_infos=[stuff.get(tunnel_idx, []) for stuff in epoch_infos]
+    relevant_epoch_infos = [stuff.get(tunnel_idx, []) for stuff in epoch_infos]
     if not any(relevant_epoch_infos):
         continue
-    epochs=[]
+    epochs = []
 
     medians = []
     means = []
@@ -141,32 +141,56 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
         for epoch, trajs in enumerate(relevant_epoch_infos):
             xs = np.arange(test_tunnel_info['xlim'][0], test_tunnel_info['xlim'][1], dx)[:-1]  # ignore the last bound
             vel_bins = [[] for _ in range(len(xs))]
+            pos_bins = [[] for _ in range(len(xs))]
 
             if not trajs:
                 # no data
                 continue
-            if args.avg_vel:
-                for traj in trajs:
-                    for thingy in traj:
-                        x = thingy['old_pose']['position'][0]
-                        xp = thingy['pose']['position'][0]
-                        if x > test_tunnel_info['xlim'][0]:
-                            bindex = np.sum(x > xs) - 1  # subtract 1 to put it on the lower end
-                            vel_bins[bindex].append((xp - x)/dt)
-                plt.plot(xs[[len(b) > 0 for b in vel_bins]],
-                         [np.mean(b) for b in vel_bins if len(b) > 0])
-                plt.xlabel('x')
-                plt.ylabel('avg forward velocity')
-                plt.title('avg vel epoch ' + str(epoch))
-                plt.xlim(xlim)
+            for traj in trajs:
+                for thingy in traj:
+                    x, y = thingy['old_pose']['position'][:1]
+                    xp = thingy['pose']['position'][0]
+                    if x > test_tunnel_info['xlim'][0]:
+                        bindex = np.sum(x > xs) - 1  # subtract 1 to put it on the lower end
+                        vel_bins[bindex].append((xp - x)/dt)
+                        pos_bins[bindex].append(y)
 
-                fname = os.path.join(individual_traj_dir,
-                                     'avg_vel_' +
-                                     'tunnel_' + str(tunnel_idx) + '_' +
-                                     'epoch_' + str(epoch) + '.png'
-                                     )
-                plt.savefig(fname, bbox_inches='tight')
-                plt.close()
+            plt.plot(xs[[len(b) > 0 for b in vel_bins]],
+                     [np.mean(b) for b in vel_bins if len(b) > 0])
+            plt.xlabel('x')
+            plt.ylabel('avg forward velocity')
+            plt.title('avg vel epoch ' + str(epoch))
+            plt.xlim(xlim)
+            fname = os.path.join(individual_traj_dir,
+                                 'avg_vel_' +
+                                 'tunnel_' + str(tunnel_idx) + '_' +
+                                 'epoch_' + str(epoch) + '.png'
+                                 )
+            plt.savefig(fname, bbox_inches='tight')
+            plt.close()
+            pos_means = np.array([np.mean(b) for b in pos_bins if len(b) > 0])
+            pos_std = np.array(np.std(b) for b in pos_bins if len(b) > 0)
+            plt.plot(xs[[len(b) > 0 for b in vel_bins]],
+                     pos_means,
+                     label='averaged y positions ')
+            plt.fill_between(xs[[len(b) > 0 for b in vel_bins]],
+                             pos_means - pos_std,
+                             pos_means + pos_std,
+                             alpha=.2,
+                             )
+            plt.xlabel('x')
+            plt.ylabel('y')
+            plt.title('average y positions epoch ' + str(epoch))
+            plt.legend()
+            plt.xlim(xlim)
+            fname = os.path.join(individual_traj_dir,
+                                 'avg_pos_' +
+                                 'tunnel_' + str(tunnel_idx) + '_' +
+                                 'epoch_' + str(epoch) + '.png'
+                                 )
+            plt.savefig(fname, bbox_inches='tight')
+            plt.close()
+
             fig, ax = plt.subplots()
             plt.xlabel('x axis')
             plt.ylabel('y axis')
@@ -176,7 +200,7 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
                         [wy for (wx, wy) in pt_list],
                         color='black', linewidth=4)
 
-            ylim = plt.ylim() # y limits should be bounded by walls
+            ylim = plt.ylim()  # y limits should be bounded by walls
             for effective_bnd in (False, True):
                 alpha = [1, .5][int(effective_bnd)]
                 for c, (w, h) in test_tunnel_info['obs']:
@@ -276,10 +300,10 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
                    output_gif_path=fname,
                    duration=200,
                    )
-    plt.plot(epochs,means, color='blue', label='means')
-    plt.plot(epochs,medians, color='orange', label='median')
-    plt.plot(epochs,maxes, color='green', label='max')
-    plt.plot(epochs,mins, color='red', label='min')
+    plt.plot(epochs, means, color='blue', label='means')
+    plt.plot(epochs, medians, color='orange', label='median')
+    plt.plot(epochs, maxes, color='green', label='max')
+    plt.plot(epochs, mins, color='red', label='min')
     plt.xlabel('epochs')
     plt.ylabel('distance traveled')
     plt.title("Distance traveled throughout training")
@@ -291,10 +315,10 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
     plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_' + 'trajectory_summary.png'))
     plt.close()
 
-    plt.plot(epochs,rwd_means, color='blue', label='means')
-    plt.plot(epochs,rwd_medians, color='orange', label='median')
-    plt.plot(epochs,rwd_maxes, color='green', label='max')
-    plt.plot(epochs,rwd_mins, color='red', label='min')
+    plt.plot(epochs, rwd_means, color='blue', label='means')
+    plt.plot(epochs, rwd_medians, color='orange', label='median')
+    plt.plot(epochs, rwd_maxes, color='green', label='max')
+    plt.plot(epochs, rwd_mins, color='red', label='min')
     plt.xlabel('epochs')
     plt.ylabel('reward sum')
     plt.title("Rewards throughout training")
