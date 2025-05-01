@@ -30,10 +30,12 @@ PARSER.add_argument('--avg-vel', action='store_true', required=False,
                     help='calculate avg vel')
 PARSER.add_argument('--traj-freq', type=int, required=False, default=1,
                     help='frequency to look for traj files')
+PARSER.add_argument('--dx', type=float, required=False, default=.5,
+                    help='dx to use for space averaging positions/velocities')
 
-dx = .1
-dt = .1
 args = PARSER.parse_args()
+dx = args.dx
+dt = .1
 load_dir = args.load_dir
 traj_dir = os.path.join(load_dir, 'trajectories')
 print('analing trajectories from', traj_dir)
@@ -134,7 +136,42 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
 
     initial_wall_y = [pt_list[0][1] for pt_list in walls]
     initial_wall_y = min(initial_wall_y), max(initial_wall_y)
+
+
     # fig, ax = plt.subplots()
+
+    def plt_env():
+        fig, ax = plt.subplots()
+        for pt_list in walls:
+            ax.plot([wx for (wx, wy) in pt_list],
+                    [wy for (wx, wy) in pt_list],
+                    color='black', linewidth=4)
+        ylim = plt.ylim()  # y limits should be bounded by walls
+        for effective_bnd in (False, True):
+            alpha = [1, .5][int(effective_bnd)]
+            for c, (w, h) in test_tunnel_info['obs']:
+                if effective_bnd:
+                    # drone has a radius of about 1m, so obstacles need to be elongated by a radius of .5,
+                    #   representing a crash if drone COM is within this area
+                    # thus, increase width and height (diameter) by 1 each
+
+                    w += 1
+                    h += 1
+                c = (c[0] + 9390)/100, (c[1] + 22145)/100
+                # ax.add_patch(plt.Circle(c, r, alpha=alpha))
+                ax.add_patch(Ellipse(xy=c,
+                                     width=w,
+                                     height=h,
+                                     angle=0,
+                                     alpha=alpha,
+                                     ))
+
+        xbnd = test_tunnel_info['finish_x']
+        ax.plot([xbnd, xbnd], plt.ylim(),
+                 color='black', linewidth=2, linestyle='--'
+                 )
+        return ylim
+
 
     for all_traj in True, False:
         fnames = []
@@ -148,7 +185,7 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
                 continue
             for traj in trajs:
                 for thingy in traj:
-                    x, y = thingy['old_pose']['position'][:1]
+                    x, y = thingy['old_pose']['position'][:2]
                     xp = thingy['pose']['position'][0]
                     if x > test_tunnel_info['xlim'][0]:
                         bindex = np.sum(x > xs) - 1  # subtract 1 to put it on the lower end
@@ -168,8 +205,11 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
                                  )
             plt.savefig(fname, bbox_inches='tight')
             plt.close()
+
+            ylim=plt_env()
+            plt.gca().set_aspect('equal')
             pos_means = np.array([np.mean(b) for b in pos_bins if len(b) > 0])
-            pos_std = np.array(np.std(b) for b in pos_bins if len(b) > 0)
+            pos_std = np.array([np.std(b) for b in pos_bins if len(b) > 0])
             plt.plot(xs[[len(b) > 0 for b in vel_bins]],
                      pos_means,
                      label='averaged y positions ')
@@ -181,8 +221,9 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
             plt.xlabel('x')
             plt.ylabel('y')
             plt.title('average y positions epoch ' + str(epoch))
-            plt.legend()
+            plt.legend(loc='center left', bbox_to_anchor=(.69, -.35))
             plt.xlim(xlim)
+            plt.ylim(ylim)
             fname = os.path.join(individual_traj_dir,
                                  'avg_pos_' +
                                  'tunnel_' + str(tunnel_idx) + '_' +
@@ -191,34 +232,12 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
             plt.savefig(fname, bbox_inches='tight')
             plt.close()
 
-            fig, ax = plt.subplots()
+            #fig, ax = plt.subplots()
             plt.xlabel('x axis')
             plt.ylabel('y axis')
+
+            ylim = plt_env()
             plt.gca().set_aspect('equal')
-            for pt_list in walls:
-                ax.plot([wx for (wx, wy) in pt_list],
-                        [wy for (wx, wy) in pt_list],
-                        color='black', linewidth=4)
-
-            ylim = plt.ylim()  # y limits should be bounded by walls
-            for effective_bnd in (False, True):
-                alpha = [1, .5][int(effective_bnd)]
-                for c, (w, h) in test_tunnel_info['obs']:
-                    if effective_bnd:
-                        # drone has a radius of about 1m, so obstacles need to be elongated by a radius of .5,
-                        #   representing a crash if drone COM is within this area
-                        # thus, increase width and height (diameter) by 1 each
-
-                        w += 1
-                        h += 1
-                    c = (c[0] + 9390)/100, (c[1] + 22145)/100
-                    # ax.add_patch(plt.Circle(c, r, alpha=alpha))
-                    ax.add_patch(Ellipse(xy=c,
-                                         width=w,
-                                         height=h,
-                                         angle=0,
-                                         alpha=alpha,
-                                         ))
 
             alpha = 1
 
@@ -274,10 +293,6 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
                 plt.plot([], [], color='yellow', label='timed out')
                 plt.plot([], [], color='red', label='crashed')
 
-            xbnd = test_tunnel_info['finish_x']
-            plt.plot([xbnd, xbnd], plt.ylim(),
-                     color='black', linewidth=2, linestyle='--'
-                     )
             plt.ylim(ylim)
 
             plt.legend(loc='center left', bbox_to_anchor=(1., .5))

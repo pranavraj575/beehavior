@@ -252,9 +252,8 @@ if __name__ == '__main__':
                 trajectories.append(traj)
                 if debug:
                     rwds = [dic['reward'] for dic in traj]
-                    print('ep length:', len(rwds))
-                    print('rwd sum:', sum(rwds))
-                    print()
+                    print('ep length:', len(rwds), ';',
+                          'rwd sum:', sum(rwds))
             testjectories[tunnel_idx] = trajectories
         return testjectories
 
