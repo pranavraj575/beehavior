@@ -63,6 +63,9 @@ class BeeseClass(gym.Env):
             fix_z_to: if velocity_ctrl, fixes the height to a certin value, if None, doesnt do this
             timeout: seconds until env timeout
             global_actions: whether action vectors are in global frame
+                NOTE: z vector is ALWAYS in global frame, x and y can be in global or local frame
+                    i.e. command vector of (0,0,1) will always correspond to straight up, regardless of agent orientation
+                        (1,0,0) is either positive x (global) or direction agent is facing (local)
         """
         super().__init__()
         if client is None:
@@ -154,7 +157,7 @@ class BeeseClass(gym.Env):
                                        idxs=None,
                                        )
             if not self.global_actions:
-                vec = self.to_global_vec(vec=vec, pose=pose)
+                vec[:2] = self.to_global_vec(vec=vec[:2], pose=pose)
             vx, vy, vz = vec
             cmd = lambda: self.client.moveByVelocityAsync(vx=vx,
                                                           vy=vy,
@@ -188,7 +191,7 @@ class BeeseClass(gym.Env):
                 self.velocity_target = self.velocity_target*(self.velocity_bounds/speed)
             vec = self.velocity_target
             if not self.global_actions:
-                vec = self.to_global_vec(vec=vec, pose=pose)
+                vec[:2] = self.to_global_vec(vec=vec[:2], pose=pose)
             vx, vy, vz = vec
             cmd = lambda: self.client.moveByVelocityAsync(vx=vx,
                                                           vy=vy,

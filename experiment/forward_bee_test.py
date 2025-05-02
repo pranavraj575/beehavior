@@ -41,6 +41,9 @@ if __name__ == '__main__':
                         help="steps to see in history")
     PARSER.add_argument("--recollect", action='store_true', required=False,
                         help="go through all saved models after training and collect <--testjectories> trajectories")
+
+    PARSER.add_argument("--display", type=int, required=False, default=None,
+                        help="skip training and run specified saved model (-1 for most recent) on all <--testing-tunnel>s")
     PARSER.add_argument('--action-type', action='store', required=False, default=ForwardBee.ACTION_VELOCITY,
                         choices=(ForwardBee.ACTION_VELOCITY,
                                  ForwardBee.ACTION_VELOCITY_XY,
@@ -242,12 +245,14 @@ if __name__ == '__main__':
         return steps
 
 
-    def collect_testjectories(model, env, testjectories=None, debug=False):
+    def collect_testjectories(model, env, testjectories=None, num_to_collect=None, debug=False):
         if testjectories is None:
             testjectories = dict()
+        if num_to_collect is None:
+            num_to_collect = args.testjectories
         for tunnel_idx in testing_tunnels:
             trajectories = testjectories.get(tunnel_idx, [])
-            while len(trajectories) < args.testjectories:
+            while len(trajectories) < num_to_collect:
                 traj = collect_testjectory(model=model, env=env, tunnel_idx=tunnel_idx)
                 trajectories.append(traj)
                 if debug:
@@ -259,6 +264,9 @@ if __name__ == '__main__':
 
 
     for epoch in range(epoch_init, args.epochs):
+        if args.display is not None:
+            # skip training
+            break
         traj_filename = os.path.join(traj_dir, 'traj_' + str(epoch) + '.pkl')
         model_filename = os.path.join(model_dir, 'model_epoch_' + str(epoch) + '.pkl')
         info_filename = os.path.join(model_dir, 'info_epoch_' + str(epoch) + '.pkl')
@@ -281,14 +289,16 @@ if __name__ == '__main__':
             testjectories = collect_testjectories(model=model,
                                                   env=env,
                                                   testjectories=None,
-                                                  debug=True)
+                                                  num_to_collect=args.testjectories,
+                                                  debug=True,
+                                                  )
             print('saving trajectories of epoch', epoch, 'info to ', traj_filename)
             f = open(traj_filename, 'wb')
             pkl.dump(testjectories, f)
             f.close()
             print('saved trajectories')
 
-    if args.recollect and args.testjectories:
+    if args.recollect and args.testjectories and (args.display is None):
         for epoch in range(args.epochs):
             if (not (epoch + 1)%test_freq):
                 traj_filename = os.path.join(traj_dir, 'traj_' + str(epoch) + '.pkl')
@@ -309,10 +319,35 @@ if __name__ == '__main__':
                 testjectories = collect_testjectories(model=model,
                                                       env=env,
                                                       testjectories=testjectories,
-                                                      debug=True)
+                                                      num_to_collect=args.testjectories,
+                                                      debug=True,
+                                                      )
 
                 print('saving trajectories of epoch', epoch, 'info to ', traj_filename)
                 f = open(traj_filename, 'wb')
                 pkl.dump(testjectories, f)
                 f.close()
                 print('saved trajectories')
+    if args.display is not None:
+        if args.display < 0:
+            past_models = get_model_history_srt()
+            if past_models:
+                model_filename, info_filename = past_models[-1]
+            else:
+                raise Exception('no models saved')
+        else:
+            model_filename = os.path.join(model_dir, 'model_epoch_' + str(args.display) + '.pkl')
+            info_filename = os.path.join(model_dir, 'info_epoch_' + str(args.display) + '.pkl')
+
+        if os.path.exists(model_filename):
+            model, info = load_model(model_filename, info_filename)
+            print('loading model', model_filename)
+        else:
+            raise Exception('model', model_filename, 'not saved')
+
+        testjectories = collect_testjectories(model=model,
+                                              env=env,
+                                              testjectories=None,
+                                              num_to_collect=1,
+                                              debug=True,
+                                              )

@@ -173,148 +173,139 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
         return ylim
 
 
-    for all_traj in True, False:
-        fnames = []
-        for epoch, trajs in enumerate(relevant_epoch_infos):
-            xs = np.arange(test_tunnel_info['xlim'][0], test_tunnel_info['xlim'][1], dx)[:-1]  # ignore the last bound
-            vel_bins = [[] for _ in range(len(xs))]
-            pos_bins = [[] for _ in range(len(xs))]
+    fnames = []
+    for epoch, trajs in enumerate(relevant_epoch_infos):
+        xs = np.arange(test_tunnel_info['xlim'][0], test_tunnel_info['xlim'][1], dx)[:-1]  # ignore the last bound
+        vel_bins = [[] for _ in range(len(xs))]
+        pos_bins = [[] for _ in range(len(xs))]
 
-            if not trajs:
-                # no data
-                continue
-            for traj in trajs:
-                for thingy in traj:
-                    x, y = thingy['old_pose']['position'][:2]
-                    xp = thingy['pose']['position'][0]
-                    if x > test_tunnel_info['xlim'][0]:
-                        bindex = np.sum(x > xs) - 1  # subtract 1 to put it on the lower end
-                        vel_bins[bindex].append((xp - x)/dt)
-                        pos_bins[bindex].append(y)
+        if not trajs:
+            # no data
+            continue
+        for traj in trajs:
+            for thingy in traj:
+                x, y = thingy['old_pose']['position'][:2]
+                xp = thingy['pose']['position'][0]
+                if x > test_tunnel_info['xlim'][0]:
+                    bindex = np.sum(x > xs) - 1  # subtract 1 to put it on the lower end
+                    vel_bins[bindex].append((xp - x)/dt)
+                    pos_bins[bindex].append(y)
 
-            plt.plot(xs[[len(b) > 0 for b in vel_bins]],
-                     [np.mean(b) for b in vel_bins if len(b) > 0])
-            plt.xlabel('x')
-            plt.ylabel('avg forward velocity')
-            plt.title('avg vel epoch ' + str(epoch))
-            plt.xlim(xlim)
-            fname = os.path.join(individual_traj_dir,
-                                 'avg_vel_' +
-                                 'tunnel_' + str(tunnel_idx) + '_' +
-                                 'epoch_' + str(epoch) + '.png'
-                                 )
-            plt.savefig(fname, bbox_inches='tight')
-            plt.close()
-
-            ylim=plt_env()
-            plt.gca().set_aspect('equal')
-            pos_means = np.array([np.mean(b) for b in pos_bins if len(b) > 0])
-            pos_std = np.array([np.std(b) for b in pos_bins if len(b) > 0])
-            plt.plot(xs[[len(b) > 0 for b in vel_bins]],
-                     pos_means,
-                     label='averaged y positions ')
-            plt.fill_between(xs[[len(b) > 0 for b in vel_bins]],
-                             pos_means - pos_std,
-                             pos_means + pos_std,
-                             alpha=.2,
-                             )
-            plt.xlabel('x')
-            plt.ylabel('y')
-            plt.title('average y positions epoch ' + str(epoch))
-            plt.legend(loc='center left', bbox_to_anchor=(.69, -.35))
-            plt.xlim(xlim)
-            plt.ylim(ylim)
-            fname = os.path.join(individual_traj_dir,
-                                 'avg_pos_' +
-                                 'tunnel_' + str(tunnel_idx) + '_' +
-                                 'epoch_' + str(epoch) + '.png'
-                                 )
-            plt.savefig(fname, bbox_inches='tight')
-            plt.close()
-
-            #fig, ax = plt.subplots()
-            plt.xlabel('x axis')
-            plt.ylabel('y axis')
-
-            ylim = plt_env()
-            plt.gca().set_aspect('equal')
-
-            alpha = 1
-
-
-            def get_dist_traveled(traj):
-                return traj[-1]['pose']['position'][0] - traj[0]['pose']['position'][0]
-
-
-            trajs.sort(key=get_dist_traveled)
-
-            if all_traj:
-                plot_stuff = []
-                for traj in trajs:
-                    kwargs = dict()
-                    last_info = traj[-1]['info']
-                    collided = last_info['collided']
-                    succ = last_info['succ']
-                    rewards = np.array([dic['reward'] for dic in traj])
-                    kwargs['color'] = 'red'
-                    kwargs['zorder'] = 1
-                    if not collided:
-                        kwargs['color'] = 'yellow'
-                        kwargs['zorder'] = 2
-                    if succ:
-                        kwargs['color'] = 'green'
-                        kwargs['zorder'] = 3
-                    plot_stuff.append((traj, kwargs))
-            else:
-
-                epochs.append(epoch)
-                dists = np.array([get_dist_traveled(traj) for traj in trajs])
-                medians.append(np.median(dists))
-                maxes.append(np.max(dists))
-                means.append(np.mean(dists))
-                mins.append(np.min(dists))
-                plot_stuff = (
-                    (trajs[len(trajs)//2], {'color': 'orange', 'label': 'median', }),
-                    (trajs[-1], {'color': 'purple', 'label': 'best'})
-                )
-                rwds = np.array([sum(t['reward'] for t in traj) for traj in trajs])
-
-                rwd_medians.append(np.median(rwds))
-                rwd_maxes.append(np.max(rwds))
-                rwd_means.append(np.mean(rwds))
-                rwd_mins.append(np.min(rwds))
-            for traj, kwargs in plot_stuff:
-                positions = np.stack([traj[0]['old_pose']['position']] +
-                                     [dic['pose']['position'] for dic in traj],
-                                     axis=0)
-                plt.plot(positions[:, 0], positions[:, 1], alpha=alpha, **kwargs)
-            if all_traj:
-                plt.plot([], [], color='green', label='successful')
-                plt.plot([], [], color='yellow', label='timed out')
-                plt.plot([], [], color='red', label='crashed')
-
-            plt.ylim(ylim)
-
-            plt.legend(loc='center left', bbox_to_anchor=(1., .5))
-            plt.title('epoch ' + str(epoch))
-            plt.xlim(xlim)
-
-            fname = os.path.join(individual_traj_dir,
-                                 'tunnel_' + str(tunnel_idx) + '_' +
-                                 ('all_' if all_traj else '') +
-                                 'epoch_' + str(epoch) + '_trajectories.png'
-                                 )
-            plt.savefig(fname, bbox_inches='tight')
-            plt.close()
-            fnames.append(fname)
-        fname = os.path.join(plot_dir,
+        plt.plot(xs[[len(b) > 0 for b in vel_bins]],
+                 [np.mean(b) for b in vel_bins if len(b) > 0])
+        plt.xlabel('x')
+        plt.ylabel('avg forward velocity')
+        plt.title('avg vel epoch ' + str(epoch))
+        plt.xlim(xlim)
+        fname = os.path.join(individual_traj_dir,
+                             'avg_vel_' +
                              'tunnel_' + str(tunnel_idx) + '_' +
-                             ('all_' if all_traj else '') +
-                             'traj_summary_gifed.gif')
-        create_gif(image_paths=fnames,
-                   output_gif_path=fname,
-                   duration=200,
-                   )
+                             'epoch_' + str(epoch) + '.png'
+                             )
+        # plt.savefig(fname, bbox_inches='tight')
+        plt.close()
+
+        ylim=plt_env()
+        plt.gca().set_aspect('equal')
+        pos_means = np.array([np.mean(b) for b in pos_bins if len(b) > 0])
+        pos_std = np.array([np.std(b) for b in pos_bins if len(b) > 0])
+        plt.plot(xs[[len(b) > 0 for b in vel_bins]],
+                 pos_means,
+                 label='averaged y positions ')
+        plt.fill_between(xs[[len(b) > 0 for b in vel_bins]],
+                         pos_means - pos_std,
+                         pos_means + pos_std,
+                         alpha=.2,
+                         )
+        plt.xlabel('x')
+        plt.ylabel('y')
+        plt.title('average y positions epoch ' + str(epoch))
+        plt.legend(loc='center left', bbox_to_anchor=(.69, -.35))
+        plt.xlim(xlim)
+        plt.ylim(ylim)
+        fname = os.path.join(individual_traj_dir,
+                             'avg_pos_' +
+                             'tunnel_' + str(tunnel_idx) + '_' +
+                             'epoch_' + str(epoch) + '.png'
+                             )
+        # plt.savefig(fname, bbox_inches='tight')
+        plt.close()
+
+        #fig, ax = plt.subplots()
+        plt.xlabel('x axis')
+        plt.ylabel('y axis')
+
+        ylim = plt_env()
+        plt.gca().set_aspect('equal')
+
+        alpha = 1
+
+
+        def get_dist_traveled(traj):
+            return traj[-1]['pose']['position'][0]
+            return traj[-1]['pose']['position'][0] - traj[0]['pose']['position'][0]
+
+
+        trajs.sort(key=get_dist_traveled)
+
+        plot_stuff = []
+        for traj in trajs:
+            kwargs = dict()
+            last_info = traj[-1]['info']
+            collided = last_info['collided']
+            succ = last_info['succ']
+            rewards = np.array([dic['reward'] for dic in traj])
+            kwargs['color'] = 'red'
+            kwargs['zorder'] = 1
+            if not collided:
+                kwargs['color'] = 'yellow'
+                kwargs['zorder'] = 2
+            if succ:
+                kwargs['color'] = 'green'
+                kwargs['zorder'] = 3
+            plot_stuff.append((traj, kwargs))
+
+        rwds = np.array([sum(t['reward'] for t in traj) for traj in trajs])
+
+        dists = np.array([get_dist_traveled(traj) for traj in trajs])
+        epochs.append(epoch)
+        medians.append(np.median(dists))
+        maxes.append(np.max(dists))
+        means.append(np.mean(dists))
+        mins.append(np.min(dists))
+        rwd_medians.append(np.median(rwds))
+        rwd_maxes.append(np.max(rwds))
+        rwd_means.append(np.mean(rwds))
+        rwd_mins.append(np.min(rwds))
+        for traj, kwargs in plot_stuff:
+            positions = np.stack([traj[0]['old_pose']['position']] +
+                                 [dic['pose']['position'] for dic in traj],
+                                 axis=0)
+            plt.plot(positions[:, 0], positions[:, 1], alpha=alpha, **kwargs)
+        plt.plot([], [], color='green', label='successful')
+        plt.plot([], [], color='yellow', label='timed out')
+        plt.plot([], [], color='red', label='crashed')
+
+        plt.ylim(ylim)
+
+        plt.legend(loc='center left', bbox_to_anchor=(1., .5))
+        plt.title('epoch ' + str(epoch))
+        plt.xlim(xlim)
+
+        fname = os.path.join(individual_traj_dir,
+                             'tunnel_' + str(tunnel_idx) + '_' +
+                             'epoch_' + str(epoch) + '_trajectories.png'
+                             )
+        plt.savefig(fname, bbox_inches='tight')
+        plt.close()
+        fnames.append(fname)
+    fname = os.path.join(plot_dir,
+                         'tunnel_' + str(tunnel_idx) + '_' +
+                         'trajectories_gifed.gif')
+    create_gif(image_paths=fnames,
+               output_gif_path=fname,
+               duration=200,
+               )
     plt.plot(epochs, means, color='blue', label='means')
     plt.plot(epochs, medians, color='orange', label='median')
     plt.plot(epochs, maxes, color='green', label='max')
@@ -323,11 +314,9 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
     plt.ylabel('distance traveled')
     plt.title("Distance traveled throughout training")
 
-    lower_bound = min(-1, plt.ylim()[0])
-    plt.ylim((lower_bound, plt.ylim()[1] + 1))
-    ylim = plt.ylim()
     plt.legend()
-    plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_' + 'trajectory_summary.png'))
+    plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_' + 'distance_summary.png'),
+                bbox_inches='tight')
     plt.close()
 
     plt.plot(epochs, rwd_means, color='blue', label='means')
@@ -338,8 +327,8 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
     plt.ylabel('reward sum')
     plt.title("Rewards throughout training")
     plt.legend()
-    plt.ylim(ylim)
-    plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_' + 'rwd_summary.png'))
+    plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_' + 'rwd_summary.png'),
+                bbox_inches='tight')
     plt.close()
 if not args.keep_individuals:
     shutil.rmtree(individual_traj_dir)
