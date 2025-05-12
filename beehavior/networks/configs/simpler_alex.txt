@@ -1,0 +1,39 @@
+{
+'input_shape':None,
+'layers':
+    [
+        {
+         'type':'maxpool',
+         'kernel':(2,2),
+         'stride':(2,2),
+        },
+        {
+         'type':'CNN',
+         'channels':64,
+         'kernel':(8,8),
+         'stride':(4,4),
+         'padding':(0,0),
+        },
+        {
+         'type':'ReLU',
+        },
+        {
+         'type':'maxpool',
+         'kernel':(2,2),
+         'stride':(2,2),
+        },
+        {
+         'type':'CNN',
+         'channels':16,
+         'kernel':(4,4),
+         'stride':(2,2),
+         'padding':(0,0),
+        },
+        {
+         'type':'ReLU',
+        },
+        {
+         'type':'flatten',
+        },
+    ],
+}

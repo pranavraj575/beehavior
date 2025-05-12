@@ -323,7 +323,8 @@ class BeeseClass(gym.Env):
                  cmd=lambda: self.client.moveToPositionAsync(x, y, z, 1, ).join(),
                  pause_after=not self.real_time,
                  )
-
+        if self.action_type in (self.ACTION_ACCELERATION, self.ACTION_ACCELERATION_XY):
+            self.velocity_target = np.zeros_like(self.velocity_target)
         # obs, info
         return self.get_obs(), {}
 

@@ -120,6 +120,8 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
         continue
     epochs = []
 
+    prop_successful = []
+
     medians = []
     means = []
     maxes = []
@@ -168,8 +170,8 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
 
         xbnd = test_tunnel_info['finish_x']
         ax.plot([xbnd, xbnd], plt.ylim(),
-                 color='black', linewidth=2, linestyle='--'
-                 )
+                color='black', linewidth=2, linestyle='--'
+                )
         return ylim
 
 
@@ -205,7 +207,7 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
         # plt.savefig(fname, bbox_inches='tight')
         plt.close()
 
-        ylim=plt_env()
+        ylim = plt_env()
         plt.gca().set_aspect('equal')
         pos_means = np.array([np.mean(b) for b in pos_bins if len(b) > 0])
         pos_std = np.array([np.std(b) for b in pos_bins if len(b) > 0])
@@ -231,7 +233,7 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
         # plt.savefig(fname, bbox_inches='tight')
         plt.close()
 
-        #fig, ax = plt.subplots()
+        # fig, ax = plt.subplots()
         plt.xlabel('x axis')
         plt.ylabel('y axis')
 
@@ -249,11 +251,13 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
         trajs.sort(key=get_dist_traveled)
 
         plot_stuff = []
+        prop_succ = 0
         for traj in trajs:
             kwargs = dict()
             last_info = traj[-1]['info']
             collided = last_info['collided']
             succ = last_info['succ']
+            prop_succ += succ/len(trajs)
             rewards = np.array([dic['reward'] for dic in traj])
             kwargs['color'] = 'red'
             kwargs['zorder'] = 1
@@ -269,6 +273,7 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
 
         dists = np.array([get_dist_traveled(traj) for traj in trajs])
         epochs.append(epoch)
+        prop_successful.append(prop_succ)
         medians.append(np.median(dists))
         maxes.append(np.max(dists))
         means.append(np.mean(dists))
@@ -306,6 +311,18 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
                output_gif_path=fname,
                duration=200,
                )
+
+    plt.plot(epochs, prop_successful, color='purple')
+
+    plt.xlabel('epochs')
+    plt.ylabel('Successful proportion of testing trajectories')
+    plt.ylim((0, 1.05))
+    plt.title("Proportion of success throughout training")
+
+    plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_success.png'),
+                bbox_inches='tight')
+    plt.close()
+
     plt.plot(epochs, means, color='blue', label='means')
     plt.plot(epochs, medians, color='orange', label='median')
     plt.plot(epochs, maxes, color='green', label='max')
@@ -315,7 +332,7 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
     plt.title("Distance traveled throughout training")
 
     plt.legend()
-    plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_' + 'distance_summary.png'),
+    plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_distance_summary.png'),
                 bbox_inches='tight')
     plt.close()
 
@@ -327,7 +344,7 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
     plt.ylabel('reward sum')
     plt.title("Rewards throughout training")
     plt.legend()
-    plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_' + 'rwd_summary.png'),
+    plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_rwd_summary.png'),
                 bbox_inches='tight')
     plt.close()
 if not args.keep_individuals:

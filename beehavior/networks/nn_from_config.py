@@ -9,7 +9,7 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 def layer_from_config_dict(dic, input_shape=None, only_shape=False):
     """
     returns nn layer from a layer config dict
-    handles Linear, flatten, relu, cnn, maxpool, avgpool
+    handles Linear, flatten, relu, tanh, cnn, maxpool, avgpool
     Args:
         dic: layer config dict
         {
@@ -39,6 +39,9 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
     if typ == 'relu':
         if not only_shape: layer = nn.ReLU()
         shape = input_shape
+    elif typ == 'tanh':
+        if not only_shape: layer = nn.Tanh()
+        shape = input_shape
     elif typ == 'flatten':
         start_dim = dic.get('start_dim', 1)
         end_dim = dic.get('end_dim', -1)
@@ -54,7 +57,6 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
                      )
         else:
             shape = None
-
     elif typ == 'linear':
         out_features = dic['out_features']
         if not only_shape:
@@ -67,7 +69,6 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
                      )
         else:
             shape = None
-
     # image stuff has annoying output shape calculation
     # only need to write it once
     elif typ in ['cnn', 'maxpool', 'avgpool']:

@@ -73,6 +73,8 @@ if __name__ == '__main__':
     PARSER.add_argument("--network", action='store', required=False,
                         default=os.path.join(DIR, 'beehavior', 'networks', 'configs', 'simp_alex.txt'),
                         help="network config file to use (look at beehavior/networks/nn_from_config.py)")
+    PARSER.add_argument("--pol-val-net", type=int, nargs='*', required=False, default=[64, 64],
+                        help="hidden layer list of policy and value nets")
     PARSER.add_argument("--reset", action='store_true', required=False,
                         help="reset training")
     args = PARSER.parse_args()
@@ -115,6 +117,7 @@ if __name__ == '__main__':
     ident += '_epoch_stp_' + str(args.timesteps_per_epoch)
     ident += '_nstep_' + str(args.nsteps)
     ident += '_net_' + os.path.basename(network_file)[:os.path.basename(network_file).find('.')]
+    ident += '_pol_val_' + '_'.join([str(h) for h in args.pol_val_net])
 
     output_dir: str = os.path.join(DIR, 'output', ident)
     traj_dir = os.path.join(output_dir, 'trajectories')
@@ -133,6 +136,7 @@ if __name__ == '__main__':
     policy_kwargs = dict(
         features_extractor_class=CustomNN,
         features_extractor_kwargs=dict(config_file=network_file),
+        net_arch=dict(pi=args.pol_val_net, vf=args.pol_val_net),
     )
 
 
@@ -182,7 +186,6 @@ if __name__ == '__main__':
                   )
     epoch_init = 0
     if not args.reset:
-        # TODO: LOADING AND SAVING DO NOT WORK
         past_models = get_model_history_srt()
         if past_models:
             model_file, info_file = past_models[-1]
@@ -277,13 +280,14 @@ if __name__ == '__main__':
                     progress_bar=True)
         print('finished training')
 
-        print('saving model and training info in', model_dir)
-        model.save(model_filename)
+        if (not (epoch + 1)%args.ckpt_freq):
+            print('saving model and training info in', model_dir)
+            model.save(model_filename)
 
-        f = open(info_filename, 'wb')
-        pkl.dump({'epochs_trained': epoch + 1}, f)
-        f.close()
-        clear_model_history()
+            f = open(info_filename, 'wb')
+            pkl.dump({'epochs_trained': epoch + 1}, f)
+            f.close()
+            clear_model_history()
         if args.testjectories and (not (epoch + 1)%test_freq):
             print('getting trajectories for epoch', epoch)
             testjectories = collect_testjectories(model=model,
