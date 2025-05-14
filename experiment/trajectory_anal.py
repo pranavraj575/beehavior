@@ -84,9 +84,10 @@ all_test_tunnel_infos = [
                 ((-8140, -22080), (1, 1))
                 ],
     },
+    # tunnel with one center obstacle and two further obstacles
     {
         # list of vertex lists
-        'walls': [[(-5, 3.14), (25, 3.14)], [(-5, 8.8), (25, 8.8)], ],
+        'walls': [[(-5, 2.9), (25, 2.9)], [(-5, 8.8), (25, 8.8)], ],
         # list of (center, width, height (for ellipse, x axis, y axis))
         'obs': [
             ((-9230, -21530), (1, 1)),

@@ -9,7 +9,7 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 def layer_from_config_dict(dic, input_shape=None, only_shape=False):
     """
     returns nn layer from a layer config dict
-    handles Linear, flatten, relu, tanh, cnn, maxpool, avgpool
+    handles Linear, flatten, relu, tanh, cnn, maxpool, avgpool, dropout
     Args:
         dic: layer config dict
         {
@@ -41,6 +41,12 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
         shape = input_shape
     elif typ == 'tanh':
         if not only_shape: layer = nn.Tanh()
+        shape = input_shape
+    elif typ == 'dropout':
+        if not only_shape: layer = nn.Dropout(dic.get('p', .1))
+        shape = input_shape
+    elif typ == 'dropout2d':
+        if not only_shape: layer = nn.Dropout2d(dic.get('p', .1))
         shape = input_shape
     elif typ == 'flatten':
         start_dim = dic.get('start_dim', 1)
