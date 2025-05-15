@@ -39,11 +39,8 @@ if __name__ == '__main__':
                         help="simulation timestep")
     PARSER.add_argument("--history-steps", type=int, required=False, default=2,
                         help="steps to see in history")
-    PARSER.add_argument("--recollect", action='store_true', required=False,
-                        help="go through all saved models after training and collect <--testjectories> trajectories")
 
-    PARSER.add_argument("--display", type=int, required=False, default=None,
-                        help="skip training and run specified saved model (-1 for most recent) on all <--testing-tunnel>s")
+
     PARSER.add_argument('--action-type', action='store', required=False, default=ForwardBee.ACTION_VELOCITY,
                         choices=(ForwardBee.ACTION_VELOCITY,
                                  ForwardBee.ACTION_VELOCITY_XY,
@@ -65,18 +62,25 @@ if __name__ == '__main__':
 
     PARSER.add_argument("--central-strip-width", type=int, required=False, default=None,
                         help="if specified, only consider the central strip with this width")
-    PARSER.add_argument("--save-model-history", type=int, required=False, default=1,
-                        help="number of past models to save (-1 for all)")
-    PARSER.add_argument("--testing-tunnel", type=int, nargs='+', required=False, default=[1],
-                        help="index of tunnels to test in, 1 is the normal one")
+
 
     PARSER.add_argument("--network", action='store', required=False,
                         default=os.path.join(DIR, 'beehavior', 'networks', 'configs', 'simp_alex.txt'),
                         help="network config file to use (look at beehavior/networks/nn_from_config.py)")
     PARSER.add_argument("--pol-val-net", type=int, nargs='*', required=False, default=[64, 64],
                         help="hidden layer list of policy and value nets")
+
+    PARSER.add_argument("--recollect", action='store_true', required=False,
+                        help="go through all saved models after training and collect <--testjectories> trajectories")
+    PARSER.add_argument("--save-model-history", type=int, required=False, default=1,
+                        help="number of past models to save (-1 for all)")
+    PARSER.add_argument("--testing-tunnel", type=int, nargs='+', required=False, default=[1],
+                        help="index of tunnels to test in, 1 is the normal one")
+
     PARSER.add_argument("--reset", action='store_true', required=False,
                         help="reset training")
+    PARSER.add_argument("--display", type=int, required=False, default=None,
+                        help="skip training and run specified saved model (-1 for most recent) on all <--testing-tunnel>s")
     args = PARSER.parse_args()
 
     test_freq = args.ckpt_freq if args.test_freq is None else args.test_freq
