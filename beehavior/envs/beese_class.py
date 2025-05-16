@@ -516,7 +516,7 @@ class OFBeeseClass(BeeseClass):
     def __init__(self,
                  client=None,
                  dt=.25,
-                 action_bounds=1.5,
+                 action_bounds=None,
                  vehicle_name='',
                  real_time=False,
                  collision_grace=1,
