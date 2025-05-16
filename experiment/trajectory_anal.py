@@ -318,7 +318,7 @@ for tunnel_idx, test_tunnel_info in enumerate(all_test_tunnel_infos):
     plt.xlabel('epochs')
     plt.ylabel('Successful proportion of testing trajectories')
     plt.ylim((0, 1.05))
-    plt.title("Proportion of success throughout training")
+    plt.title("Proportion of test success throughout training")
 
     plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_success.png'),
                 bbox_inches='tight')

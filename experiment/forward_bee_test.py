@@ -40,7 +40,6 @@ if __name__ == '__main__':
     PARSER.add_argument("--history-steps", type=int, required=False, default=2,
                         help="steps to see in history")
 
-
     PARSER.add_argument('--action-type', action='store', required=False, default=ForwardBee.ACTION_VELOCITY,
                         choices=(ForwardBee.ACTION_VELOCITY,
                                  ForwardBee.ACTION_VELOCITY_XY,
@@ -62,7 +61,6 @@ if __name__ == '__main__':
 
     PARSER.add_argument("--central-strip-width", type=int, required=False, default=None,
                         help="if specified, only consider the central strip with this width")
-
 
     PARSER.add_argument("--network", action='store', required=False,
                         default=os.path.join(DIR, 'beehavior', 'networks', 'configs', 'simp_alex.txt'),
@@ -265,7 +263,9 @@ if __name__ == '__main__':
                 if debug:
                     rwds = [dic['reward'] for dic in traj]
                     print('ep length:', len(rwds), ';',
-                          'rwd sum:', sum(rwds))
+                          'rwd sum:', sum(rwds), ';',
+                          traj[-1]['info'],
+                          )
             testjectories[tunnel_idx] = trajectories
         return testjectories
 
