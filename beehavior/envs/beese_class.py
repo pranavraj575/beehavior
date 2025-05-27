@@ -127,7 +127,7 @@ class BeeseClass(gym.Env):
             )
         elif self.action_type == self.ACTION_ROLL_PITCH_THRUST:
             if self.action_bounds is None:
-                self.action_bounds = np.pi/18
+                self.action_bounds = np.pi/36 # 5 degrees, which apparently is quite steep
             self.action_space = gym.spaces.Box(
                 low=np.array([-self.action_bounds, -self.action_bounds, 0]),
                 high=np.array([self.action_bounds, self.action_bounds, 1]),

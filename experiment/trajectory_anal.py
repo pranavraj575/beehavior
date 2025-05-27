@@ -70,35 +70,69 @@ if not epoch_infos:
 all_test_tunnel_infos = [
     # squished tunnel
     {
+        # list of vertex lists
         'walls': [[(-5, -8.35), (3.85, -8.35), (9.35, -6.9), (15.05, -8.35), (20.85, -6.9)],
                   [(-5, -3.15), (3.85, -3.15), (9.35, -4.6), (15.05, -3.15), (20.85, -4.6)]],
         'xlim': (-3, 21),
+        # list of (center, width, height (for ellipse, x axis, y axis))
         'obs': [],
     },
     # basic default tunnel with two obstacles
     {
-        # list of vertex lists
         'walls': [[(-5, -2.1), (25, -2.1)], [(-5, 2.1), (25, 2.1)]],
-        # list of (center, width, height (for ellipse, x axis, y axis))
         'obs': [((-9230, -22250), (1, 1)),
                 ((-8140, -22080), (1, 1))
                 ],
     },
     # tunnel with one center obstacle and two further obstacles
     {
-        # list of vertex lists
         'walls': [[(-5, 2.9), (25, 2.9)], [(-5, 8.8), (25, 8.8)], ],
-        # list of (center, width, height (for ellipse, x axis, y axis))
         'obs': [
             ((-9230, -21530), (1, 1)),
             ((-8030, -21300), (1, 1)),
             ((-7900, -21790), (1, 1)),
         ],
     },
-    None,
-    None,
-    None,
-    None,
+    # narrow tunnel
+    {
+        'walls': [[(-5, 9.75), (25, 9.75)], [(-5, 11.85), (25, 11.85)], ],
+        'obs': [
+            ((-8620, -20980), (1, 1)),
+            ((-7820, -21130), (1, .5)),
+        ],
+    },
+    # tunnel with two side obstacles then one center obstacle
+    {
+        'walls': [[(-5, 12.55), (25, 12.55)], [(-5, 16.5), (25, 16.5)], ],
+        'obs': [
+            ((-8830, -20860), (1, 1.5)),
+            ((-8720, -20510), (1, 1.5)),
+            ((-8020, -20680), (1, 1)),
+        ],
+    },
+    # wide tunnel, one center then two side obstacles
+    {
+        'walls': [[(-5, 17.69), (25, 17.69)], [(-5, 26.8), (25, 26.8)], ],
+        'obs': [
+            ((-8760, -19840), (3, 3)),
+            ((-7900, -20250), (1, 1.5)),
+            ((-8060, -19480), (1, 1.5)),
+        ],
+    },
+    # side to side walls tunnel
+    {
+        'walls': [[(-5, 28),
+                   (8.5 + (-2.21 - 1.9), 28), (8.5, 31.88), (8.5, 28),
+                   (25, 28)
+                   ],
+                  [(-5, 35.3),
+                   (-2.21, 35.3), (1.9, 31.5), (1.9, 35.3),
+                   (-2.21 + 13.5, 35.3), (1.9 + 13.5, 31.5), (1.9 + 13.5, 35.3),
+                   (25, 35.3)
+                   ],
+                  ],
+        'obs': [],
+    },
     # empty tunnel
     {
         'walls': [[(-5, 36.52), (25, 36.52)], [(-5, 41.39), (25, 41.39)]],
