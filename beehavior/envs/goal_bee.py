@@ -6,9 +6,9 @@ from gymnasium.core import ObsType
 from beehavior.envs.beese_class import OFBeeseClass
 
 
-class ForwardBee(OFBeeseClass):
+class GoalBee(OFBeeseClass):
     """
-    reward for moving forward (x direction) through obstacles
+    goal conditioned rl env (generic)
     """
 
     def __init__(self,
@@ -31,7 +31,6 @@ class ForwardBee(OFBeeseClass):
                  },
                  timeout=30,
                  bounds=((-7., 27), None, None),
-                 goal_x=20.,
                  img_history_steps=2,
                  input_img_space=(OFBeeseClass.INPUT_LOG_OF, OFBeeseClass.INPUT_OF_ORIENTATION,),
                  velocity_bounds=2.,
@@ -68,14 +67,8 @@ class ForwardBee(OFBeeseClass):
             global_actions=global_actions,
         )
         self.bounds = bounds
-        self.goal_x = goal_x
-        self.farthest_reached = None
 
-    def get_obs_vector(self):
-        """
-        get obs vector, including roll, pitch, yaw (yaw is encoded as its sine and cosine components,
-            to remove the discontinuity at +-pi). this is not an issue for roll,pitch since they will never get this large
-        """
+    def get_observation_vector_part(self):
         if self.get_obs_vector_dim() == 0:
             raise NotImplementedError
         kinematics = self.client.simGetGroundTruthKinematics(vehicle_name=self.vehicle_name)
@@ -84,29 +77,36 @@ class ForwardBee(OFBeeseClass):
                         kinematics.linear_velocity.z_val])
         return vel + np.random.normal(scale=self.input_vel_w_noise, size=3)
 
+    def get_goal_vector_part(self):
         raise NotImplementedError
-        # TODO: ignore rpy
-        pose = self.get_pose()
-        ht = -pose.position.z_val
-        r, p, y = self.get_orientation_eulerian(pose=pose)
-        cy = np.cos(y)
-        sy = np.sin(y)
-        return np.array([
-            r,
-            p,
-            cy,
-            sy,
-            # ht,
-        ])
+
+    def get_obs_vector(self):
+        """
+        get obs vector, including roll, pitch, yaw (yaw is encoded as its sine and cosine components,
+            to remove the discontinuity at +-pi). this is not an issue for roll,pitch since they will never get this large
+        """
+        vcs=[]
+        if self.get_observation_part_dim()>0:
+            vcs.append(self.get_observation_vector_part())
+        if self.get_goal_part_dim()>0:
+            vcs.append(self.get_goal_vector_part())
+        return np.concatenate(vcs,)
+
+
+    def get_observation_part_dim(self):
+        if self.input_vel_w_noise is not None:
+            return 3
+        else:
+            return 0
+
+    def get_goal_part_dim(self):
+        return 0
 
     def get_obs_vector_dim(self):
         """
         shape of obs vector is (4,)
         """
-        if self.input_vel_w_noise is not None:
-            return 3
-        else:
-            return 0
+        return self.get_observation_part_dim() + self.get_goal_part_dim()
 
     def out_of_bounds(self, pose):
 
@@ -130,33 +130,24 @@ class ForwardBee(OFBeeseClass):
             return term, trunc
         pose = self.get_pose()
         term = self.out_of_bounds(pose=pose)
-        if pose.position.x_val > self.goal_x:
-            term = True
         return term, trunc
 
     def get_rwd(self, collided, obs):
         """
-        -1 for colliding, .5 for correct height, (0,.5) for incorrect height
+        -1 for colliding
+
+        should be conditioned on self.get_goal_vector_part
         """
-        info_dic = {'succ': False}
+        info_dic = dict()
         if collided:
             return -1., info_dic
         pose = self.get_pose()
         if self.out_of_bounds(pose=pose):
             return -.5, info_dic
-        if pose.position.x_val > self.goal_x:
-            info_dic['succ'] = True
-            # return 1., info_dic
 
-        if pose.position.x_val > self.farthest_reached:
-            val = pose.position.x_val - self.farthest_reached
-        else:
-            val = 0
-        self.farthest_reached = max(
-            self.farthest_reached,
-            pose.position.x_val,
-        )
-        return val, info_dic
+        # self.get_goal_vector_part()
+
+        raise NotImplementedError
 
     def reset(
             self,
@@ -172,7 +163,7 @@ class ForwardBee(OFBeeseClass):
 if __name__ == '__main__':
     import time
 
-    env = ForwardBee(dt=.2,action_type=ForwardBee.ACTION_ROLL_PITCH_THRUST)
+    env = GoalBee(dt=.2,action_type=GoalBee.ACTION_ROLL_PITCH_THRUST)
     env.reset()
     env.step(action=np.array([0., 0., 1.]))
     for _ in range(0, int(.5/env.dt), 1):

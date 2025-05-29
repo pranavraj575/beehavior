@@ -520,7 +520,7 @@ class OFBeeseClass(BeeseClass):
                  vehicle_name='',
                  real_time=False,
                  collision_grace=1,
-                 of_camera='front',
+                 of_cameras='front',
                  initial_position=None,
                  timeout=300,
                  img_history_steps=2,
@@ -539,7 +539,8 @@ class OFBeeseClass(BeeseClass):
             action_bounds:
             vehicle_name:
             real_time:
-            of_camera: camera to take OF information from
+            of_cameras: camera to take OF information from, if tuple, input space is a tuple of images
+                this will be acted on independently by the cnns, then the output vectors will be joined
             timeout:
             img_history_steps: number of images to show at each time step
             of_mapping: mapping to apply to optic flow
@@ -553,7 +554,7 @@ class OFBeeseClass(BeeseClass):
         self.obs_shape = None
         self.img_stack = None
         self.of_ignore_angular_velocity = of_ignore_angular_velocity
-        self.of_camera = of_camera
+        self.of_cameras = of_cameras
         self.input_img_space = set(input_img_space)
         self.imgs_per_step = (int(self.INPUT_RAW_OF in self.input_img_space) +
                               int(self.INPUT_LOG_OF in self.input_img_space) +
@@ -618,7 +619,7 @@ class OFBeeseClass(BeeseClass):
 
     def get_obs(self):
         of = of_geo(client=self.client,
-                    camera_name='front',
+                    camera_name=self.of_cameras,
                     vehicle_name=self.vehicle_name,
                     ignore_angular_velocity=self.of_ignore_angular_velocity,
                     )
@@ -645,7 +646,7 @@ class OFBeeseClass(BeeseClass):
             # sees (...,inv_depth_img,...) at each timestep
             # depth image and inv depth img are on (0,inf)
             depth = get_depth_img(client=self.client,
-                                  camera_name='front',
+                                  camera_name=self.of_cameras,
                                   numpee=True,
                                   )
 
@@ -696,18 +697,12 @@ class OFBeeseClass(BeeseClass):
     # OF STUFF
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-    def get_of_data(self):
-        """
-        gets np array of optic flow from last completed step()
-        """
-        return of_geo(client=self.client, camera_name=self.of_camera, vehicle_name=self.vehicle_name)
-
     def get_of_data_shape(self):
         """
         shape of self.get_of_data()
         costly, should not be run too many times, as we can either save this shape or just look at the last observation
         """
-        shape = get_of_geo_shape(client=self.client, camera_name=self.of_camera)
+        shape = get_of_geo_shape(client=self.client, camera_name=self.of_cameras)
         if self.central_strip_width is not None:
             (C, H, W) = shape
             return C, 2*self.central_strip_width, W

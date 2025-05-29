@@ -159,11 +159,16 @@ def get_depth_img(client: airsim.MultirotorClient, camera_name='front', numpee=F
         sometimes there is a bug where width and height are zero, queries until this is not the case
     Args:
         client: client
-        camera_name: camera name
+        camera_name: camera name, if tuple, returns tuple of depth images
         numpee: return numpy array, shaped (height, width)
     Returns:
         output of client.simGetImages
     """
+    if type(camera_name) == tuple:
+        return tuple(get_depth_img(client=client,
+                                   camera_name=t,
+                                   numpee=numpee)
+                     for t in camera_name)
     # airsim.ImageType.OpticalFlow
     img_type = airsim.ImageType.DepthPerspective
     depth_image = client.simGetImages([
@@ -218,7 +223,7 @@ def of_geo(client: airsim.MultirotorClient,
         from this, can calculate optic flow
     Args:
         client: client
-        camera_name: name of camera
+        camera_name: name of camera, if tuple, returns a tuple of of data
         vehicle_name: guess
         ignore_angular_velocity: whether to ignore angular velocity in calculation
             if True, calculated as if camera is on chicken head
@@ -228,7 +233,15 @@ def of_geo(client: airsim.MultirotorClient,
         optic flow array, shaped (2,H,W) for better use in CNNs
         x component, y component
     """
-    # TODO : rotate and check if we correctly ignore orientation
+    if type(camera_name) == tuple:
+        return tuple(of_geo(client=client,
+                            camera_name=t,
+                            vehicle_name=vehicle_name,
+                            ignore_angular_velocity=ignore_angular_velocity,
+                            FOVx=FOVx,
+                            )
+                     for t in camera_name)
+
     if FOVx is None:
         FOVx = get_fov(camera_settings=CAMERA_SETTINGS,
                        camera_name=camera_name,
