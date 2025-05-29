@@ -18,7 +18,7 @@ class ForwardBee(OFBeeseClass):
                  vehicle_name='',
                  real_time=False,
                  collision_grace=1,
-                 of_cameras='front',
+                 of_cameras=('front',),
                  initial_position={
                      ((-5., -1.), yrng, (-1., -1.5)): 1/6
                      for yrng in ((-1., 1.),  # -1.8,1.8
@@ -39,7 +39,6 @@ class ForwardBee(OFBeeseClass):
                  fix_z_to=None,
                  of_ignore_angular_velocity=True,
                  input_velocity_with_noise=None,
-                 central_strip_width=None,
                  global_actions=False,
                  ):
         """
@@ -64,7 +63,6 @@ class ForwardBee(OFBeeseClass):
             action_type=action_type,
             fix_z_to=fix_z_to,
             of_ignore_angular_velocity=of_ignore_angular_velocity,
-            central_strip_width=central_strip_width,
             global_actions=global_actions,
         )
         self.bounds = bounds

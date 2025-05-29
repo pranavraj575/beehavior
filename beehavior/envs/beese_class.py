@@ -127,7 +127,7 @@ class BeeseClass(gym.Env):
             )
         elif self.action_type == self.ACTION_ROLL_PITCH_THRUST:
             if self.action_bounds is None:
-                self.action_bounds = np.pi/36 # 5 degrees, which apparently is quite steep
+                self.action_bounds = np.pi/36  # 5 degrees, which apparently is quite steep
             self.action_space = gym.spaces.Box(
                 low=np.array([-self.action_bounds, -self.action_bounds, 0]),
                 high=np.array([self.action_bounds, self.action_bounds, 1]),
@@ -496,10 +496,8 @@ class BeeseClass(gym.Env):
 
 class OFBeeseClass(BeeseClass):
     """
-    observation is optic flow data, with a vector (self.get_obs_vector()) appended to every pixel
-        observation is specifically magnitude of optic flow of points projected onto sphere around observer
-    the reason we do it this way is because gym.space.Tuple is not supported by stable_baselines3
-        we could make our own networks, but just appending is easier
+    dict observation, optic flow cameras ('front', 'bottom', etc) and 'vec' to vector
+        OF observation is specifically magnitude of optic flow of points projected onto sphere around observer
     """
     # these are used to specify what the agent can sense as an image
     INPUT_RAW_OF = 'INPUT_RAW_OF'
@@ -520,16 +518,15 @@ class OFBeeseClass(BeeseClass):
                  vehicle_name='',
                  real_time=False,
                  collision_grace=1,
-                 of_cameras='front',
+                 of_cameras=('front',),
                  initial_position=None,
                  timeout=300,
                  img_history_steps=2,
                  input_img_space=(INPUT_LOG_OF, INPUT_OF_ORIENTATION,),
                  velocity_bounds=2.,
-                 action_type=BeeseClass.ACTION_VELOCITY,
+                 action_type=BeeseClass.ACTION_ROLL_PITCH_THRUST,
                  fix_z_to=None,
                  of_ignore_angular_velocity=True,
-                 central_strip_width=None,
                  global_actions=False,
                  ):
         """
@@ -539,7 +536,7 @@ class OFBeeseClass(BeeseClass):
             action_bounds:
             vehicle_name:
             real_time:
-            of_cameras: camera to take OF information from, if tuple, input space is a tuple of images
+            of_cameras: camera to take OF information from, if tuple, input space is a dict of images
                 this will be acted on independently by the cnns, then the output vectors will be joined
             timeout:
             img_history_steps: number of images to show at each time step
@@ -549,7 +546,6 @@ class OFBeeseClass(BeeseClass):
             see_of_orientation: whether bee can see the orientation of OF
             of_ignore_angular_velocity: whether to ignore angular velocity in OF calc
                 if true, pretends camera is on chicken head
-            central_strip_width: if specified, gives it a radius of n pixels (0<=n)
         """
         self.obs_shape = None
         self.img_stack = None
@@ -562,7 +558,6 @@ class OFBeeseClass(BeeseClass):
                               int(self.INPUT_INV_DEPTH_IMG in self.input_img_space)
                               )
         self.img_stack_size = img_history_steps*self.imgs_per_step
-        self.central_strip_width = central_strip_width
         super().__init__(
             client=client,
             dt=dt,
@@ -582,105 +577,105 @@ class OFBeeseClass(BeeseClass):
         """
         defines gym observation space, taking optic flow image and appending a vector to each element
         """
-        (_, H, W) = self.get_of_data_shape()
         C = self.img_stack_size  # stack this many images on top of each other
         shape = self.get_obs_shape()
-        arr = np.ones(shape)
-
-        # (scaled) magnitudes are from -inf to inf
-        low = -np.inf*arr
-        high = np.inf*arr
-        i = 0
-        if self.INPUT_RAW_OF in self.input_img_space:
-            # sees (...,raw_OF,...) at each timestep
-            # OF is on [0,inf)
-            low[i:C:self.imgs_per_step, :, :] = 0
-            i += 1
-        if self.INPUT_LOG_OF in self.input_img_space:
-            # sees (log(OF),...) at each timestep
-            # log(OF) is on (-inf,inf) (we clip to avoid log(0) error)
-            i += 1
-        if self.INPUT_OF_ORIENTATION in self.input_img_space:
-            # sees (..., scaled x component, scaled y component,...) at each timestep
-            # components are -1 to 1
-            for dim in range(2):
-                low[i:C:self.imgs_per_step, :, :] = -1
-                high[i:C:self.imgs_per_step, :, :] = 1
+        obs_space_dic = dict()
+        for k, (_, H, W) in zip(self.of_cameras, self.get_of_data_shape()):
+            sh = shape[k]
+            arr = np.ones(sh)
+            # (scaled) magnitudes are from -inf to inf
+            low = -np.inf*arr
+            high = np.inf*arr
+            i = 0
+            if self.INPUT_RAW_OF in self.input_img_space:
+                # sees (...,raw_OF,...) at each timestep
+                # OF is on [0,inf)
+                low[i:C:self.imgs_per_step, :, :] = 0
                 i += 1
-        if self.INPUT_INV_DEPTH_IMG in self.input_img_space:
-            # sees (...,depth_img,...) at each timestep
-            # depth image and inv depth img is [0,inf)
-            low[i:C:self.imgs_per_step, :, :] = 0
-            high[i:C:self.imgs_per_step, :, :] = np.inf
-            i += 1
-        low[C:, :, :] = -np.inf
-        high[C:, :, :] = np.inf
-        return gym.spaces.Box(low=low, high=high, shape=shape, dtype=np.float64)
+            if self.INPUT_LOG_OF in self.input_img_space:
+                # sees (log(OF),...) at each timestep
+                # log(OF) is on (-inf,inf) (we clip to avoid log(0) error)
+                i += 1
+            if self.INPUT_OF_ORIENTATION in self.input_img_space:
+                # sees (..., scaled x component, scaled y component,...) at each timestep
+                # components are -1 to 1
+                for dim in range(2):
+                    low[i:C:self.imgs_per_step, :, :] = -1
+                    high[i:C:self.imgs_per_step, :, :] = 1
+                    i += 1
+            if self.INPUT_INV_DEPTH_IMG in self.input_img_space:
+                # sees (...,depth_img,...) at each timestep
+                # depth image and inv depth img is [0,inf)
+                low[i:C:self.imgs_per_step, :, :] = 0
+                high[i:C:self.imgs_per_step, :, :] = np.inf
+                i += 1
+            low[C:, :, :] = -np.inf
+            high[C:, :, :] = np.inf
+            obs_space_dic[k] = gym.spaces.Box(low=low, high=high, shape=sh, dtype=np.float64)
+        if self.get_obs_vector_dim() > 0:
+            obs_space_dic['vec'] = gym.spaces.Box(low=-np.inf,
+                                                  high=np.inf,
+                                                  shape=(self.get_obs_vector_dim(),),
+                                                  dtype=np.float64,
+                                                  )
+        return gym.spaces.Dict(obs_space_dic)
 
     def get_obs(self):
-        of = of_geo(client=self.client,
-                    camera_name=self.of_cameras,
-                    vehicle_name=self.vehicle_name,
-                    ignore_angular_velocity=self.of_ignore_angular_velocity,
-                    )
-        if self.central_strip_width is not None:
-            (_, H, _) = of.shape
-            of = of[:, H//2 - self.central_strip_width:H//2 + self.central_strip_width, :]
+        obs = dict()
+        for camera_name in self.of_cameras:
+            of = of_geo(client=self.client,
+                        camera_name=camera_name,
+                        vehicle_name=self.vehicle_name,
+                        ignore_angular_velocity=self.of_ignore_angular_velocity,
+                        )
+            of_magnitude = np.linalg.norm(of, axis=0)  # magnitude of x and y components of projected optic flow
+            obs[camera_name] = None
+            # H, W = of.shape
+            if self.INPUT_RAW_OF in self.input_img_space:
+                # (H,W) optic flow magnitude  on [0,inf)
+                self.img_stack[camera_name].append(of_magnitude.copy())
+            if self.INPUT_LOG_OF in self.input_img_space:
+                # (H,W) log(optic flow magnitude)  on (-inf,inf)
+                # clipped to avoid log(0) error
+                self.img_stack[camera_name].append(np.log(np.clip(of_magnitude, 10e-3, np.inf)))
+            if self.INPUT_OF_ORIENTATION in self.input_img_space:
+                # 2x (H,W) for x and y components of optic flow orientation
+                #  each component is -1 to 1
+                clipped_mag = np.clip(of_magnitude, 10e-4, np.inf)  # avoid division by zero
+                self.img_stack[camera_name].append(of[0]/clipped_mag)
+                self.img_stack[camera_name].append(of[1]/clipped_mag)
+            if self.INPUT_INV_DEPTH_IMG in self.input_img_space:
+                # sees (...,inv_depth_img,...) at each timestep
+                # depth image and inv depth img are on (0,inf)
+                depth = get_depth_img(client=self.client,
+                                      camera_name=camera_name,
+                                      numpee=True,
+                                      )
 
-        of_magnitude = np.linalg.norm(of, axis=0)  # magnitude of x and y components of projected optic flow
-        # H, W = of.shape
-        if self.INPUT_RAW_OF in self.input_img_space:
-            # (H,W) optic flow magnitude  on [0,inf)
-            self.img_stack.append(of_magnitude.copy())
-        if self.INPUT_LOG_OF in self.input_img_space:
-            # (H,W) log(optic flow magnitude)  on (-inf,inf)
-            # clipped to avoid log(0) error
-            self.img_stack.append(np.log(np.clip(of_magnitude, 10e-3, np.inf)))
-        if self.INPUT_OF_ORIENTATION in self.input_img_space:
-            # 2x (H,W) for x and y components of optic flow orientation
-            #  each component is -1 to 1
-            clipped_mag = np.clip(of_magnitude, 10e-4, np.inf)  # avoid division by zero
-            self.img_stack.append(of[0]/clipped_mag)
-            self.img_stack.append(of[1]/clipped_mag)
-        if self.INPUT_INV_DEPTH_IMG in self.input_img_space:
-            # sees (...,inv_depth_img,...) at each timestep
-            # depth image and inv depth img are on (0,inf)
-            depth = get_depth_img(client=self.client,
-                                  camera_name=self.of_cameras,
-                                  numpee=True,
-                                  )
+                # clip depth to avoid 1/0 error, this means minimum visible depth is .001m which is resonable
+                self.img_stack[camera_name].append(1/np.clip(depth, 10e-3, np.inf))
 
-            if self.central_strip_width is not None:
-                (H, _) = depth.shape
-                depth = depth[H//2 - self.central_strip_width:H//2 + self.central_strip_width, :]
-            # clip depth to avoid 1/0 error, this means minimum visible depth is .001m which is resonable
-            self.img_stack.append(1/np.clip(depth, 10e-3, np.inf))
-
-        while len(self.img_stack) < self.img_stack_size:
-            # copy the first however many elements
-            extensor = [self.img_stack[i] for i in range(self.imgs_per_step)]
-            self.img_stack.extend(extensor)
-        obs = np.zeros(self.get_obs_shape())
-        # (C+m,H,W) where m is additional vector size
-        C = self.img_stack_size  # number of of images
-        obs[:C, :, :] = np.stack(self.img_stack, axis=0)  # this is a (C,H,W) history of optic flow data
+            while len(self.img_stack[camera_name]) < self.img_stack_size:
+                # copy the first however many elements
+                extensor = [self.img_stack[camera_name][i] for i in range(self.imgs_per_step)]
+                self.img_stack[camera_name].extend(extensor)
+            obs[camera_name] = np.stack(self.img_stack[camera_name],
+                                        axis=0)  # this is a (C,H,W) history of optic flow data
 
         if self.get_obs_vector_dim() > 0:
-            # m>0
-            vec = self.get_obs_vector()
-            # (m,) sized vector, used for goal conditioning
-            obs[C:, :, :] = np.expand_dims(vec, axis=(1, 2))  # (m,1,1)
-            # places copies of vec at every pixel
-            # can technically use gym.spaces.Tuple, and return (of, vec)
-            #  unfortunately Tuple space is not supported in stable_baselines
+            obs['vec'] = self.get_obs_vector()
+
         return obs
 
     def get_obs_shape(self):
         if self.obs_shape is None:
+            self.obs_shape = dict()
             of_shape = self.get_of_data_shape()
-            # self.obs_shape = (of_shape[0] + self.get_obs_vector_dim(), *of_shape[1:])
-            # we are only using translational optic flow (1,H,W), and stacking self.img_stack_size of them
-            self.obs_shape = (self.img_stack_size + self.get_obs_vector_dim(), *of_shape[1:])
+            for k, of_sh in zip(self.of_cameras, of_shape):
+                # self.obs_shape = (of_shape[0] + self.get_obs_vector_dim(), *of_shape[1:])
+                # we are only using translational optic flow (1,H,W), and stacking self.img_stack_size of them
+                self.obs_shape[k] = (self.img_stack_size, *of_sh[1:])
+            self.obs_shape['vec'] = (self.get_obs_vector_dim(),)
         return self.obs_shape
 
     def reset(
@@ -689,7 +684,7 @@ class OFBeeseClass(BeeseClass):
             seed: Optional[int] = None,
             options: Optional[dict] = None,
     ) -> Tuple[ObsType, dict]:
-        self.img_stack = deque(maxlen=self.img_stack_size)
+        self.img_stack = {k: deque(maxlen=self.img_stack_size) for k in self.of_cameras}
         stuf = super().reset(seed=seed, options=options)
         return stuf
 
@@ -703,15 +698,26 @@ class OFBeeseClass(BeeseClass):
         costly, should not be run too many times, as we can either save this shape or just look at the last observation
         """
         shape = get_of_geo_shape(client=self.client, camera_name=self.of_cameras)
-        if self.central_strip_width is not None:
-            (C, H, W) = shape
-            return C, 2*self.central_strip_width, W
-        else:
-            return shape
+        return shape
 
 
 if __name__ == '__main__':
     import time
+
+    env = OFBeeseClass(dt=.2, real_time=False, action_type=OFBeeseClass.ACTION_VELOCITY_XY,
+                       of_cameras=('front', 'bottom'))
+    env.reset()
+    env.step(action=env.action_space.sample())
+    for _ in range(0, int(1/env.dt), 1):
+        env.step(action=env.action_space.sample())
+    for i in range(0, int(10/env.dt), 1):
+        action = env.action_space.sample()
+        print(action)
+        obs, rwd, term, _, _ = env.step(action=action)
+        if term:
+            print("CRASHED")
+            break
+    env.close()
 
     env = BeeseClass(dt=.2, real_time=True)
     env.reset()

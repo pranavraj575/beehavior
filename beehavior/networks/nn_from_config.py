@@ -7,7 +7,7 @@ from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from torch.fx.experimental.proxy_tensor import fetch_sym_proxy
 
 
-def layer_from_config_dict(dic, input_shape=None, only_shape=False):
+def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None):
     """
     returns nn layer from a layer config dict
     handles Linear, flatten, relu, tanh, cnn, maxpool, avgpool, dropout
@@ -69,6 +69,7 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
         if not only_shape:
             layer = nn.Linear(in_features=input_shape[-1],
                               out_features=out_features,
+                              device=device,
                               )
         if input_shape is not None:
             shape = (*(input_shape[:-1]),
@@ -99,6 +100,7 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
                     kernel_size=kernel_size,
                     stride=stride,
                     padding=padding,
+                    device=device,
                 )
             shape = (N, out_channels, Hp, Wp)
         elif typ == 'maxpool':
@@ -125,7 +127,7 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False):
     return layer, shape
 
 
-def layers_from_config_list(dic_list, input_shape, only_shape=False):
+def layers_from_config_list(dic_list, input_shape, only_shape=False, device=None):
     """
     returns list of layers from a list of config dicts
         calculates each successive input shape automatically
@@ -143,12 +145,13 @@ def layers_from_config_list(dic_list, input_shape, only_shape=False):
         layer, shape = layer_from_config_dict(dic=dic,
                                               input_shape=shape,
                                               only_shape=only_shape,
+                                              device=device,
                                               )
         layers.append(layer)
     return layers, shape
 
 
-def layers_from_structure(structure, input_shape=None, only_shape=False):
+def layers_from_structure(structure, input_shape=None, only_shape=False, device=None):
     """
     obtains layers from a structure (dict, DO NOT NEST DICTS)
     {
@@ -185,6 +188,7 @@ def layers_from_structure(structure, input_shape=None, only_shape=False):
                 dic_list=structure['layers'],
                 input_shape=input_shape,
                 only_shape=only_shape,
+                device=device,
             )
         else:
             dd = {
@@ -225,6 +229,7 @@ class CustomNN(BaseFeaturesExtractor):
                  observation_space,
                  structure,
                  config_file=None,
+                 device=None,
                  ):
         """
         Args:
@@ -242,7 +247,9 @@ class CustomNN(BaseFeaturesExtractor):
             f = open(config_file, 'r')
             structure = ast.literal_eval(f.read())
             f.close()
-        _, output_shape = layers_from_structure(structure=structure, input_shape=unbatched, only_shape=True)
+        self.device=device
+        _, output_shape = layers_from_structure(structure=structure, input_shape=unbatched, only_shape=True,
+                                                device=self.device)
         if type(output_shape) == dict:
             self.dict_input = True
             self.keys = tuple(sorted(output_shape.keys()))
@@ -257,17 +264,17 @@ class CustomNN(BaseFeaturesExtractor):
             self.dict_input = False
             self.keys = None
             super().__init__(observation_space, output_shape[-1])
-        layers, _ = layers_from_structure(structure=structure, input_shape=unbatched)
+        layers, _ = layers_from_structure(structure=structure, input_shape=unbatched, device=self.device)
         if self.dict_input:
             self.network = {
-                k: layers[k] if type(layers[k]) == str else nn.Sequential(*layers[k])
+                k: layers[k] if type(layers[k]) == str else nn.Sequential(*layers[k]).to(self.device)
                 for k in self.keys}
             self.network = {
                 k: self.network[self.network[k]] if type(self.network[k]) == str else self.network[k]
                 for k in self.keys
             }
         else:
-            self.network = nn.Sequential(*layers)
+            self.network = nn.Sequential(*layers).to(self.device)
 
         # Compute shape and print by doing one forward pass
         if True:
@@ -275,7 +282,7 @@ class CustomNN(BaseFeaturesExtractor):
                 if self.dict_input:
                     for k in self.keys:
                         print('KEY:', k)
-                        b = torch.as_tensor(observation_space[k].sample()[None]).float()
+                        b = torch.as_tensor(observation_space[k].sample()[None],device=self.device).float()
                         lys = layers[k]
                         if type(lys) == str:
                             lys = layers[lys]
@@ -291,11 +298,9 @@ class CustomNN(BaseFeaturesExtractor):
 
     def forward(self, observations):
         if self.dict_input:
-            stuff = []
-            for k in self.keys:
-                obs = observations[k]
-                stuff.append(self.network[k].forward(obs))
-            return torch.concatenate(stuff, dim=-1)
+            return torch.concatenate([self.network[k].forward(observations[k])
+                                      for k in self.keys],
+                                     dim=-1)
         else:
             return self.network.forward(observations)
 

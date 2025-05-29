@@ -1,8 +1,11 @@
+import ast
+
 import gymnasium as gym
 
 from beehavior.networks.nn_from_config import CustomNN
 
 if __name__ == '__main__':
+    device = 'cuda:0'
     import argparse
     import numpy as np
     from stable_baselines3 import PPO as MODEL
@@ -23,7 +26,7 @@ if __name__ == '__main__':
 
     PARSER.add_argument("--ident", action='store', required=False, default='forw_bee_test',
                         help="test identification")
-    PARSER.add_argument("--timesteps-per-epoch", type=int, required=False, default=512,
+    PARSER.add_argument("--timesteps-per-epoch", type=int, required=False, default=1024,
                         help="number of timesteps to train for each epoch")
     PARSER.add_argument("--epochs", type=int, required=False, default=50,
                         help="number of epochs")
@@ -31,16 +34,16 @@ if __name__ == '__main__':
                         help="frequency to save model")
     PARSER.add_argument("--test-freq", type=int, required=False, default=None,
                         help="frequency to check trajectories, defaults to same as --ckpt-freq")
-    PARSER.add_argument("--nsteps", type=int, required=False, default=512,
+    PARSER.add_argument("--nsteps", type=int, required=False, default=1024,
                         help="number of steps before learning step")
     PARSER.add_argument("--testjectories", type=int, required=False, default=32,
                         help="number of trajectories to collect each epoch")
-    PARSER.add_argument("--dt", type=float, required=False, default=.1,
+    PARSER.add_argument("--dt", type=float, required=False, default=.05,
                         help="simulation timestep")
     PARSER.add_argument("--history-steps", type=int, required=False, default=2,
                         help="steps to see in history")
 
-    PARSER.add_argument('--action-type', action='store', required=False, default=ForwardBee.ACTION_VELOCITY,
+    PARSER.add_argument('--action-type', action='store', required=False, default=ForwardBee.ACTION_ACCELERATION_XY,
                         choices=(ForwardBee.ACTION_VELOCITY,
                                  ForwardBee.ACTION_VELOCITY_XY,
                                  ForwardBee.ACTION_ACCELERATION,
@@ -59,13 +62,10 @@ if __name__ == '__main__':
     PARSER.add_argument("--include-vel-with-noise", type=float, required=False, default=None,
                         help="include noisy velocity in input (specify stdev of noise)")
 
-    PARSER.add_argument("--central-strip-width", type=int, required=False, default=None,
-                        help="if specified, only consider the central strip with this width")
-
     PARSER.add_argument("--network", action='store', required=False,
-                        default=os.path.join(DIR, 'beehavior', 'networks', 'configs', 'simp_alex.txt'),
+                        default=os.path.join(DIR, 'beehavior', 'networks', 'configs', 'simplest_alex.txt'),
                         help="network config file to use (look at beehavior/networks/nn_from_config.py)")
-    PARSER.add_argument("--pol-val-net", type=int, nargs='*', required=False, default=[64, 64],
+    PARSER.add_argument("--pol-val-net", type=int, nargs='*', required=False, default=[64, ],
                         help="hidden layer list of policy and value nets")
 
     PARSER.add_argument("--recollect", action='store_true', required=False,
@@ -111,8 +111,6 @@ if __name__ == '__main__':
             ident += 'n'
     if args.include_vel_with_noise is not None:
         ident += '_vel_noise_' + str(args.include_vel_with_noise).replace('.', '_')
-    if args.central_strip_width is not None:
-        ident += '_cen_strp_' + str(args.central_strip_width)
     ident += '_act_' + args.action_type
     ident += '_k_' + str(args.history_steps)
     ident += '_dt_' + str(args.dt).replace('.', '_')
@@ -133,13 +131,17 @@ if __name__ == '__main__':
                    action_type=args.action_type,
                    img_history_steps=args.history_steps,
                    input_velocity_with_noise=args.include_vel_with_noise,
-                   central_strip_width=args.central_strip_width,
                    )
+    f = open(network_file, 'r')
     policy_kwargs = dict(
         features_extractor_class=CustomNN,
-        features_extractor_kwargs=dict(config_file=network_file),
+        features_extractor_kwargs=dict(structure={'front': ast.literal_eval(f.read())},
+                                       device=device,
+                                       ),
         net_arch=dict(pi=args.pol_val_net, vf=args.pol_val_net),
+
     )
+    f.close()
 
 
     def epoch_from_name(basename) -> int:
@@ -182,9 +184,13 @@ if __name__ == '__main__':
         return model, info
 
 
-    model = MODEL('CnnPolicy', env, verbose=1, policy_kwargs=policy_kwargs,
+    model = MODEL('MultiInputPolicy',
+                  env,
+                  verbose=1,
+                  policy_kwargs=policy_kwargs,
                   # buffer_size=2048,  # for replay buffer methods
                   n_steps=args.nsteps,
+                  device=device,
                   )
     epoch_init = 0
     if not args.reset:

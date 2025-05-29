@@ -167,7 +167,8 @@ def get_depth_img(client: airsim.MultirotorClient, camera_name='front', numpee=F
     if type(camera_name) == tuple:
         return tuple(get_depth_img(client=client,
                                    camera_name=t,
-                                   numpee=numpee)
+                                   numpee=numpee,
+                                   )
                      for t in camera_name)
     # airsim.ImageType.OpticalFlow
     img_type = airsim.ImageType.DepthPerspective
@@ -189,7 +190,6 @@ def get_depth_img(client: airsim.MultirotorClient, camera_name='front', numpee=F
         image_height = depth_image.height
         image_width = depth_image.width
         depth_image = np.array(depth_image.image_data_float, dtype=np.float32).reshape(image_height, image_width)
-
     return depth_image
 
 
@@ -202,6 +202,9 @@ def get_of_geo_shape(client: airsim.MultirotorClient, camera_name='front'):
     Returns:
         shape tuple, probably (2, 240, 320)
     """
+    if type(camera_name) == tuple:
+        return tuple(get_of_geo_shape(client=client, camera_name=c) for c in camera_name)
+
     depth_image = get_depth_img(client=client, camera_name=camera_name)
     return (2, depth_image.height, depth_image.width)
 
@@ -329,16 +332,26 @@ def of_geo(client: airsim.MultirotorClient,
 
 
 if __name__ == '__main__':
-    import argparse
+    client = connect_client(vehicle_name='')
+    # client.moveByRollPitchYawrateThrottleAsync(roll=0, pitch=0, throttle=.6, yaw_rate=0, duration=1, ).join()
 
-    PARSER = argparse.ArgumentParser()
-    PARSER.add_argument("--headless", action='store_true', required=False,
-                        help="open in headless mode")
-    PARSER.add_argument("--start-paused", action='store_true', required=False,
-                        help="starts simulation paused")
-    args = PARSER.parse_args()
-    if not engine_started():
-        thing = start_game_engine(open_gui=not args.headless,
-                                  start_paused=False,
-                                  join=True,
-                                  )
+    step(client=client,
+         seconds=.1,
+         cmd=lambda: client.moveByVelocityAsync(vx=1, vy=0, vz=-1,
+                                                duration=1, vehicle_name='').join(),
+         )
+
+    step(client=client,
+         seconds=.1,
+         cmd=lambda: client.moveByRollPitchYawrateThrottleAsync(roll=0, pitch=0, throttle=.6, yaw_rate=0,
+                                                                duration=.1, ).join(),
+         )
+    step(client=client,
+         seconds=.1,
+         cmd=lambda: client.moveByRollPitchYawrateThrottleAsync(roll=0, pitch=0, throttle=.6, yaw_rate=0,
+                                                                duration=.1, ).join(),
+         )
+    print(of_geo(client=client,
+                 camera_name='front'))
+    print(of_geo(client=client,
+                 camera_name='bottom'))
