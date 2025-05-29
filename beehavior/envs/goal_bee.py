@@ -18,7 +18,7 @@ class GoalBee(OFBeeseClass):
                  vehicle_name='',
                  real_time=False,
                  collision_grace=1,
-                 of_cameras='front',
+                 of_cameras=('front', 'bottom'),
                  initial_position={
                      ((-5., -1.), yrng, (-1., -1.5)): 1/6
                      for yrng in ((-1., 1.),  # -1.8,1.8
@@ -37,16 +37,11 @@ class GoalBee(OFBeeseClass):
                  action_type=OFBeeseClass.ACTION_ACCELERATION_XY,
                  fix_z_to=None,
                  of_ignore_angular_velocity=True,
-                 input_velocity_with_noise=None,
-                 central_strip_width=None,
                  global_actions=False,
                  ):
         """
         Args:
-            height_range: height goal
-            input_velocity_with_noise: whether to include noisy velocity in input
         """
-        self.input_vel_w_noise = input_velocity_with_noise
         super().__init__(
             client=client,
             dt=dt,
@@ -63,49 +58,77 @@ class GoalBee(OFBeeseClass):
             action_type=action_type,
             fix_z_to=fix_z_to,
             of_ignore_angular_velocity=of_ignore_angular_velocity,
-            central_strip_width=central_strip_width,
             global_actions=global_actions,
         )
         self.bounds = bounds
 
+        self.GOAL_FORWARD = False
+        self.GOAL_HOVER = False
+        self.GOAL_STATION_KEEP = False
+        self.GOAL_LAND_ON = False
+
+    def set_forward_goal(self, activate=True):
+        """
+        Args:
+            activate: whether to activate the forward goal
+        """
+        if activate:
+            # reset the furthest agent has traveled to current position
+            self.farthest_reached = self.get_pose().position.x_val
+        self.GOAL_FORWARD = activate
+
+    def set_hover_goal(self, activate=True):
+        """
+        Args:
+            activate: whether to activate the hover goal
+        """
+        self.GOAL_HOVER = activate
+
+    def set_station_keep_goal(self, activate=True):
+        """
+        Args:
+            activate: whether to activate the station keeping goal
+        """
+        self.GOAL_STATION_KEEP = activate
+
+    def set_land_goal(self, activate=True):
+        """
+        Args:
+            activate: whether to activate the land goal
+        """
+        self.GOAL_LAND_ON = activate
+
     def get_observation_vector_part(self):
-        if self.get_obs_vector_dim() == 0:
-            raise NotImplementedError
-        kinematics = self.client.simGetGroundTruthKinematics(vehicle_name=self.vehicle_name)
-        vel = np.array([kinematics.linear_velocity.x_val,
-                        kinematics.linear_velocity.y_val,
-                        kinematics.linear_velocity.z_val])
-        return vel + np.random.normal(scale=self.input_vel_w_noise, size=3)
+        raise NotImplementedError
+
+    def get_goal_part_dim(self):
+        return 1 + 1 + 1 + 1
 
     def get_goal_vector_part(self):
-        raise NotImplementedError
+        return np.array([self.GOAL_FORWARD,
+                         self.GOAL_HOVER,
+                         self.GOAL_STATION_KEEP,
+                         self.GOAL_LAND_ON,
+                         ],
+                        dtype=np.float64,
+                        )
 
     def get_obs_vector(self):
         """
         get obs vector, including roll, pitch, yaw (yaw is encoded as its sine and cosine components,
             to remove the discontinuity at +-pi). this is not an issue for roll,pitch since they will never get this large
         """
-        vcs=[]
-        if self.get_observation_part_dim()>0:
+        vcs = []
+        if self.get_observation_part_dim() > 0:
             vcs.append(self.get_observation_vector_part())
-        if self.get_goal_part_dim()>0:
+        if self.get_goal_part_dim() > 0:
             vcs.append(self.get_goal_vector_part())
-        return np.concatenate(vcs,)
-
+        return np.concatenate(vcs, )
 
     def get_observation_part_dim(self):
-        if self.input_vel_w_noise is not None:
-            return 3
-        else:
-            return 0
-
-    def get_goal_part_dim(self):
         return 0
 
     def get_obs_vector_dim(self):
-        """
-        shape of obs vector is (4,)
-        """
         return self.get_observation_part_dim() + self.get_goal_part_dim()
 
     def out_of_bounds(self, pose):
@@ -146,7 +169,7 @@ class GoalBee(OFBeeseClass):
             return -.5, info_dic
 
         # self.get_goal_vector_part()
-
+        return 0
         raise NotImplementedError
 
     def reset(
@@ -163,21 +186,17 @@ class GoalBee(OFBeeseClass):
 if __name__ == '__main__':
     import time
 
-    env = GoalBee(dt=.2,action_type=GoalBee.ACTION_ROLL_PITCH_THRUST)
+    env = GoalBee(dt=.1, action_type=GoalBee.ACTION_ROLL_PITCH_THRUST)
     env.reset()
     env.step(action=np.array([0., 0., 1.]))
-    for _ in range(0, int(.5/env.dt), 1):
-        env.step(action=np.array([0., 0., 1.]))
     for i in range(0, int(10/env.dt), 1):
         action = env.action_space.sample()
-        r, p, t = action
         obs, rwd, term, _, _ = env.step(action=action)
-        print('roll:', r,
-              'pitch:', p,
-              'thrust:', t,
-              'reward:', rwd,
-              )
+
         if term:
             print("CRASHED")
             break
     env.close()
+    print({
+        k: obs[k].shape for k in obs
+    })

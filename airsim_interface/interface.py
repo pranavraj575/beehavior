@@ -208,7 +208,14 @@ def get_of_geo_shape(client: airsim.MultirotorClient, camera_name='front'):
     depth_image = get_depth_img(client=client, camera_name=camera_name)
     return (2, depth_image.height, depth_image.width)
 
-
+CAMERA_NAME_TO_BASIS={
+    #'front':np.identity(3),
+    'bottom':np.array([
+        [1.,0.,0],
+        [0.,0.,-1.],
+        [0.,1.,0.],
+    ]),
+}
 def of_geo(client: airsim.MultirotorClient,
            camera_name='front',
            vehicle_name='',
@@ -258,6 +265,11 @@ def of_geo(client: airsim.MultirotorClient,
 
     T = np.array(
         [-kinematics.linear_velocity.y_val, -kinematics.linear_velocity.z_val, kinematics.linear_velocity.x_val])
+    if camera_name in CAMERA_NAME_TO_BASIS:
+        print('HERE')
+        print(np.round(T,4))
+        T=T@CAMERA_NAME_TO_BASIS[camera_name]
+        print(np.round(T,4))
 
     # Rotational velocity (angular velocity)
     omega = np.array(

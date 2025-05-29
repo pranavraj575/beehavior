@@ -518,7 +518,7 @@ class OFBeeseClass(BeeseClass):
                  vehicle_name='',
                  real_time=False,
                  collision_grace=1,
-                 of_cameras=('front',),
+                 of_cameras=('front', 'bottom'),
                  initial_position=None,
                  timeout=300,
                  img_history_steps=2,

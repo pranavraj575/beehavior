@@ -216,9 +216,8 @@ if __name__ == '__main__':
                 plt.imshow(image[:, :, ::-1], interpolation='nearest', )
                 h, w = np.meshgrid(np.arange(of.shape[0]), np.arange(of.shape[1]))
                 ss = 10
-                of_disp = np.transpose(of, axes=(
-                    1, 0, 2))  # inverted from image (height is top down) to np plot (y dim  bottom up)
-
+                of_disp = np.transpose(of, axes=(1, 0, 2))
+                # inverted from image (height is top down) to np plot (y dim  bottom up)
                 plt.quiver(w[::ss, ::ss], h[::ss, ::ss],
                            of_disp[::ss, ::ss, 0],
                            -of_disp[::ss, ::ss, 1],
