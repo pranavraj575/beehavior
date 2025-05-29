@@ -1,11 +1,12 @@
 import ast
 
 import gymnasium as gym
+import torch.cuda
 
 from beehavior.networks.nn_from_config import CustomNN
 
 if __name__ == '__main__':
-    device = 'cuda:0'
+
     import argparse
     import numpy as np
     from stable_baselines3 import PPO as MODEL
@@ -13,6 +14,8 @@ if __name__ == '__main__':
     import pickle as pkl
     import beehavior
     from beehavior.envs.forward_bee import ForwardBee
+
+    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
     DIR = os.path.dirname(os.path.dirname(__file__))
 
