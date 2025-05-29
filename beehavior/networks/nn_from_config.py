@@ -4,6 +4,7 @@ from torch import nn
 import ast
 import gymnasium as gym
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from torch.fx.experimental.proxy_tensor import fetch_sym_proxy
 
 
 def layer_from_config_dict(dic, input_shape=None, only_shape=False):
@@ -147,30 +148,71 @@ def layers_from_config_list(dic_list, input_shape, only_shape=False):
     return layers, shape
 
 
-def layers_from_config_file(file, input_shape=None, only_shape=False):
+def layers_from_structure(structure, input_shape=None, only_shape=False):
     """
-    obtains layers from a file formatted as a python dict
+    obtains layers from a structure (dict, DO NOT NEST DICTS)
     {
         'input_shape': input shape, OPTIONAL
         'layers': list of layer config dicts
     }
+    can also take dicts that contain these formatted things
+        i.e. {'img':<nn b dict>, 'vec': <nn c dict>} will return
+             {'img':<nn b layers>, 'vec': <nn c layers>},{'img':<nn b shape>, 'vec': <nn c shape>},
+        IF you put in a dict, 'layers' cannot be a key, as this indicates the base level dict
+        Can also do this:
+            {'default':<nn a dict>, 'case a':'default', 'case b': default} will return
+            {'default':<nn a layers>, 'case a':'default', 'case b': default},{'default':<nn a shape>, 'case a':'default', 'case b': default}
+            In this case, only ONE network will be made, meant to handle two copies of identical input
+            DO NOT PUT CHAINS LONGER THAN ONE,
     Args:
-        file: directory of file to read
-        input_shape: overwrites input shape specified in file
+        structure: structure to read
+        input_shape: overwrites input shape specified in file, MUST BE SAME FORM AS STRUCTURE
+            i.e. if structure is a tuple, input shape must be tuple of input shapes, etc.
+            also UNBATCHED
         only_shape: only calculate shapes, do not make networks
     Returns:
+        layer structure, shape structure
+    """
+    if type(structure) == str:
+        return structure, structure
+    elif type(structure) == dict:
+        if 'layers' in structure:
+            if input_shape is None:
+                input_shape = structure.get('input_shape', None)
+            if input_shape is not None:
+                input_shape = (1, *input_shape)
+            return layers_from_config_list(
+                dic_list=structure['layers'],
+                input_shape=input_shape,
+                only_shape=only_shape,
+            )
+        else:
+            dd = {
+                k: layers_from_structure(structure=structure[k],
+                                         input_shape=None if input_shape is None else input_shape.get(k, None),
+                                         only_shape=only_shape,
+                                         )
+                for k in structure
+            }
+            # layer dict, shape dict
+            return {k: dd[k][0] for k in dd}, {k: dd[k][1] for k in dd}
+    else:
+        raise Exception('unknown type:', type(structure))
 
+
+def layers_from_config_file(file, input_shape=None, only_shape=False):
+    """
+    obtains layers from a file formatted as a structure (calls layers_from_structure)
+    Args:
+        file: directory of file to read
+        input_shape: overwrites input shape specified in file, UNBATCHED
+        only_shape: only calculate shapes, do not make networks
+    Returns:
     """
     f = open(file, 'r')
-    full_dic = ast.literal_eval(f.read())
+    full_file = ast.literal_eval(f.read())
     f.close()
-    if input_shape is None:
-        input_shape = full_dic.get('input_shape', None)
-    return layers_from_config_list(
-        dic_list=full_dic['layers'],
-        input_shape=input_shape,
-        only_shape=only_shape,
-    )
+    return layers_from_structure(structure=full_file, input_shape=input_shape, only_shape=only_shape)
 
 
 class CustomNN(BaseFeaturesExtractor):
@@ -180,26 +222,82 @@ class CustomNN(BaseFeaturesExtractor):
     """
 
     def __init__(self,
-                 observation_space: gym.spaces.Box,
-                 config_file,
+                 observation_space,
+                 structure,
+                 config_file=None,
                  ):
+        """
+        Args:
+            observation_space:
+            structure: specifies network structure
+                can also put in None, then enter config file
+            config_file:
+        """
         unbatched = observation_space.shape
-        _, output_shape = layers_from_config_file(file=config_file, input_shape=(1, *unbatched), only_shape=True)
-        super().__init__(observation_space, output_shape[-1])
-        layers, _ = layers_from_config_file(file=config_file, input_shape=(1, *unbatched))
-        self.network = nn.Sequential(*layers)
+        if unbatched is None:
+            assert type(observation_space) == gym.spaces.Dict
+            unbatched = {k: observation_space[k].shape for k in observation_space.keys()}
+        if structure is None:
+            assert config_file is not None
+            f = open(config_file, 'r')
+            structure = ast.literal_eval(f.read())
+            f.close()
+        _, output_shape = layers_from_structure(structure=structure, input_shape=unbatched, only_shape=True)
+        if type(output_shape) == dict:
+            self.dict_input = True
+            self.keys = tuple(sorted(output_shape.keys()))
+            features_dim = 0
+            for k in self.keys:
+                if type(output_shape[k]) == str:
+                    features_dim += output_shape[output_shape[k]][-1]
+                else:
+                    features_dim += output_shape[k][-1]
+            super().__init__(observation_space, features_dim=features_dim)
+        else:
+            self.dict_input = False
+            self.keys = None
+            super().__init__(observation_space, output_shape[-1])
+        layers, _ = layers_from_structure(structure=structure, input_shape=unbatched)
+        if self.dict_input:
+            self.network = {
+                k: layers[k] if type(layers[k]) == str else nn.Sequential(*layers[k])
+                for k in self.keys}
+            self.network = {
+                k: self.network[self.network[k]] if type(self.network[k]) == str else self.network[k]
+                for k in self.keys
+            }
+        else:
+            self.network = nn.Sequential(*layers)
 
         # Compute shape and print by doing one forward pass
         if True:
             with torch.no_grad():
-                b = torch.as_tensor(observation_space.sample()[None]).float()
-                print(b.shape)
-                for layer in layers:
-                    b = layer.forward(b)
-                    print(b.shape, layer)
+                if self.dict_input:
+                    for k in self.keys:
+                        print('KEY:', k)
+                        b = torch.as_tensor(observation_space[k].sample()[None]).float()
+                        lys = layers[k]
+                        if type(lys) == str:
+                            lys = layers[lys]
+                        for layer in lys:
+                            b = layer.forward(b)
+                            print(b.shape, layer)
+                else:
+                    b = torch.as_tensor(observation_space.sample()[None]).float()
+                    print(b.shape)
+                    for layer in layers:
+                        b = layer.forward(b)
+                        print(b.shape, layer)
 
-    def forward(self, observations: torch.Tensor) -> torch.Tensor:
-        return self.network(observations)
+    def forward(self, observations):
+        if self.dict_input:
+            stuff = []
+            for k in self.keys:
+                obs = observations[k]
+                stuff.append(self.network[k].forward(obs))
+            return torch.concatenate(stuff, dim=-1)
+        else:
+            return self.network.forward(observations)
 
 
 if __name__ == '__main__':
@@ -237,12 +335,13 @@ if __name__ == '__main__':
     alex = os.path.join(network_dir, 'configs', 'alexnet.txt')
     print(layers_from_config_file(
         alex,
-        input_shape=(1, 9, 240, 320)
+        input_shape=(9, 240, 320)
     ))
     print()
     print(CustomNN(
         observation_space=gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2, 240, 320)),
         config_file=alex,
+        structure=None,
     ))
 
     alex = os.path.join(network_dir, 'configs', 'simp_alex.txt')
@@ -250,4 +349,32 @@ if __name__ == '__main__':
     print(CustomNN(
         observation_space=gym.spaces.Box(low=-np.inf, high=np.inf, shape=(8, 240, 320)),
         config_file=alex,
+        structure=None,
     ))
+    f = open(alex, 'r')
+    alex_struct = ast.literal_eval(f.read())
+    f.close()
+    f = open(os.path.join(network_dir, 'configs', 'simplest_alex.txt'), 'r')
+    simplest_struct = ast.literal_eval(f.read())
+    f.close()
+
+    print(layers_from_structure(structure={'case a': alex_struct, 'case b': simplest_struct, 'case c': 'case a'},
+                                input_shape={'case a': (8, 240, 320), 'case b': (8, 240, 320), 'case c': 'case a'},
+                                only_shape=False,
+                                ))
+    obs_space = gym.spaces.Dict({'case a': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(8, 240, 320)),
+                                 'case b': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+                                 'case c': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(8, 240, 320))})
+    pp = CustomNN(
+        observation_space=
+        obs_space,
+        structure={'case a': simplest_struct,
+                   'case b': {
+                       'layers': [
+                           {'type': 'linear', 'out_features': 256, },
+                           {'type': 'ReLU', },
+                       ]
+                   },
+                   'case c': 'case a'},
+    )
+    print(pp)

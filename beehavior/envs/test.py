@@ -77,6 +77,8 @@ class Test(gym.Env):
 if __name__ == '__main__':
     env = Test()
     print(env.observation_space.sample())
+    print(type(env.observation_space))
+    print(env.observation_space['imgs'].shape)
     print(env.reset(seed=69))
     print(env.step(np.array([-1., 0])))
     print(env.step(np.array([1., 0])))
