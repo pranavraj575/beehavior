@@ -2,6 +2,9 @@ from typing import Tuple, Optional
 import gymnasium as gym
 from gymnasium.core import ActType, ObsType
 import numpy as np
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from torch import nn
+import torch
 
 
 class Test(gym.Env):
@@ -21,8 +24,8 @@ class Test(gym.Env):
         self.action_space = gym.spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float64)
         self.observation_space = gym.spaces.Dict({
             'vec': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2,), dtype=np.float64),
-            'imgs': gym.spaces.Tuple((gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2, 2, 2), dtype=np.float64),
-                                      gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2, 2, 2), dtype=np.float64)))
+            'img': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2, 2, 2), dtype=np.float64),
+            'img2': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2, 2, 2), dtype=np.float64),
         })
         self.s = None
         self.t = None
@@ -40,16 +43,19 @@ class Test(gym.Env):
         self.s += action
         dp = np.linalg.norm(self.t - self.s)
         r = d - dp
+        self.ct+=1
 
         # observation, reward, termination, truncation, info
-        return self.get_obs(), r.item(), dp.item() < 1, False, {}
+        return self.get_obs(), r.item(), dp.item() < 1 or self.ct>1000, False, {}
 
     def get_obs(self):
         vec = self.t - self.s
-        imgs = self.observation_space['imgs'].sample()
+        img = self.observation_space['img'].sample()
+        img2 = self.observation_space['img2'].sample()
         return {
             'vec': vec,
-            'imgs': imgs,
+            'img': img,
+            'img2':img2,
         }
 
     def reset(
@@ -67,6 +73,7 @@ class Test(gym.Env):
             (observation, info dict)
         """
         super().reset(seed=seed)
+        self.ct=0
         np.random.seed(seed)
         self.s = (2*np.random.random(2) - 1)*self.scale
         self.t = (2*np.random.random(2) - 1)*self.scale
@@ -74,12 +81,74 @@ class Test(gym.Env):
         return self.get_obs(), {}
 
 
+class TestNN(BaseFeaturesExtractor):
+    """
+    custom network built with config file
+    https://stable-baselines3.readthedocs.io/en/master/guide/custom_policy.html
+    """
+
+    def __init__(self,
+                 observation_space,
+                 ):
+        """
+        Args:
+            observation_space:
+            structure: specifies network structure
+                can also put in None, then enter config file
+            config_file:
+        """
+        unbatched = observation_space.shape
+        if unbatched is None:
+            assert type(observation_space) == gym.spaces.Dict
+            self.keys = tuple(sorted(observation_space.keys()))
+
+        features_dim = 16*3
+        super().__init__(observation_space, features_dim=features_dim)
+        img_net=nn.Sequential(nn.Flatten(), nn.Linear(in_features=8, out_features=16), nn.ReLU())
+        self.network = {
+            'vec': nn.Sequential(nn.Linear(in_features=2, out_features=16), nn.ReLU()),
+            'img': img_net,
+            'img2': img_net,
+        }
+
+    def forward(self, observations):
+        stuff = []
+        for k in self.keys:
+            obs = observations[k]
+            stuff.append(self.network[k].forward(obs))
+        return torch.concatenate(stuff, dim=-1)
+
+
 if __name__ == '__main__':
     env = Test()
     print(env.observation_space.sample())
     print(type(env.observation_space))
-    print(env.observation_space['imgs'].shape)
+    print(env.observation_space['img'].shape)
     print(env.reset(seed=69))
     print(env.step(np.array([-1., 0])))
     print(env.step(np.array([1., 0])))
     print(env.step(np.array([1., -.25])))
+
+    import gymnasium as gym
+    import os
+
+    from stable_baselines3 import PPO
+    from stable_baselines3.common.env_util import make_vec_env
+    import matplotlib.pyplot as plt
+
+    steps_per_epoch = 256
+
+    policy_kwargs = dict(
+        features_extractor_class=TestNN,
+    )
+    model = PPO("MultiInputPolicy", env, verbose=0, n_steps=steps_per_epoch, policy_kwargs=policy_kwargs, device='cpu')
+    for _ in range(100):
+        model.learn(total_timesteps=steps_per_epoch, reset_num_timesteps=False, progress_bar=False)
+        obs, info = env.reset()  # vec_env.reset()
+        term = False
+        reward_all=[]
+        while not term:
+            action, _states = model.predict(obs)
+            obs, rewards, term, _, info = env.step(action)
+            reward_all.append(rewards)
+        print(sum(reward_all)/len(reward_all))
