@@ -15,7 +15,6 @@ if __name__ == '__main__':
     import beehavior
     from beehavior.envs.forward_bee import ForwardBee
 
-    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
     DIR = os.path.dirname(os.path.dirname(__file__))
 
@@ -139,7 +138,6 @@ if __name__ == '__main__':
     policy_kwargs = dict(
         features_extractor_class=CustomNN,
         features_extractor_kwargs=dict(structure={'front': ast.literal_eval(f.read())},
-                                       device=device,
                                        ),
         net_arch=dict(pi=args.pol_val_net, vf=args.pol_val_net),
 
@@ -193,7 +191,6 @@ if __name__ == '__main__':
                   policy_kwargs=policy_kwargs,
                   # buffer_size=2048,  # for replay buffer methods
                   n_steps=args.nsteps,
-                  device=device,
                   )
     epoch_init = 0
     if not args.reset:
@@ -225,14 +222,14 @@ if __name__ == '__main__':
 
 
     initial_positions = [
-        ((-4., -3.), (-4.8, -5.8), (-1., -1.5)),  # converging/diverging tunnel
-        ((-4., -3.), (-.5, .5), (-1., -1.5)),  # normal tunnel
-        ((-4., -3.), (5.5, 6.5), (-1., -1.5)),
-        ((-4., -3.), (10.7, 11.3), (-1., -1.5)),  # narrow tunnel
-        ((-4., -3.), (14.7, 15.3), (-1., -1.5)),
-        ((-4., -3.), (19, 25), (-1., -1.5)),
-        ((-4., -3.), (30, 33), (-1., -1.5)),
-        ((-4., -3.), (38.5, 39.5), (-1., -1.5))  # empty tunnel
+        ((-4., -3.), (-4.8, -5.8), (-1., -6.9)),  # converging/diverging tunnel
+        ((-4., -3.), (-.5, .5), (-1., -6.9)),  # normal tunnel
+        ((-4., -3.), (5.5, 6.5), (-1., -6.9)),
+        ((-4., -3.), (10.7, 11.3), (-1., -6.9)),  # narrow tunnel
+        ((-4., -3.), (14.7, 15.3), (-1., -6.9)),
+        ((-4., -3.), (19, 25), (-1., -6.9)),
+        ((-4., -3.), (30, 33), (-1., -6.9)),
+        ((-4., -3.), (38.5, 39.5), (-1., -6.9))  # empty tunnel
     ]
 
 

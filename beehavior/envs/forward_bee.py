@@ -20,7 +20,7 @@ class ForwardBee(OFBeeseClass):
                  collision_grace=1,
                  of_cameras=('front',),
                  initial_position={
-                     ((-5., -1.), yrng, (-1., -1.5)): 1/6
+                     ((-5., -1.), yrng, (-1., -6.9)): 1/6
                      for yrng in ((-1., 1.),  # -1.8,1.8
                                   (4.20, 7.0),  # 3.14, 8.8
                                   (10.5, 11.),  # 10,11.7

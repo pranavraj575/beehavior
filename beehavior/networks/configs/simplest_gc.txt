@@ -28,7 +28,35 @@
                 },
             ],
     },
-    'bottom': 'front',
+    'bottom': {
+        'input_shape': None,
+        'layers':
+            [
+                {
+                    'type': 'maxpool',
+                    'kernel': (8, 8),
+                    'stride': (8, 8),
+                },
+                {
+                    'type': 'CNN',
+                    'channels': 16,
+                    'kernel': (5, 5),
+                    'stride': (3, 3),
+                    'padding': (0, 0),
+                },
+                {
+                    'type': 'ReLU',
+                },
+                {
+                    'type': 'maxpool',
+                    'kernel': (2, 2),
+                    'stride': (2, 2),
+                },
+                {
+                    'type': 'flatten',
+                },
+            ],
+    },
     'vec': {
         'input_shape': None,
         'layers':

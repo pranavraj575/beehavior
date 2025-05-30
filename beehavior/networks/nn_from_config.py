@@ -232,7 +232,6 @@ class CustomNN(BaseFeaturesExtractor):
                  observation_space,
                  structure,
                  config_file=None,
-                 device=None,
                  ):
         """
         Args:
@@ -250,9 +249,8 @@ class CustomNN(BaseFeaturesExtractor):
             f = open(config_file, 'r')
             structure = ast.literal_eval(f.read())
             f.close()
-        self.device = device
         _, output_shape = layers_from_structure(structure=structure, input_shape=unbatched, only_shape=True,
-                                                device=self.device)
+                                                device=None,)
         if type(output_shape) == dict:
             self.dict_input = True
             self.keys = tuple(sorted(output_shape.keys()))
@@ -267,10 +265,10 @@ class CustomNN(BaseFeaturesExtractor):
             self.dict_input = False
             self.keys = None
             super().__init__(observation_space, output_shape[-1])
-        layers, _ = layers_from_structure(structure=structure, input_shape=unbatched, device=self.device)
+        layers, _ = layers_from_structure(structure=structure, input_shape=unbatched, device=None)
         if self.dict_input:
             network = {
-                k: layers[k] if type(layers[k]) == str else nn.Sequential(*layers[k]).to(self.device)
+                k: layers[k] if type(layers[k]) == str else nn.Sequential(*layers[k])
                 for k in self.keys}
             network = {
                 k: network[network[k]] if type(network[k]) == str else network[k]
@@ -278,7 +276,7 @@ class CustomNN(BaseFeaturesExtractor):
             }
             self.network = nn.ParameterDict(network)
         else:
-            self.network = nn.Sequential(*layers).to(self.device)
+            self.network = nn.Sequential(*layers)
 
         # Compute shape and print by doing one forward pass
         if True:
@@ -286,7 +284,7 @@ class CustomNN(BaseFeaturesExtractor):
                 if self.dict_input:
                     for k in self.keys:
                         print('KEY:', k)
-                        b = torch.as_tensor(observation_space[k].sample()[None], device=self.device).float()
+                        b = torch.as_tensor(observation_space[k].sample()[None], device=None).float()
                         lys = layers[k]
                         if type(lys) == str:
                             lys = layers[lys]
