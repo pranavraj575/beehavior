@@ -247,7 +247,7 @@ class CustomNN(BaseFeaturesExtractor):
             f = open(config_file, 'r')
             structure = ast.literal_eval(f.read())
             f.close()
-        self.device=device
+        self.device = device
         _, output_shape = layers_from_structure(structure=structure, input_shape=unbatched, only_shape=True,
                                                 device=self.device)
         if type(output_shape) == dict:
@@ -266,13 +266,14 @@ class CustomNN(BaseFeaturesExtractor):
             super().__init__(observation_space, output_shape[-1])
         layers, _ = layers_from_structure(structure=structure, input_shape=unbatched, device=self.device)
         if self.dict_input:
-            self.network = {
+            network = {
                 k: layers[k] if type(layers[k]) == str else nn.Sequential(*layers[k]).to(self.device)
                 for k in self.keys}
-            self.network = {
-                k: self.network[self.network[k]] if type(self.network[k]) == str else self.network[k]
+            network = {
+                k: network[network[k]] if type(network[k]) == str else network[k]
                 for k in self.keys
             }
+            self.network = nn.ParameterDict(network)
         else:
             self.network = nn.Sequential(*layers).to(self.device)
 
@@ -282,7 +283,7 @@ class CustomNN(BaseFeaturesExtractor):
                 if self.dict_input:
                     for k in self.keys:
                         print('KEY:', k)
-                        b = torch.as_tensor(observation_space[k].sample()[None],device=self.device).float()
+                        b = torch.as_tensor(observation_space[k].sample()[None], device=self.device).float()
                         lys = layers[k]
                         if type(lys) == str:
                             lys = layers[lys]
@@ -349,7 +350,7 @@ if __name__ == '__main__':
         structure=None,
     ))
 
-    alex = os.path.join(network_dir, 'configs', 'simp_alex.txt')
+    alex = os.path.join(network_dir, 'configs', 'simplest_alex.txt')
 
     print(CustomNN(
         observation_space=gym.spaces.Box(low=-np.inf, high=np.inf, shape=(8, 240, 320)),
@@ -373,13 +374,37 @@ if __name__ == '__main__':
     pp = CustomNN(
         observation_space=
         obs_space,
-        structure={'case a': simplest_struct,
-                   'case b': {
-                       'layers': [
-                           {'type': 'linear', 'out_features': 256, },
-                           {'type': 'ReLU', },
-                       ]
-                   },
-                   'case c': 'case a'},
+        structure={
+            'case a': simplest_struct,
+            'case b': {
+                'layers': [
+                    {'type': 'linear', 'out_features': 256, },
+                    {'type': 'ReLU', },
+                ]
+            },
+            'case c': 'case a'
+        },
     )
     print(pp)
+    for param in pp.parameters():
+        print(param.shape)
+    # this should have more parameters, since we are making two copies of simplest_struct for case a and case c
+    pp2 = CustomNN(
+        observation_space=
+        obs_space,
+        structure={
+            'case a': simplest_struct,
+            'case b': {
+                'layers': [
+                    {'type': 'linear', 'out_features': 256, },
+                    {'type': 'ReLU', },
+                ]
+            },
+            'case c': simplest_struct
+        },
+    )
+
+    print(pp2)
+    for param in pp2.parameters():
+        print(param.shape)
+    print(len(list(pp.parameters())),len(list(pp2.parameters())))
