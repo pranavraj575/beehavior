@@ -10,7 +10,7 @@ from torch.fx.experimental.proxy_tensor import fetch_sym_proxy
 def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None):
     """
     returns nn layer from a layer config dict
-    handles Linear, flatten, relu, tanh, cnn, maxpool, avgpool, dropout
+    handles Linear, flatten, relu, tanh, cnn, maxpool, avgpool, dropout, identity
     Args:
         dic: layer config dict
         {
@@ -37,7 +37,10 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None)
     """
     typ = dic['type'].lower()
     layer = None
-    if typ == 'relu':
+    if typ == 'identity':
+        if not only_shape: layer = nn.Identity()
+        shape = input_shape
+    elif typ == 'relu':
         if not only_shape: layer = nn.ReLU()
         shape = input_shape
     elif typ == 'tanh':
@@ -390,8 +393,7 @@ if __name__ == '__main__':
         print(param.shape)
     # this should have more parameters, since we are making two copies of simplest_struct for case a and case c
     pp2 = CustomNN(
-        observation_space=
-        obs_space,
+        observation_space=obs_space,
         structure={
             'case a': simplest_struct,
             'case b': {
@@ -407,4 +409,19 @@ if __name__ == '__main__':
     print(pp2)
     for param in pp2.parameters():
         print(param.shape)
-    print(len(list(pp.parameters())),len(list(pp2.parameters())))
+    print('second should be bigger:', len(list(pp.parameters())), len(list(pp2.parameters())))
+
+    f = open(os.path.join(network_dir, 'configs', 'simplest_gc.txt'), 'r')
+    gc_struct = ast.literal_eval(f.read())
+    f.close()
+
+    gc_space = gym.spaces.Dict({'front': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(8, 240, 320)),
+                                'vec': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,)),
+                                'bottom': gym.spaces.Box(low=-np.inf, high=np.inf, shape=(8, 240, 320))})
+    gc = CustomNN(
+        observation_space=gc_space,
+        structure=gc_struct,
+    )
+    print('params')
+    for p in gc.parameters():
+        print(p.shape)

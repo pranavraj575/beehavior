@@ -147,14 +147,14 @@ class ForwardBee(OFBeeseClass):
             # return 1., info_dic
 
         if pose.position.x_val > self.farthest_reached:
-            val = pose.position.x_val - self.farthest_reached
+            rwd = pose.position.x_val - self.farthest_reached
         else:
-            val = 0
+            rwd = 0
         self.farthest_reached = max(
             self.farthest_reached,
             pose.position.x_val,
         )
-        return val, info_dic
+        return rwd, info_dic
 
     def reset(
             self,

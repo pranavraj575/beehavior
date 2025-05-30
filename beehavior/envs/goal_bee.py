@@ -8,7 +8,18 @@ from beehavior.envs.beese_class import OFBeeseClass
 
 class GoalBee(OFBeeseClass):
     """
-    goal conditioned rl env (generic)
+    goal conditioned rl env
+    IMPLEMENTED GOALS:
+        move forward:
+            reward is the amount agent advances the furthest distance travelled in +x direction
+                if agent does not increase the furthest it has traveled, reward is 0
+        hover:
+            reward is (c-|movement|) at each step.
+                c = self.velocity_bounds*self.dt, theoretic max distance traveled if agent moves at velocity_bounds
+        station_keeping:
+            reward modeled after RL balloon station keeping task
+        landing:
+            reward modeled after gymnasium Lunar Lander task
     """
 
     def __init__(self,
@@ -41,6 +52,8 @@ class GoalBee(OFBeeseClass):
                  ):
         """
         Args:
+            dt: also used to calculate reward for GOAL_HOVER
+            velocity_bounds: also used to calculate reward for GOAL_HOVER
         """
         super().__init__(
             client=client,
@@ -82,6 +95,8 @@ class GoalBee(OFBeeseClass):
         Args:
             activate: whether to activate the hover goal
         """
+        if activate:
+            self.old_pose = self.get_pose()
         self.GOAL_HOVER = activate
 
     def set_station_keep_goal(self, activate=True):
@@ -169,8 +184,29 @@ class GoalBee(OFBeeseClass):
             return -.5, info_dic
 
         # self.get_goal_vector_part()
-        return 0
-        raise NotImplementedError
+        rwd = 0
+        if self.GOAL_FORWARD:
+            new_furthest = max(self.get_pose().position.x_val, self.farthest_reached)
+            rwd += new_furthest - self.farthest_reached
+            self.farthest_reached = new_furthest
+
+        if self.GOAL_HOVER:
+            pose = self.get_pose()
+            dp = np.array([
+                pose.position.x_val - self.old_pose.position.x_val,
+                pose.position.y_val - self.old_pose.position.y_val,
+                pose.position.z_val - self.old_pose.position.z_val,
+            ])
+            rwd += (self.velocity_bounds*self.dt - np.linalg.norm(dp))
+
+            self.old_pose = pose
+        if self.GOAL_STATION_KEEP:
+            # TODO THIS
+            pass
+        if self.GOAL_LAND_ON:
+            # TODO THIS
+            pass
+        return rwd
 
     def reset(
             self,
@@ -178,7 +214,10 @@ class GoalBee(OFBeeseClass):
             seed: Optional[int] = None,
             options: Optional[dict] = None,
     ) -> Tuple[ObsType, dict]:
-        stuff = super().reset(seed=seed, options=options, )
+        stuff = super().reset(seed=seed,
+                              options=options,
+                              )
+        self.old_pose = self.get_pose()
         self.farthest_reached = self.get_pose().position.x_val
         return stuff
 
