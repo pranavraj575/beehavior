@@ -40,6 +40,9 @@ class GoalBee(OFBeeseClass):
                                   (29., 34.),  # 28,35.3
                                   )
                  },
+                 landing_positions=((0, 0, 1, 3),),
+                 station_tau=1,
+                 station_c=.5,
                  timeout=30,
                  bounds=((-7., 27), None, None),
                  img_history_steps=2,
@@ -52,6 +55,10 @@ class GoalBee(OFBeeseClass):
                  ):
         """
         Args:
+            landing_positions: list of (x,y,z,radius) for landing positions
+                collisions ignored if within radius of landing position
+            station_tau: for GOAL_STATION_KEEPING, tau from https://www.nature.com/articles/s41586-020-2939-8
+            station_c: for GOAL_STATION_KEEPING, c_cliff from https://www.nature.com/articles/s41586-020-2939-8
             dt: also used to calculate reward for GOAL_HOVER
             velocity_bounds: also used to calculate reward for GOAL_HOVER
         """
@@ -74,7 +81,9 @@ class GoalBee(OFBeeseClass):
             global_actions=global_actions,
         )
         self.bounds = bounds
-
+        self.landing_positions = np.array(landing_positions)  # (m,4) shaped array of landing positions
+        self.station_c = station_c
+        self.station_tau = station_tau
         self.GOAL_FORWARD = False
         self.GOAL_HOVER = False
         self.GOAL_STATION_KEEP = False
@@ -105,6 +114,28 @@ class GoalBee(OFBeeseClass):
             activate: whether to activate the station keeping goal
         """
         self.GOAL_STATION_KEEP = activate
+
+    def closest_landing(self, position=None, ignore_z=True):
+        """
+        gets closest landing position to specified (x,y,z) position
+        Args:
+            position: (x,y,z) np array of position to check, if None, uses self.pose
+            ignore_z: ignore z direction when calculating closest
+        Returns:
+            [x,y,z,radius] of closest landing position, distance to landing (xy distance if ignore_z)
+        """
+        if position is None:
+            pose = self.get_pose()
+            position = np.array([pose.position.x_val,
+                                 pose.position.y_val,
+                                 pose.position.z_val,
+                                 ])
+        if ignore_z:
+            dists = np.linalg.norm(self.landing_positions[:, :2] - position.view((1, 2)), axis=1)
+        else:
+            dists = np.linalg.norm(self.landing_positions[:, :3] - position.view((1, 3)), axis=1)
+        idx = np.argmin(dists)
+        return self.landing_positions[idx], dists[idx]
 
     def set_land_goal(self, activate=True):
         """
@@ -201,8 +232,17 @@ class GoalBee(OFBeeseClass):
 
             self.old_pose = pose
         if self.GOAL_STATION_KEEP:
-            # TODO THIS
-            pass
+            landing, dist = self.closest_landing(position=np.array([pose.position.x_val,
+                                                                    pose.position.y_val,
+                                                                    pose.position.z_val,
+                                                                    ]),
+                                                 ignore_z=True,
+                                                 )
+
+            if dist < landing[-1]:
+                rwd += 1
+            else:
+                rwd += self.station_c*np.exp2(-(dist - landing[-1])/self.station_tau)
         if self.GOAL_LAND_ON:
             # TODO THIS
             pass
