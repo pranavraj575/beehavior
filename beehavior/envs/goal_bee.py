@@ -2,6 +2,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 from gymnasium.core import ObsType
+from sympy.physics.units import speed_of_light
 
 from beehavior.envs.beese_class import OFBeeseClass
 
@@ -41,6 +42,7 @@ class GoalBee(OFBeeseClass):
                                   )
                  },
                  landing_positions=((0, 0, 1, 3),),
+                 landing_speed_goal=.5,
                  station_tau=1,
                  station_c=.5,
                  timeout=30,
@@ -57,6 +59,7 @@ class GoalBee(OFBeeseClass):
         Args:
             landing_positions: list of (x,y,z,radius) for landing positions
                 collisions ignored if within radius of landing position
+            landing_speed_goal: want to land at or below this speed
             station_tau: for GOAL_STATION_KEEPING, tau from https://www.nature.com/articles/s41586-020-2939-8
             station_c: for GOAL_STATION_KEEPING, c_cliff from https://www.nature.com/articles/s41586-020-2939-8
             dt: also used to calculate reward for GOAL_HOVER
@@ -81,9 +84,13 @@ class GoalBee(OFBeeseClass):
             global_actions=global_actions,
         )
         self.bounds = bounds
+
         self.landing_positions = np.array(landing_positions)  # (m,4) shaped array of landing positions
+        self.landing_speed_goal = landing_speed_goal
+
         self.station_c = station_c
         self.station_tau = station_tau
+
         self.GOAL_FORWARD = False
         self.GOAL_HOVER = False
         self.GOAL_STATION_KEEP = False
@@ -243,9 +250,61 @@ class GoalBee(OFBeeseClass):
                 rwd += 1
             else:
                 rwd += self.station_c*np.exp2(-(dist - landing[-1])/self.station_tau)
+
         if self.GOAL_LAND_ON:
             # TODO THIS
-            pass
+            # https://github.com/openai/gym/blob/master/gym/envs/box2d/lunar_lander.py
+
+            # reward shaping
+            landing_rwd_shape = 0.
+
+            # amount to weight station keeping part of reward
+            lnd_station_keeping_c = .2
+            # amount to weight keeping speed low
+            lnd_speed_c = .1
+            # amount to weight distance
+            lnd_dist_c = .1
+            # amount to weight angle flatness
+            lnd_angle_c = .1
+            # amount to weight leg touching down
+            lnd_contact_c = .1
+
+            # amnt to penalize staying in air
+            air_penalty = -.1
+
+            position = np.array([pose.position.x_val,
+                                 pose.position.y_val,
+                                 pose.position.z_val,
+                                 ])
+            kinematics = self.get_kinematics()
+            velocity = np.array([kinematics.linear_velocity.x_val,
+                                 kinematics.linear_velocity.y_val,
+                                 kinematics.linear_velocity.z_val,
+                                 ])
+
+            robot_angle = 0
+            leg_ground_contact = 0
+
+            landing, distxy = self.closest_landing(position=position,
+                                                   ignore_z=True,
+                                                   )
+            dist_xyz = np.linalg.norm(landing[:3] - position)
+
+            # penalize distance from landing
+            landing_rwd_shape += -lnd_dist_c*dist_xyz
+
+            # penalize moving quickly
+            landing_rwd_shape += -lnd_speed_c*np.linalg.norm(velocity)
+
+            # penalize angle
+            landing_rwd_shape += -lnd_angle_c*robot_angle
+
+            # reward leg touching ground
+            landing_rwd_shape += -lnd_contact_c*leg_ground_contact
+
+            rwd += landing_rwd_shape - self.past_landing_rwd_shape
+            rwd += air_penalty
+            self.past_landing_rwd_shape = landing_rwd_shape
         return rwd
 
     def reset(
@@ -259,7 +318,76 @@ class GoalBee(OFBeeseClass):
                               )
         self.old_pose = self.get_pose()
         self.farthest_reached = self.get_pose().position.x_val
+        self.past_landing_rwd_shape = 0.
         return stuff
+
+
+class FwdGoalBee(GoalBee):
+    """
+    Forward bee as subclass of goal bee
+    """
+
+    def __init__(self,
+                 client=None,
+                 dt=.25,
+                 action_bounds=None,
+                 vehicle_name='',
+                 real_time=False,
+                 collision_grace=1,
+                 of_cameras=('front', 'bottom'),
+                 initial_position={
+                     ((-5., -1.), yrng, (-1., -1.5)): 1/6
+                     for yrng in ((-1., 1.),  # -1.8,1.8
+                                  (4.20, 7.0),  # 3.14, 8.8
+                                  (10.5, 11.),  # 10,11.7
+                                  (13.5, 15.5),  # 12.7,16.5
+                                  (18.5, 25.8),  # 17.69, 26.8
+                                  (29., 34.),  # 28,35.3
+                                  )
+                 },
+                 timeout=30,
+                 goal_x=20.,
+                 bounds=((-7., 27), None, None),
+                 img_history_steps=2,
+                 input_img_space=(OFBeeseClass.INPUT_LOG_OF, OFBeeseClass.INPUT_OF_ORIENTATION,),
+                 velocity_bounds=2.,
+                 action_type=OFBeeseClass.ACTION_ACCELERATION_XY,
+                 fix_z_to=None,
+                 of_ignore_angular_velocity=True,
+                 global_actions=False,
+                 ):
+        super().__init__(
+            client=client,
+            dt=dt,
+            action_bounds=action_bounds,
+            vehicle_name=vehicle_name,
+            real_time=real_time,
+            collision_grace=collision_grace,
+            of_cameras=of_cameras,
+            initial_position=initial_position,
+            timeout=timeout,
+            bounds=bounds,
+            img_history_steps=img_history_steps,
+            input_img_space=input_img_space,
+            velocity_bounds=velocity_bounds,
+            action_type=action_type,
+            fix_z_to=fix_z_to,
+            of_ignore_angular_velocity=of_ignore_angular_velocity,
+            global_actions=global_actions,
+        )
+        self.set_forward_goal(activate=True)
+        self.goal_x = goal_x
+
+    def get_termination(self, collided):
+        """
+        terminate if out of bounds or in goal region
+        """
+        term, trunc = super().get_termination(collided=collided)
+        if term:
+            return term, trunc
+        pose = self.get_pose()
+        term = pose.position.x_val >= self.goal_x
+        return term, trunc
 
 
 if __name__ == '__main__':

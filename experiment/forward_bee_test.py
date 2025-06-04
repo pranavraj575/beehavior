@@ -15,7 +15,6 @@ if __name__ == '__main__':
     import beehavior
     from beehavior.envs.forward_bee import ForwardBee
 
-
     DIR = os.path.dirname(os.path.dirname(__file__))
 
     PARSER = argparse.ArgumentParser(
@@ -76,6 +75,8 @@ if __name__ == '__main__':
                         help="number of past models to save (-1 for all)")
     PARSER.add_argument("--testing-tunnel", type=int, nargs='+', required=False, default=[1],
                         help="index of tunnels to test in, 1 is the normal one")
+    PARSER.add_argument("--nondeterministic-testjectory", action='store_true', required=False,
+                        help='use randomness in testjectory')
 
     PARSER.add_argument("--reset", action='store_true', required=False,
                         help="reset training")
@@ -127,12 +128,20 @@ if __name__ == '__main__':
     for d in (output_dir, traj_dir, model_dir):
         if not os.path.exists(d): os.makedirs(d)
     print('saving to', output_dir)
-    env = gym.make('ForwardBee-v0',
-                   dt=args.dt,
-                   input_img_space=img_input_space,
-                   action_type=args.action_type,
-                   img_history_steps=args.history_steps,
-                   input_velocity_with_noise=args.include_vel_with_noise,
+
+    env_config = {'name': 'ForwardBee-v0',
+                  'kwargs': dict(
+                      dt=args.dt,
+                      input_img_space=img_input_space,
+                      action_type=args.action_type,
+                      img_history_steps=args.history_steps,
+                      input_velocity_with_noise=args.include_vel_with_noise,
+                  )}
+    f = open(os.path.join(output_dir, 'env_config.txt'), 'w')
+    f.write(str(env_config))
+    f.close()
+    env = gym.make(env_config['name'],
+                   **env_config['kwargs'],
                    )
     f = open(network_file, 'r')
     policy_kwargs = dict(
@@ -241,7 +250,7 @@ if __name__ == '__main__':
         old_pose = env.unwrapped.get_pose()
         done = False
         while not done:
-            action, _ = model.predict(observation=obs, deterministic=False)
+            action, _ = model.predict(observation=obs, deterministic=not args.nondeterministic_testjectory)
 
             obs, rwd, done, term, info = env.step(action)
             pose = env.unwrapped.get_pose()

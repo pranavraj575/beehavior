@@ -148,6 +148,7 @@ class BeeseClass(gym.Env):
                     truncation, info)
         """
         pose = self.get_pose()
+        action = action.copy()  # to prevent mutation of action
         # orient_eulerian = self.get_orientation_eulerian(
         #    quaternion=(pose.orientation.x_val, pose.orientation.y_val, pose.orientation.z_val, pose.orientation.w_val)
         # )
@@ -282,7 +283,7 @@ class BeeseClass(gym.Env):
         initial_pos = None
         if self.initial_pos is not None:
             initial_pos = self.initial_pos
-        if options is not None and 'initial_pos' in options:
+        if (options is not None) and ('initial_pos' in options) and (options['initial_pos'] is not None):
             # overrides default
             initial_pos = options['initial_pos']
 
@@ -426,6 +427,12 @@ class BeeseClass(gym.Env):
         """
         return self.client.simGetVehiclePose(vehicle_name=self.vehicle_name)
 
+    def get_kinematics(self):
+        """
+        gets pose of agent in environment, pose object has a .position and .orientation
+        """
+        return self.client.simGetGroundTruthKinematics(vehicle_name=self.vehicle_name)
+
     def _get_rotation(self, pose=None):
         """
         gets scipy Rotation object from pose (if given) or self.get_pose()
@@ -552,6 +559,13 @@ class OFBeeseClass(BeeseClass):
         self.of_ignore_angular_velocity = of_ignore_angular_velocity
         self.of_cameras = of_cameras
         self.input_img_space = set(input_img_space)
+        self.ordered_input_img_space = tuple([input_key for input_key in (self.INPUT_RAW_OF,
+                                                                          self.INPUT_LOG_OF,
+                                                                          self.INPUT_OF_ORIENTATION,
+                                                                          self.INPUT_INV_DEPTH_IMG,
+                                                                          )
+                                              if input_key in self.input_img_space])
+
         self.imgs_per_step = (int(self.INPUT_RAW_OF in self.input_img_space) +
                               int(self.INPUT_LOG_OF in self.input_img_space) +
                               2*int(self.INPUT_OF_ORIENTATION in self.input_img_space) +

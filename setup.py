@@ -12,6 +12,7 @@ setup(
                       'gymnasium',
                       'stable-baselines3[extra]',
                       'scipy',
+                      'shap',
                       # 'airsim', TODO: NEED TO INSTALL THIS AFTER, it needs numpy and msgpack to already be installed
                       ],
     license='Liscence to Krill',

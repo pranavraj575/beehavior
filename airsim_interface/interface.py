@@ -266,10 +266,7 @@ def of_geo(client: airsim.MultirotorClient,
     T = np.array(
         [-kinematics.linear_velocity.y_val, -kinematics.linear_velocity.z_val, kinematics.linear_velocity.x_val])
     if camera_name in CAMERA_NAME_TO_BASIS:
-        print('HERE')
-        print(np.round(T,4))
         T=T@CAMERA_NAME_TO_BASIS[camera_name]
-        print(np.round(T,4))
 
     # Rotational velocity (angular velocity)
     omega = np.array(

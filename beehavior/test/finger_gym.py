@@ -131,6 +131,7 @@ if __name__ == '__main__':
                 this_step = observation[camera][-3:]
 
                 OF_log_magnitude = this_step[0]
+                OF_magnitude = np.exp(OF_log_magnitude)
                 OF_orientation = this_step[1:]
 
                 log_mag_min = np.min(OF_log_magnitude)
@@ -148,7 +149,8 @@ if __name__ == '__main__':
                 ss = 10
                 h, w = np.meshgrid(np.arange(OF_log_magnitude.shape[0]), np.arange(OF_log_magnitude.shape[1]))
 
-                of_disp = np.transpose(OF_orientation, axes=(0, 2, 1))
+                of_disp = np.transpose(OF_orientation*np.expand_dims(OF_magnitude, 0),
+                                       axes=(0, 2, 1))
                 # inverted from image (height is top down) to np plot (y dim  bottom up)
                 plt.quiver(w[::ss, ::ss], h[::ss, ::ss],
                            of_disp[0, ::ss, ::ss],

@@ -9,7 +9,7 @@
             },
             {
                 'type': 'CNN',
-                'channels': 16,
+                'channels': 12,
                 'kernel': (5, 5),
                 'stride': (3, 3),
                 'padding': (0, 0),
