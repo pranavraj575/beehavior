@@ -12,12 +12,6 @@ class ForwardBee(OFBeeseClass):
     """
 
     def __init__(self,
-                 client=None,
-                 dt=.25,
-                 action_bounds=None,
-                 vehicle_name='',
-                 real_time=False,
-                 collision_grace=1,
                  of_cameras=('front',),
                  initial_position={
                      ((-5., -1.), yrng, (-1., -6.9)): 1/6
@@ -32,38 +26,21 @@ class ForwardBee(OFBeeseClass):
                  timeout=30,
                  bounds=((-7., 27), None, None),
                  goal_x=20.,
-                 img_history_steps=2,
-                 input_img_space=(OFBeeseClass.INPUT_LOG_OF, OFBeeseClass.INPUT_OF_ORIENTATION,),
-                 velocity_bounds=2.,
-                 action_type=OFBeeseClass.ACTION_ACCELERATION_XY,
-                 fix_z_to=None,
-                 of_ignore_angular_velocity=True,
                  input_velocity_with_noise=None,
-                 global_actions=False,
+                 **kwargs,
                  ):
         """
         Args:
             height_range: height goal
             input_velocity_with_noise: whether to include noisy velocity in input
+            **kwargs: keyword arguments for OFBeeseClass and BeeseClass
         """
         self.input_vel_w_noise = input_velocity_with_noise
         super().__init__(
-            client=client,
-            dt=dt,
-            action_bounds=action_bounds,
-            vehicle_name=vehicle_name,
-            real_time=real_time,
-            collision_grace=collision_grace,
-            of_cameras=of_cameras,
             initial_position=initial_position,
             timeout=timeout,
-            img_history_steps=img_history_steps,
-            input_img_space=input_img_space,
-            velocity_bounds=velocity_bounds,
-            action_type=action_type,
-            fix_z_to=fix_z_to,
-            of_ignore_angular_velocity=of_ignore_angular_velocity,
-            global_actions=global_actions,
+            of_cameras=of_cameras,
+            **kwargs,
         )
         self.bounds = bounds
         self.goal_x = goal_x

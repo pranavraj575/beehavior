@@ -10,47 +10,22 @@ class HiBee(OFBeeseClass):
     """
 
     def __init__(self,
-                 client=None,
-                 dt=.25,
-                 action_bounds=None,
-                 vehicle_name='',
-                 real_time=False,
-                 collision_grace=1,
-                 of_cameras='front',
+                 of_cameras=('front',),
                  height_range=(2, 3),
                  initial_position=((-1., 0.), (-1., 1.), (-1., -1.5)),
                  timeout=30,
-                 img_history_steps=2,
-                 input_img_space=(OFBeeseClass.INPUT_LOG_OF, OFBeeseClass.INPUT_OF_ORIENTATION,),
-                 velocity_bounds=2.,
-                 action_type=OFBeeseClass.ACTION_VELOCITY,
-                 fix_z_to=None,
-                 of_ignore_angular_velocity=True,
-                 central_strip_width=None,
-                 global_actions=False,
+                 **kwargs,
                  ):
         """
         Args:
             height_range: height goal
+            **kwargs: keyword arguments for OFBeeseClass and BeeseClass
         """
         super().__init__(
-            client=client,
-            dt=dt,
-            action_bounds=action_bounds,
-            vehicle_name=vehicle_name,
-            real_time=real_time,
-            collision_grace=collision_grace,
             of_cameras=of_cameras,
             initial_position=initial_position,
             timeout=timeout,
-            img_history_steps=img_history_steps,
-            input_img_space=input_img_space,
-            velocity_bounds=velocity_bounds,
-            action_type=action_type,
-            fix_z_to=fix_z_to,
-            of_ignore_angular_velocity=of_ignore_angular_velocity,
-            central_strip_width=central_strip_width,
-            global_actions=global_actions,
+            **kwargs,
         )
         self.ht_rng = height_range
         # shoot for average

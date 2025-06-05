@@ -1,5 +1,8 @@
 from typing import Tuple, Optional
+
+import airsim
 import gymnasium as gym
+from grpc.aio import AioRpcError
 from gymnasium.core import ActType, ObsType
 import numpy as np
 import math
@@ -35,7 +38,7 @@ class BeeseClass(gym.Env):
                  real_time=False,
                  collision_grace=1,
                  initial_position=None,
-                 action_type=ACTION_VELOCITY,
+                 action_type=ACTION_ACCELERATION,
                  velocity_bounds=2.,
                  fix_z_to=None,
                  timeout=300,
@@ -45,6 +48,8 @@ class BeeseClass(gym.Env):
         Args:
             client: airsim interface client
                 if None, makes own client
+                if not a airsim.MultirotorClient object, makes a dummy environment that cannot use .step()
+                    i.e. pass in client=False to do this
             dt: actions run for this amount of time
             action_bounds: maximum action magnitude that agent can take
                 if action is ROLL_PITCH_YAW, this is max RADIANS that agent can roll/pitch
@@ -68,9 +73,14 @@ class BeeseClass(gym.Env):
                         (1,0,0) is either positive x (global) or direction agent is facing (local)
         """
         super().__init__()
+
         if client is None:
             client = connect_client(client=client)
         self.client = client
+        self.valid_client = (type(self.client) == airsim.MultirotorClient)
+        if not self.valid_client:
+            print("WARNING: dummy environment made without valid client, "
+                  "will not be able to interface with simulator (cannot use step etc.)")
 
         self.vehicle_name = vehicle_name
         self.dt = dt
@@ -275,8 +285,9 @@ class BeeseClass(gym.Env):
             (observation, info dict)
         """
         super().reset(seed=seed)
-        self.client.reset()
-        self.client = connect_client(client=self.client)
+        if self.valid_client:
+            self.client.reset()
+            self.client = connect_client(client=self.client)
         self.update_recent_colision()
         self.col_cnt = self.collision_grace
         self.env_time = 0
@@ -287,7 +298,7 @@ class BeeseClass(gym.Env):
             # overrides default
             initial_pos = options['initial_pos']
 
-        if initial_pos is not None:
+        if self.valid_client and initial_pos is not None:
             if type(initial_pos) == dict:  # if initial_pos is a probability dict of boxes, choose which one to use
                 r = np.random.rand()
                 temp = None
@@ -519,22 +530,12 @@ class OFBeeseClass(BeeseClass):
     #   used to confirm whether a learning task is possible with depth information
 
     def __init__(self,
-                 client=None,
-                 dt=.25,
-                 action_bounds=None,
-                 vehicle_name='',
-                 real_time=False,
-                 collision_grace=1,
                  of_cameras=('front', 'bottom'),
-                 initial_position=None,
-                 timeout=300,
+                 default_camera_shape=(2, 240, 320),
                  img_history_steps=2,
                  input_img_space=(INPUT_LOG_OF, INPUT_OF_ORIENTATION,),
-                 velocity_bounds=2.,
-                 action_type=BeeseClass.ACTION_ROLL_PITCH_THRUST,
-                 fix_z_to=None,
                  of_ignore_angular_velocity=True,
-                 global_actions=False,
+                 **kwargs,
                  ):
         """
         Args:
@@ -545,7 +546,7 @@ class OFBeeseClass(BeeseClass):
             real_time:
             of_cameras: camera to take OF information from, if tuple, input space is a dict of images
                 this will be acted on independently by the cnns, then the output vectors will be joined
-            timeout:
+            default_camera_shape: default shape for cameras, used when client is not defined
             img_history_steps: number of images to show at each time step
             of_mapping: mapping to apply to optic flow
             input_img_space: list of keys that determines what the agent can visually see, keys are
@@ -558,6 +559,7 @@ class OFBeeseClass(BeeseClass):
         self.img_stack = None
         self.of_ignore_angular_velocity = of_ignore_angular_velocity
         self.of_cameras = of_cameras
+        self.default_camera_shape = default_camera_shape
         self.input_img_space = set(input_img_space)
         self.ordered_input_img_space = tuple([input_key for input_key in (self.INPUT_RAW_OF,
                                                                           self.INPUT_LOG_OF,
@@ -573,18 +575,7 @@ class OFBeeseClass(BeeseClass):
                               )
         self.img_stack_size = img_history_steps*self.imgs_per_step
         super().__init__(
-            client=client,
-            dt=dt,
-            action_bounds=action_bounds,
-            vehicle_name=vehicle_name,
-            real_time=real_time,
-            collision_grace=collision_grace,
-            initial_position=initial_position,
-            action_type=action_type,
-            velocity_bounds=velocity_bounds,
-            fix_z_to=fix_z_to,
-            timeout=timeout,
-            global_actions=global_actions,
+            **kwargs,
         )
 
     def define_observation_space(self):
@@ -711,7 +702,10 @@ class OFBeeseClass(BeeseClass):
         shape of self.get_of_data()
         costly, should not be run too many times, as we can either save this shape or just look at the last observation
         """
-        shape = get_of_geo_shape(client=self.client, camera_name=self.of_cameras)
+        if self.valid_client:
+            shape = get_of_geo_shape(client=self.client, camera_name=self.of_cameras)
+        else:
+            shape = tuple(self.default_camera_shape for cam_name in self.of_cameras)
         return shape
 
 

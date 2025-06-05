@@ -67,6 +67,16 @@ if __name__ == '__main__':
     for d in (output_dir, img_dir):
         if not os.path.exists(d): os.makedirs(d)
 
+
+    # load previous trajectory if found
+    steps = None
+    filename = os.path.join(output_dir, 'saved_traj.pkl')
+    if os.path.exists(filename) and not args.retry:
+        f = open(filename, 'rb')
+        steps = pkl.load(f)
+        f.close()
+
+
     if args.env_config_file is None:
         env_config = {'name': 'GoalBee-v0',
                       'kwargs': dict(
@@ -80,6 +90,9 @@ if __name__ == '__main__':
         env_config = ast.literal_eval(f.read())
         f.close()
 
+    if steps is not None:
+        # disable client
+        env_config['kwargs']['client']=False
     env = gym.make(env_config['name'],
                    **env_config['kwargs'],
                    )
@@ -106,13 +119,7 @@ if __name__ == '__main__':
                 }
 
 
-    steps = []
-    filename = os.path.join(output_dir, 'saved_traj.pkl')
-    if os.path.exists(filename) and not args.retry:
-        f = open(filename, 'rb')
-        steps = pkl.load(f)
-        f.close()
-    else:
+    if steps is None:
         obs, info = env.reset(options={
             'initial_pos': args.initial_pos if args.initial_pos is not None else None
         })

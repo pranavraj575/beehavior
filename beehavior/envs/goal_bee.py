@@ -24,13 +24,6 @@ class GoalBee(OFBeeseClass):
     """
 
     def __init__(self,
-                 client=None,
-                 dt=.25,
-                 action_bounds=None,
-                 vehicle_name='',
-                 real_time=False,
-                 collision_grace=1,
-                 of_cameras=('front', 'bottom'),
                  initial_position={
                      ((-5., -1.), yrng, (-1., -1.5)): 1/6
                      for yrng in ((-1., 1.),  # -1.8,1.8
@@ -47,13 +40,7 @@ class GoalBee(OFBeeseClass):
                  station_c=.5,
                  timeout=30,
                  bounds=((-7., 27), None, None),
-                 img_history_steps=2,
-                 input_img_space=(OFBeeseClass.INPUT_LOG_OF, OFBeeseClass.INPUT_OF_ORIENTATION,),
-                 velocity_bounds=2.,
-                 action_type=OFBeeseClass.ACTION_ACCELERATION_XY,
-                 fix_z_to=None,
-                 of_ignore_angular_velocity=True,
-                 global_actions=False,
+                 **kwargs,
                  ):
         """
         Args:
@@ -64,24 +51,12 @@ class GoalBee(OFBeeseClass):
             station_c: for GOAL_STATION_KEEPING, c_cliff from https://www.nature.com/articles/s41586-020-2939-8
             dt: also used to calculate reward for GOAL_HOVER
             velocity_bounds: also used to calculate reward for GOAL_HOVER
+            **kwargs: keyword arguments for OFBeeseClass and BeeseClass
         """
         super().__init__(
-            client=client,
-            dt=dt,
-            action_bounds=action_bounds,
-            vehicle_name=vehicle_name,
-            real_time=real_time,
-            collision_grace=collision_grace,
-            of_cameras=of_cameras,
             initial_position=initial_position,
             timeout=timeout,
-            img_history_steps=img_history_steps,
-            input_img_space=input_img_space,
-            velocity_bounds=velocity_bounds,
-            action_type=action_type,
-            fix_z_to=fix_z_to,
-            of_ignore_angular_velocity=of_ignore_angular_velocity,
-            global_actions=global_actions,
+            **kwargs,
         )
         self.bounds = bounds
 
@@ -328,52 +303,16 @@ class FwdGoalBee(GoalBee):
     """
 
     def __init__(self,
-                 client=None,
-                 dt=.25,
-                 action_bounds=None,
-                 vehicle_name='',
-                 real_time=False,
-                 collision_grace=1,
-                 of_cameras=('front', 'bottom'),
-                 initial_position={
-                     ((-5., -1.), yrng, (-1., -1.5)): 1/6
-                     for yrng in ((-1., 1.),  # -1.8,1.8
-                                  (4.20, 7.0),  # 3.14, 8.8
-                                  (10.5, 11.),  # 10,11.7
-                                  (13.5, 15.5),  # 12.7,16.5
-                                  (18.5, 25.8),  # 17.69, 26.8
-                                  (29., 34.),  # 28,35.3
-                                  )
-                 },
-                 timeout=30,
                  goal_x=20.,
-                 bounds=((-7., 27), None, None),
-                 img_history_steps=2,
-                 input_img_space=(OFBeeseClass.INPUT_LOG_OF, OFBeeseClass.INPUT_OF_ORIENTATION,),
-                 velocity_bounds=2.,
-                 action_type=OFBeeseClass.ACTION_ACCELERATION_XY,
-                 fix_z_to=None,
-                 of_ignore_angular_velocity=True,
-                 global_actions=False,
+                 **kwargs,
                  ):
+        """
+        Args:
+            goal_x:
+            **kwargs: keyword arguments for GoalBee, OFBeeseClass and BeeseClass
+        """
         super().__init__(
-            client=client,
-            dt=dt,
-            action_bounds=action_bounds,
-            vehicle_name=vehicle_name,
-            real_time=real_time,
-            collision_grace=collision_grace,
-            of_cameras=of_cameras,
-            initial_position=initial_position,
-            timeout=timeout,
-            bounds=bounds,
-            img_history_steps=img_history_steps,
-            input_img_space=input_img_space,
-            velocity_bounds=velocity_bounds,
-            action_type=action_type,
-            fix_z_to=fix_z_to,
-            of_ignore_angular_velocity=of_ignore_angular_velocity,
-            global_actions=global_actions,
+            **kwargs,
         )
         self.set_forward_goal(activate=True)
         self.goal_x = goal_x
