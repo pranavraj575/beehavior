@@ -67,7 +67,6 @@ if __name__ == '__main__':
     for d in (output_dir, img_dir):
         if not os.path.exists(d): os.makedirs(d)
 
-
     # load previous trajectory if found
     steps = None
     filename = os.path.join(output_dir, 'saved_traj.pkl')
@@ -75,7 +74,6 @@ if __name__ == '__main__':
         f = open(filename, 'rb')
         steps = pkl.load(f)
         f.close()
-
 
     if args.env_config_file is None:
         env_config = {'name': 'GoalBee-v0',
@@ -92,7 +90,7 @@ if __name__ == '__main__':
 
     if steps is not None:
         # disable client
-        env_config['kwargs']['client']=False
+        env_config['kwargs']['client'] = False
     env = gym.make(env_config['name'],
                    **env_config['kwargs'],
                    )
@@ -120,6 +118,7 @@ if __name__ == '__main__':
 
 
     if steps is None:
+        steps = []
         obs, info = env.reset(options={
             'initial_pos': args.initial_pos if args.initial_pos is not None else None
         })
@@ -164,9 +163,9 @@ if __name__ == '__main__':
             for cam_name in env.unwrapped.of_cameras:
                 OF_scale[cam_name] = np.mean([
                     np.max(
-                        np.exp(dic['obs'][cam_name][-count-1:][0])
+                        np.exp(dic['obs'][cam_name][-count - 1:][0])
                         if GoalBee.INPUT_LOG_OF in env.unwrapped.input_img_space
-                        else dic['obs'][cam_name][-count-1:][0]
+                        else dic['obs'][cam_name][-count - 1:][0]
                     )
                     for dic in steps]
                 )
@@ -174,8 +173,15 @@ if __name__ == '__main__':
         for t, dic in enumerate(steps):
             if t%capture_interval:
                 continue
+            obs = dic['obs']
+            np_action, _ = model.predict(obs, deterministic=True)
+            obs_tense, vectorized = model.policy.obs_to_tensor(obs)
+            actions, value, log_prob = model.policy.forward(obs_tense, deterministic=True)
+            print(np_action, actions.cpu().detach().numpy())
+            print(np_action-actions.cpu().detach().numpy())
+            print()
+            # print(actions, value, log_prob)
             for cam_name in env.unwrapped.of_cameras:
-                obs = dic['obs']
                 OF = dict()
                 i = 0
                 for input_k in env.unwrapped.ordered_input_img_space[::-1]:

@@ -97,6 +97,9 @@ class BeeseClass(gym.Env):
 
         # in euclidean cases, we make the output on a [-1,1] box, then scale it to a radius action_bounds ball later
         # in roll, pitch, yaw, we do not scale as it doesnt really make (non euclidean)
+        # we also keep the action space approximately a [-1,1] box, the network seems to make more sense if the
+        #   output space is all around the same scale. we scale network outputs in the .step() function before sending
+        #   the command to simulation
         if self.action_type == self.ACTION_VELOCITY:
             if self.action_bounds is None:
                 self.action_bounds = 1.
@@ -138,9 +141,10 @@ class BeeseClass(gym.Env):
         elif self.action_type == self.ACTION_ROLL_PITCH_THRUST:
             if self.action_bounds is None:
                 self.action_bounds = np.pi/36  # 5 degrees, which apparently is quite steep
+            # in .step(), roll and pitch will be multiplied by self.action_bounds
             self.action_space = gym.spaces.Box(
-                low=np.array([-self.action_bounds, -self.action_bounds, 0]),
-                high=np.array([self.action_bounds, self.action_bounds, 1]),
+                low=np.array([-1, -1, 0]),
+                high=np.array([1, 1, 1]),
                 shape=(3,),
                 dtype=np.float64,
             )
@@ -233,6 +237,7 @@ class BeeseClass(gym.Env):
                                                            )
         elif self.action_type == self.ACTION_ROLL_PITCH_THRUST:
             roll, pitch, thrust = action
+            roll, pitch = roll*self.action_bounds, pitch*self.action_bounds
             cmd = lambda: self.client.moveByRollPitchYawrateThrottleAsync(roll=roll,
                                                                           pitch=pitch,
                                                                           yaw_rate=0,

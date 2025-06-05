@@ -70,8 +70,8 @@ class DicWrapper(torch.nn.Module):
         return self.network.forward(tensor_to_dict(tensor=tense, ksp=self.ksp))
 
 
-def shap_val(model):
-    pass
+def shap_val(model,background):
+    explainer = shap.DeepExplainer(model, background_tensor)
 
 
 if __name__ == '__main__':
