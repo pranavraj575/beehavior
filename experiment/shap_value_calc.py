@@ -117,8 +117,8 @@ def shap_val(model, explanation_data, baseline_tensor, ):
     # baseline should be about 10% sample from explanation
     explainer = shap.DeepExplainer(model, baseline_tensor, )
     for i in range(len(explanation_data)):
-        print(explainer.shap_values(explanation_data[i:i+1], check_additivity=False))
-    #print(model.forward(background_tensor).cpu().detach().numpy())
+        print(explainer.shap_values(explanation_data[i:i + 1], check_additivity=False))
+    # print(model.forward(background_tensor).cpu().detach().numpy())
     print(baseline_tensor.shape)
     print(model.forward(baseline_tensor).shape)
 
@@ -137,7 +137,21 @@ if __name__ == '__main__':
         assert test[k].shape == test2[k].shape
 
 
-    # define architecture or load model here
+    class NeuralNet(torch.nn.Module):
+        def __init__(self):
+            super(NeuralNet, self).__init__()
+            self.fc1 = torch.nn.Linear(360, 8)
+            self.test_lyr=torch.nn.Tanh()
+            self.fc2 = torch.nn.Linear(8, 1)
+
+        def forward(self, x):
+            x=self.fc1(x)
+            #x = torch.relu(x)
+            x=self.test_lyr(x)
+            x = self.fc2(x)
+            return x
+
+
     class DNeuralNet(torch.nn.Module):
         def __init__(self):
             super(DNeuralNet, self).__init__()
@@ -159,6 +173,14 @@ if __name__ == '__main__':
     print([param.shape for param in model.parameters()])
     print([param.shape for param in wrapped_model.parameters()])
     print(wrapped_model.forward(tense=tense), model.forward(example_input))
+
+    torch.random.manual_seed(69)
+    explanation_data = torch.rand(1000, 360)
+    model = NeuralNet()
+    shap_val(model=model,
+             explanation_data=explanation_data,
+             baseline_tensor=explanation_data[torch.randint(0, len(explanation_data), (200,))],
+             )
 
     quit()
 
