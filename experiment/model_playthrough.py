@@ -17,6 +17,7 @@ if __name__ == '__main__':
     import beehavior
     from beehavior.envs.goal_bee import GoalBee
     from experiment.trajectory_anal import create_gif
+    from experiment.shap_value_calc import shap_val, DicWrapper, dict_to_tensor
 
     DIR = os.path.dirname(os.path.dirname(__file__))
 
@@ -44,12 +45,18 @@ if __name__ == '__main__':
                         help="skip this many timesteps when displaying OF video")
     PARSER.add_argument("--ignorientation", action='store_true', required=False,
                         help="ignore OF orientation")
-    PARSER.add_argument("--clear-imgs", action='store_true', required=False,
-                        help="clear any previous imgs")
-    PARSER.add_argument("--retry", action='store_true', required=False,
-                        help="take another trajectory")
 
+    PARSER.add_argument("--num-trajectories", type=int, required=False, default=1,
+                        help="number of trajectories to capture")
+
+    PARSER.add_argument("--reset", action='store_true', required=False,
+                        help="overwrite previous trajectories")
+    PARSER.add_argument("--append", action='store_true', required=False,
+                        help="append sampled trajectory to previously captured trajectories")
+    PARSER.add_argument("--device", action='store', required=False, default='cpu',
+                        help="device to store tensors on")
     args = PARSER.parse_args()
+    device=args.device
     output_dir = args.display_output_dir
     if output_dir is None:
         output_dir = os.path.join(DIR,
@@ -61,7 +68,7 @@ if __name__ == '__main__':
     # model_dir = os.path.join(output_dir, 'past_models')
     img_dir = os.path.join(output_dir, 'images')
 
-    if args.clear_imgs and os.path.exists(img_dir):
+    if os.path.exists(img_dir):
         shutil.rmtree(img_dir)
 
     for d in (output_dir, img_dir):
@@ -70,10 +77,12 @@ if __name__ == '__main__':
     # load previous trajectory if found
     steps = None
     filename = os.path.join(output_dir, 'saved_traj.pkl')
-    if os.path.exists(filename) and not args.retry:
+    if os.path.exists(filename) and not args.reset:
         f = open(filename, 'rb')
         steps = pkl.load(f)
         f.close()
+    # we are grabbing a trajectory if steps is empty, or if we are appending to steps
+    traj_sampling = ((steps is None) or (args.append)) and (args.num_trajectories > 0)
 
     if args.env_config_file is None:
         env_config = {'name': 'GoalBee-v0',
@@ -88,7 +97,7 @@ if __name__ == '__main__':
         env_config = ast.literal_eval(f.read())
         f.close()
 
-    if steps is not None:
+    if not traj_sampling:
         # disable client
         env_config['kwargs']['client'] = False
     env = gym.make(env_config['name'],
@@ -96,10 +105,11 @@ if __name__ == '__main__':
                    )
 
     model = MODEL.load(args.model, env=env)
-
+    model.policy.to(device)
     print(model.policy)
     print(type(model.policy))
     print('saving to', output_dir)
+
 
 
     def pose_to_dic(pose):
@@ -119,35 +129,52 @@ if __name__ == '__main__':
 
     if steps is None:
         steps = []
-        obs, info = env.reset(options={
-            'initial_pos': args.initial_pos if args.initial_pos is not None else None
-        })
-        old_pose = env.unwrapped.get_pose()
-        done = False
-        while not done:
-            action, _ = model.predict(observation=obs, deterministic=True)
 
-            obs, rwd, done, term, info = env.step(action)
-            pose = env.unwrapped.get_pose()
-
-            steps.append({
-                'old_pose': pose_to_dic(old_pose),
-                'obs': obs,
-                'action': action,
-                'reward': rwd,
-                'pose': pose_to_dic(pose),
-                'info': info,
+    if traj_sampling:
+        for _ in range(args.num_trajectories):
+            obs, info = env.reset(options={
+                'initial_pos': args.initial_pos if args.initial_pos is not None else None
             })
-            old_pose = pose
+            old_pose = env.unwrapped.get_pose()
+            done = False
+            while not done:
+                action, _ = model.predict(observation=obs, deterministic=True)
 
+                obs, rwd, done, term, info = env.step(action)
+                pose = env.unwrapped.get_pose()
+
+                steps.append({
+                    'old_pose': pose_to_dic(old_pose),
+                    'obs': obs,
+                    'action': action,
+                    'reward': rwd,
+                    'pose': pose_to_dic(pose),
+                    'info': info,
+                })
+                old_pose = pose
+        print('completed sample, saving')
         f = open(filename, 'wb')
         pkl.dump(steps, f)
         f.close()
+        print('saved')
 
     import matplotlib.pyplot as plt
 
     capture_interval = args.capture_interval
 
+    tensor_dic_observations = [
+        model.policy.obs_to_tensor(dic['obs'])[0] for dic in steps
+    ]
+    tensor_observations, ksp = dict_to_tensor(dic=tensor_dic_observations)
+    wrapped_model = DicWrapper(model.policy,
+                               ksp=ksp,
+                               proc_model_output=lambda x: x[0].flatten(),
+                               model_call_kwargs={'deterministic': True}
+                               )
+    shap_val(model=wrapped_model,
+             explanation_data=tensor_observations,
+             baseline_tensor=tensor_observations,
+             )
     # display optic flow
     if ((GoalBee.INPUT_LOG_OF in env.unwrapped.input_img_space) or
             (GoalBee.INPUT_RAW_OF in env.unwrapped.input_img_space)):
@@ -175,11 +202,9 @@ if __name__ == '__main__':
                 continue
             obs = dic['obs']
             np_action, _ = model.predict(obs, deterministic=True)
-            obs_tense, vectorized = model.policy.obs_to_tensor(obs)
+            # obs_tense, vectorized = model.policy.obs_to_tensor(obs)
+            obs_tense = tensor_dic_observations[t]
             actions, value, log_prob = model.policy.forward(obs_tense, deterministic=True)
-            print(np_action, actions.cpu().detach().numpy())
-            print(np_action-actions.cpu().detach().numpy())
-            print()
             # print(actions, value, log_prob)
             for cam_name in env.unwrapped.of_cameras:
                 OF = dict()
