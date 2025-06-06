@@ -63,6 +63,31 @@ def tensor_to_dict(tensor, ksp):
     return dic
 
 
+class GymWrapper(torch.nn.Module):
+    """
+    network is a gym network, network.forward outputs a tuple
+        this returns the ith element of the tuple
+    """
+
+    def __init__(self,
+                 network: torch.nn.Module,
+                 i=0,
+                 model_call_kwargs=None,
+                 ):
+        super(GymWrapper, self).__init__()
+        self.network = network
+        self.i = i
+        if model_call_kwargs is None:
+            model_call_kwargs = dict()
+        self.model_call_kwargs = model_call_kwargs
+
+    def forward(self, tense):
+        mod_out = self.network.forward(tense, **self.model_call_kwargs)[self.i]
+        if len(mod_out.shape) == 1:
+            mod_out = torch.unsqueeze(mod_out, dim=0)
+        return mod_out
+
+
 class DicWrapper(torch.nn.Module):
     """
     network is a torch module that takes in a dictionary
@@ -116,14 +141,20 @@ class DicWrapper(torch.nn.Module):
 def shap_val(model, explanation_data, baseline_tensor, ):
     # baseline should be about 10% sample from explanation
     explainer = shap.DeepExplainer(model, baseline_tensor, )
+    explanations = []
     for i in range(len(explanation_data)):
-        print(explainer.shap_values(explanation_data[i:i + 1], check_additivity=False))
+        explanation = explainer.shap_values(explanation_data[i:i + 1], check_additivity=False)
+        explanations.append(explanation)
+
     # print(model.forward(background_tensor).cpu().detach().numpy())
     print(baseline_tensor.shape)
     print(model.forward(baseline_tensor).shape)
+    print(explanations[0][0].shape)
+    return explanations
 
 
 if __name__ == '__main__':
+    n = 100
     test = {
         'a': np.random.rand(*(1 + np.arange(7))),
         'b': np.random.rand(4),
@@ -141,13 +172,13 @@ if __name__ == '__main__':
         def __init__(self):
             super(NeuralNet, self).__init__()
             self.fc1 = torch.nn.Linear(360, 8)
-            self.test_lyr=torch.nn.Tanh()
+            self.test_lyr = torch.nn.Tanh()
             self.fc2 = torch.nn.Linear(8, 1)
 
         def forward(self, x):
-            x=self.fc1(x)
-            #x = torch.relu(x)
-            x=self.test_lyr(x)
+            x = self.fc1(x)
+            # x = torch.relu(x)
+            x = self.test_lyr(x)
             x = self.fc2(x)
             return x
 
@@ -175,12 +206,84 @@ if __name__ == '__main__':
     print(wrapped_model.forward(tense=tense), model.forward(example_input))
 
     torch.random.manual_seed(69)
-    explanation_data = torch.rand(1000, 360)
+    explanation_data = torch.rand(n, 360)
     model = NeuralNet()
     shap_val(model=model,
              explanation_data=explanation_data,
              baseline_tensor=explanation_data[torch.randint(0, len(explanation_data), (200,))],
              )
+
+    import gymnasium as gym
+    from stable_baselines3 import PPO
+
+    env = gym.make('MountainCarContinuous-v0')
+    model = PPO(policy='MlpPolicy',
+                env=env,
+                device='cpu'
+                )
+    explanation_data = torch.concatenate([model.policy.obs_to_tensor(env.observation_space.sample())[0]
+                                          for _ in range(n)],
+                                         dim=0)
+
+    shap_val(model=GymWrapper(model.policy, ),
+             explanation_data=explanation_data,
+             baseline_tensor=explanation_data,
+             )
+
+    from beehavior.envs.test import Test2, TestNN2
+
+    env = Test2()
+    obs = env.reset()[0]
+    policy_kwargs = dict(
+        features_extractor_class=TestNN2,
+    )
+    model = PPO(policy='MlpPolicy',
+                env=env,
+                policy_kwargs=policy_kwargs,
+                device='cpu',
+                )
+
+    explanation_data = torch.concatenate([model.policy.obs_to_tensor(env.observation_space.sample())[0]
+                        for _ in range(n)],dim=0)
+
+    print(explanation_data.shape)
+    print(model.predict(obs))
+    wrapped_model=GymWrapper(network=model.policy)
+    print(wrapped_model.forward(explanation_data)[0].shape)
+    shap_val(model=wrapped_model,
+             explanation_data=explanation_data,
+             baseline_tensor=explanation_data,
+             )
+
+    from beehavior.envs.test import Test, TestNN
+
+    env = Test()
+    obs = env.reset()[0]
+    policy_kwargs = dict(
+        features_extractor_class=TestNN,
+    )
+    model = PPO(policy='MultiInputPolicy',
+                env=env,
+                policy_kwargs=policy_kwargs,
+                device='cpu',
+                )
+
+    explanation_data = [model.policy.obs_to_tensor(env.observation_space.sample())[0]
+                        for _ in range(n)]
+    explanation_data_tensor, ksp = dict_to_tensor(explanation_data)
+    print(explanation_data_tensor.shape)
+    print(model.predict(obs))
+    wrapped_model = DicWrapper(network=model.policy,
+                               ksp=ksp,
+                               model_call_kwargs={'deterministic': True},
+                               proc_model_output=lambda x: x[0].flatten(),
+                               )
+    print(wrapped_model.forward(explanation_data_tensor).shape)
+    shap_val(model=wrapped_model,
+             explanation_data=explanation_data_tensor,
+             baseline_tensor=explanation_data_tensor,
+             )
+
 
     quit()
 

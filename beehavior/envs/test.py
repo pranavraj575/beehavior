@@ -43,10 +43,10 @@ class Test(gym.Env):
         self.s += action
         dp = np.linalg.norm(self.t - self.s)
         r = d - dp
-        self.ct+=1
+        self.ct += 1
 
         # observation, reward, termination, truncation, info
-        return self.get_obs(), r.item(), dp.item() < 1 or self.ct>1000, False, {}
+        return self.get_obs(), r.item(), dp.item() < 1 or self.ct > 1000, False, {}
 
     def get_obs(self):
         vec = self.t - self.s
@@ -55,7 +55,7 @@ class Test(gym.Env):
         return {
             'vec': vec,
             'img': img,
-            'img2':img2,
+            'img2': img2,
         }
 
     def reset(
@@ -73,7 +73,7 @@ class Test(gym.Env):
             (observation, info dict)
         """
         super().reset(seed=seed)
-        self.ct=0
+        self.ct = 0
         np.random.seed(seed)
         self.s = (2*np.random.random(2) - 1)*self.scale
         self.t = (2*np.random.random(2) - 1)*self.scale
@@ -104,12 +104,12 @@ class TestNN(BaseFeaturesExtractor):
 
         features_dim = 16*3
         super().__init__(observation_space, features_dim=features_dim)
-        img_net=nn.Sequential(nn.Flatten(), nn.Linear(in_features=8, out_features=16), nn.ReLU())
-        self.network = {
+        img_net = nn.Sequential(nn.Flatten(), nn.Linear(in_features=8, out_features=16), nn.ReLU())
+        self.network = nn.ModuleDict({
             'vec': nn.Sequential(nn.Linear(in_features=2, out_features=16), nn.ReLU()),
             'img': img_net,
             'img2': img_net,
-        }
+        })
 
     def forward(self, observations):
         stuff = []
@@ -117,6 +117,118 @@ class TestNN(BaseFeaturesExtractor):
             obs = observations[k]
             stuff.append(self.network[k].forward(obs))
         return torch.concatenate(stuff, dim=-1)
+
+
+class Test2(gym.Env):
+    """testing the concatenated thingy
+    """
+
+    def __init__(self, scale=100):
+        super().__init__()
+        self.scale = scale
+
+        self.action_space = gym.spaces.Box(low=-1, high=1, shape=(2,), dtype=np.float64)
+        self.observation_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(18,), dtype=np.float64)
+
+        self.s = None
+        self.t = None
+
+    def step(self, action: ActType) -> Tuple[ObsType, float, bool, bool, dict]:
+        """
+        implementiaon of gym's step function
+        Args:
+            action: action that agent makes at a timestep
+        Returns:
+            (observation, reward, termination,
+                    truncation, info)
+        """
+        d = np.linalg.norm(self.t - self.s)
+        self.s += action
+        dp = np.linalg.norm(self.t - self.s)
+        r = d - dp
+        self.ct += 1
+
+        # observation, reward, termination, truncation, info
+        return self.get_obs(), r.item(), dp.item() < 1 or self.ct > 1000, False, {}
+
+    def get_obs(self):
+        vec = self.t - self.s
+        img = np.random.random((2, 2, 2))
+        img2 = np.random.random((2, 2, 2))
+        dic = {
+            'vec': vec,
+            'img': img,
+            'img2': img2,
+        }
+        return np.concatenate((dic['img'].flatten(), dic['img2'].flatten(), dic['vec']))
+
+    def reset(
+            self,
+            *,
+            seed: Optional[int] = None,
+            options: Optional[dict] = None,
+    ) -> Tuple[ObsType, dict]:
+        """
+        implementiaon of gym's reset function
+        Args:
+            seed: random seed
+            options: option dictionary
+        Returns:
+            (observation, info dict)
+        """
+        super().reset(seed=seed)
+        self.ct = 0
+        np.random.seed(seed)
+        self.s = (2*np.random.random(2) - 1)*self.scale
+        self.t = (2*np.random.random(2) - 1)*self.scale
+        # obs, info
+        return self.get_obs(), {}
+
+
+class TestNN2(BaseFeaturesExtractor):
+    """
+    custom network built with config file
+    https://stable-baselines3.readthedocs.io/en/master/guide/custom_policy.html
+    """
+
+    def __init__(self,
+                 observation_space,
+                 ):
+        """
+        Args:
+            observation_space:
+            structure: specifies network structure
+                can also put in None, then enter config file
+            config_file:
+        """
+        unbatched = observation_space.shape
+        if unbatched is None:
+            assert type(observation_space) == gym.spaces.Dict
+            self.keys = tuple(sorted(observation_space.keys()))
+
+        features_dim = 16*3
+        super().__init__(observation_space, features_dim=features_dim)
+        img_net = nn.Sequential(nn.Flatten(), nn.Linear(in_features=8, out_features=16), nn.ReLU())
+        self.network = nn.ModuleDict({
+            'vec': nn.Sequential(nn.Linear(in_features=2, out_features=16), nn.ReLU()),
+            'img': img_net,
+            'img2': img_net,
+        })
+
+    def forward(self, observations):
+        if len(observations.shape) == 1:
+            observations = observations.reshape((1, -1))
+        img = observations[:, :8].reshape((-1, 2, 2, 2))
+        img2 = observations[:, 8:16].reshape((-1, 2, 2, 2))
+        vec = observations[:, 16:]
+        print('shps')
+        print(self.network['img'].forward(img).shape)
+        print(self.network['vec'].forward(vec).shape)
+        return torch.concatenate((self.network['img'].forward(img),
+                                  self.network['img2'].forward(img2),
+                                  self.network['vec'].forward(vec)),
+                                 dim=-1
+                                 )
 
 
 if __name__ == '__main__':
@@ -146,7 +258,7 @@ if __name__ == '__main__':
         model.learn(total_timesteps=steps_per_epoch, reset_num_timesteps=False, progress_bar=False)
         obs, info = env.reset()  # vec_env.reset()
         term = False
-        reward_all=[]
+        reward_all = []
         while not term:
             action, _states = model.predict(obs)
             obs, rewards, term, _, info = env.step(action)
