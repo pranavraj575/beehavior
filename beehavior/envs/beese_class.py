@@ -540,6 +540,7 @@ class OFBeeseClass(BeeseClass):
                  img_history_steps=2,
                  input_img_space=(INPUT_LOG_OF, INPUT_OF_ORIENTATION,),
                  of_ignore_angular_velocity=True,
+                 concatenate_observations=False,
                  **kwargs,
                  ):
         """
@@ -559,7 +560,11 @@ class OFBeeseClass(BeeseClass):
             see_of_orientation: whether bee can see the orientation of OF
             of_ignore_angular_velocity: whether to ignore angular velocity in OF calc
                 if true, pretends camera is on chicken head
+            concatenate_observations: instead of dict observation space, concatenates everything into a long row vector
+                used to prevent issues with SHAP package
         """
+        self.concat_obs=concatenate_observations
+
         self.obs_shape = None
         self.img_stack = None
         self.of_ignore_angular_velocity = of_ignore_angular_velocity
@@ -628,7 +633,11 @@ class OFBeeseClass(BeeseClass):
                                                   shape=(self.get_obs_vector_dim(),),
                                                   dtype=np.float64,
                                                   )
-        return gym.spaces.Dict(obs_space_dic)
+        self.ordered_keys=tuple(sorted(list(obs_space_dic.keys())))
+        if self.concat_obs:
+            raise NotImplementedError
+        else:
+            return gym.spaces.Dict(obs_space_dic)
 
     def get_obs(self):
         obs = dict()
@@ -716,6 +725,18 @@ class OFBeeseClass(BeeseClass):
 
 if __name__ == '__main__':
     import time
+
+    env=OFBeeseClass(of_cameras=('front', 'bottom'),
+                     concatenate_observations=False,
+                     client=False,
+                     )
+    print(type(env.observation_space.sample()))
+    env=OFBeeseClass(of_cameras=('front', 'bottom'),
+                     concatenate_observations=True,
+                     client=False,
+                     )
+    print(type(env.observation_space.sample()))
+    quit()
 
     env = OFBeeseClass(dt=.2, real_time=False, action_type=OFBeeseClass.ACTION_VELOCITY_XY,
                        of_cameras=('front', 'bottom'))
