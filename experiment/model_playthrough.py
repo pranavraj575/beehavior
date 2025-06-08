@@ -17,7 +17,7 @@ if __name__ == '__main__':
     import beehavior
     from beehavior.envs.goal_bee import GoalBee
     from experiment.trajectory_anal import create_gif
-    from experiment.shap_value_calc import shap_val, DicWrapper, dict_to_tensor
+    from experiment.shap_value_calc import shap_val, DicWrapper, dict_to_tensor, GymWrapper
 
     DIR = os.path.dirname(os.path.dirname(__file__))
 
@@ -162,19 +162,27 @@ if __name__ == '__main__':
 
     capture_interval = args.capture_interval
 
-    tensor_dic_observations = [
+    converted_observations = [
         model.policy.obs_to_tensor(dic['obs'])[0] for dic in steps
     ]
-    tensor_observations, ksp = dict_to_tensor(dic=tensor_dic_observations)
-    wrapped_model = DicWrapper(model.policy,
-                               ksp=ksp,
-                               proc_model_output=lambda x: x[0].flatten(),
-                               model_call_kwargs={'deterministic': True}
-                               )
+    print((converted_observations[0].shape))
+    if type(converted_observations[0])==dict:
+        tensor_observations, ksp = dict_to_tensor(dic=converted_observations)
+        wrapped_model = DicWrapper(model.policy,
+                                   ksp=ksp,
+                                   proc_model_output=lambda x: x[0].flatten(),
+                                   model_call_kwargs={'deterministic': True},
+                                   )
+    else:
+        tensor_observations=torch.concatenate(converted_observations,dim=0)
+        wrapped_model=GymWrapper(network=model.policy,
+                                   model_call_kwargs={'deterministic': True},
+                                )
     shap_val(model=wrapped_model,
              explanation_data=tensor_observations,
              baseline_tensor=tensor_observations,
              )
+    quit()
     # display optic flow
     if ((GoalBee.INPUT_LOG_OF in env.unwrapped.input_img_space) or
             (GoalBee.INPUT_RAW_OF in env.unwrapped.input_img_space)):
@@ -203,7 +211,7 @@ if __name__ == '__main__':
             obs = dic['obs']
             np_action, _ = model.predict(obs, deterministic=True)
             # obs_tense, vectorized = model.policy.obs_to_tensor(obs)
-            obs_tense = tensor_dic_observations[t]
+            obs_tense = converted_observations[t]
             actions, value, log_prob = model.policy.forward(obs_tense, deterministic=True)
             # print(actions, value, log_prob)
             for cam_name in env.unwrapped.of_cameras:

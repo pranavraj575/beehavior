@@ -224,6 +224,14 @@ class TestNN2(BaseFeaturesExtractor):
         print('shps')
         print(self.network['img'].forward(img).shape)
         print(self.network['vec'].forward(vec).shape)
+        dic={'img':img,
+             'img2':img2,
+             'vec':vec}
+
+        return torch.concatenate([self.network[k].forward(dic[k])
+                                  for k in ('img','img2','vec')],
+                                 dim=-1
+                                 )
         return torch.concatenate((self.network['img'].forward(img),
                                   self.network['img2'].forward(img2),
                                   self.network['vec'].forward(vec)),

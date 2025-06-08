@@ -231,6 +231,7 @@ class CustomNN(BaseFeaturesExtractor):
     def __init__(self,
                  observation_space,
                  structure,
+                 ksp=None,
                  config_file=None,
                  ):
         """
@@ -238,9 +239,23 @@ class CustomNN(BaseFeaturesExtractor):
             observation_space:
             structure: specifies network structure
                 can also put in None, then enter config file
+            ksp: keys, shapes, partition
+                if the input is a dictionary compressed into a tensor, this is how to uncompress it
+                keys - order of keys in tensor
+                shapes - shape of each element in tensor
+                partition - what indices the tensor should be split at
             config_file:
         """
+        self.dict_input = False
+        self.ksp = ksp
+        self.keys_permutation = None  # self.keys[i]=keys[self.keys_permutation[i]] for keys,_,_= ksp
         unbatched = observation_space.shape
+
+        if self.ksp is not None:
+            keys, shapes, _ = self.ksp
+            self.dict_input = True
+            # unbatched needs to be swapped to a dict
+            unbatched = {k: shapes[i] for i, k in enumerate(keys)}
         if unbatched is None:
             assert type(observation_space) == gym.spaces.Dict
             unbatched = {k: observation_space[k].shape for k in observation_space.keys()}
@@ -250,10 +265,13 @@ class CustomNN(BaseFeaturesExtractor):
             structure = ast.literal_eval(f.read())
             f.close()
         _, output_shape = layers_from_structure(structure=structure, input_shape=unbatched, only_shape=True,
-                                                device=None,)
+                                                device=None, )
         if type(output_shape) == dict:
             self.dict_input = True
             self.keys = tuple(sorted(output_shape.keys()))
+            if self.ksp is not None:
+                keys, _, _ = self.ksp
+                self.keys_permutation = {i: keys.index(k) for i, k in enumerate(self.keys)}
             features_dim = 0
             for k in self.keys:
                 if type(output_shape[k]) == str:
@@ -284,7 +302,13 @@ class CustomNN(BaseFeaturesExtractor):
                 if self.dict_input:
                     for k in self.keys:
                         print('KEY:', k)
-                        b = torch.as_tensor(observation_space[k].sample()[None], device=None).float()
+                        if self.ksp is None:
+                            b = torch.as_tensor(observation_space[k].sample()[None], device=None).float()
+                        else:
+                            keys, shapes, partition = self.ksp
+                            b = torch.as_tensor(observation_space.sample()[None], device=None).float()
+                            idx = keys.index(k)
+                            b = b[partition[idx]:partition[idx + 1]].reshape(shapes[idx])
                         lys = layers[k]
                         if type(lys) == str:
                             lys = layers[lys]
@@ -300,9 +324,26 @@ class CustomNN(BaseFeaturesExtractor):
 
     def forward(self, observations):
         if self.dict_input:
-            return torch.concatenate([self.network[k].forward(observations[k])
-                                      for k in self.keys],
-                                     dim=-1)
+            if type(observations) == dict:
+                return torch.concatenate([self.network[k].forward(observations[k])
+                                          for k in self.keys],
+                                         dim=-1)
+            else:
+                keys, shapes, partition = self.ksp
+                if len(observations.shape) == 2:
+                    stuff = [
+                        observations[:, partition[i]:partition[i + 1]].reshape(observations.shape[0],*shapes[i])
+                        for i in range(len(keys))
+                    ]
+                else:
+                    stuff = [
+                        observations[partition[i]:partition[i + 1]].reshape(shapes[i])
+                        for i in range(len(keys))
+                    ]
+                return torch.concatenate([self.network[k].forward(stuff[self.keys_permutation[i]])
+                                          for i, k in enumerate(self.keys)],
+                                         dim=-1,
+                                         )
         else:
             return self.network.forward(observations)
 

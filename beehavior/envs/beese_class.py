@@ -563,7 +563,7 @@ class OFBeeseClass(BeeseClass):
             concatenate_observations: instead of dict observation space, concatenates everything into a long row vector
                 used to prevent issues with SHAP package
         """
-        self.concat_obs=concatenate_observations
+        self.concat_obs = concatenate_observations
 
         self.obs_shape = None
         self.img_stack = None
@@ -633,11 +633,32 @@ class OFBeeseClass(BeeseClass):
                                                   shape=(self.get_obs_vector_dim(),),
                                                   dtype=np.float64,
                                                   )
-        self.ordered_keys=tuple(sorted(list(obs_space_dic.keys())))
+        self.ordered_keys = tuple(sorted(list(obs_space_dic.keys())))
+        self.shapes = None
+        self.partition = None
         if self.concat_obs:
-            raise NotImplementedError
+            self.shapes = []
+            self.partition = [0]
+            lows = []
+            highs = []
+            for key in self.ordered_keys:
+                spc = obs_space_dic[key]
+                lows.append(spc.low.flatten())
+                highs.append(spc.high.flatten())
+                self.shapes.append(spc.shape)
+                self.partition.append(self.partition[-1] + np.prod(spc.shape))
+            self.shapes = tuple(self.shapes)
+            self.partition = tuple(self.partition)
+            return gym.spaces.Box(low=np.concatenate(lows),
+                                  high=np.concatenate(highs),
+                                  shape=(self.partition[-1],),
+                                  dtype=np.float64,
+                                  )
         else:
             return gym.spaces.Dict(obs_space_dic)
+
+    def get_ksp(self):
+        return self.ordered_keys, self.shapes, self.partition
 
     def get_obs(self):
         obs = dict()
@@ -683,8 +704,10 @@ class OFBeeseClass(BeeseClass):
 
         if self.get_obs_vector_dim() > 0:
             obs['vec'] = self.get_obs_vector()
-
-        return obs
+        if self.concat_obs:
+            return np.concatenate([obs[key].flatten() for key in self.ordered_keys])
+        else:
+            return obs
 
     def get_obs_shape(self):
         if self.obs_shape is None:
@@ -726,16 +749,17 @@ class OFBeeseClass(BeeseClass):
 if __name__ == '__main__':
     import time
 
-    env=OFBeeseClass(of_cameras=('front', 'bottom'),
-                     concatenate_observations=False,
-                     client=False,
-                     )
+    env = OFBeeseClass(of_cameras=('front', 'bottom'),
+                       concatenate_observations=False,
+                       client=False,
+                       )
     print(type(env.observation_space.sample()))
-    env=OFBeeseClass(of_cameras=('front', 'bottom'),
-                     concatenate_observations=True,
-                     client=False,
-                     )
+    env = OFBeeseClass(of_cameras=('front', 'bottom'),
+                       concatenate_observations=True,
+                       client=False,
+                       )
     print(type(env.observation_space.sample()))
+    print((env.observation_space.sample()).shape)
     quit()
 
     env = OFBeeseClass(dt=.2, real_time=False, action_type=OFBeeseClass.ACTION_VELOCITY_XY,

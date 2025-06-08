@@ -78,11 +78,15 @@ if __name__ == '__main__':
     PARSER.add_argument("--nondeterministic-testjectory", action='store_true', required=False,
                         help='use randomness in testjectory')
 
+    PARSER.add_argument("--dictionary-space", action='store_true', required=False,
+                        help='gym environment is a dictionary, this should make model faster, but cannot use this for SHAP')
+
     PARSER.add_argument("--reset", action='store_true', required=False,
                         help="reset training")
     PARSER.add_argument("--display", type=int, required=False, default=None,
                         help="skip training and run specified saved model (-1 for most recent) on all <--testing-tunnel>s")
     args = PARSER.parse_args()
+    concat_obs = not args.dictionary_space
 
     test_freq = args.ckpt_freq if args.test_freq is None else args.test_freq
     network_file = args.network
@@ -102,6 +106,8 @@ if __name__ == '__main__':
         raise Exception('need to add at least one image input')
 
     ident = args.ident
+    if concat_obs:
+        ident += '_cat_obs_'
     ident += '_in_'
     for key in (ForwardBee.INPUT_RAW_OF,
                 ForwardBee.INPUT_LOG_OF,
@@ -128,7 +134,6 @@ if __name__ == '__main__':
     for d in (output_dir, traj_dir, model_dir):
         if not os.path.exists(d): os.makedirs(d)
     print('saving to', output_dir)
-
     env_config = {'name': 'ForwardBee-v0',
                   'kwargs': dict(
                       dt=args.dt,
@@ -136,6 +141,7 @@ if __name__ == '__main__':
                       action_type=args.action_type,
                       img_history_steps=args.history_steps,
                       input_velocity_with_noise=args.include_vel_with_noise,
+                      concatenate_observations=concat_obs,
                   )}
     f = open(os.path.join(output_dir, 'env_config.txt'), 'w')
     f.write(str(env_config))
@@ -147,9 +153,9 @@ if __name__ == '__main__':
     policy_kwargs = dict(
         features_extractor_class=CustomNN,
         features_extractor_kwargs=dict(structure={'front': ast.literal_eval(f.read())},
+                                       ksp=env.unwrapped.get_ksp() if concat_obs else None
                                        ),
         net_arch=dict(pi=args.pol_val_net, vf=args.pol_val_net),
-
     )
     f.close()
 
