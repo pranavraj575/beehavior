@@ -49,6 +49,12 @@ if __name__ == '__main__':
     PARSER.add_argument("--num-trajectories", type=int, required=False, default=1,
                         help="number of trajectories to capture")
 
+    PARSER.add_argument("--baseline-amnt", type=float, required=False, default=None,
+                        help="number of observations to use as background. "
+                             "If None, uses all, "
+                             "if less than 1, uses this as a proportion, "
+                             "otherwise, uses this as number of samples")
+
     PARSER.add_argument("--reset", action='store_true', required=False,
                         help="overwrite previous trajectories")
     PARSER.add_argument("--append", action='store_true', required=False,
@@ -56,7 +62,7 @@ if __name__ == '__main__':
     PARSER.add_argument("--device", action='store', required=False, default='cpu',
                         help="device to store tensors on")
     args = PARSER.parse_args()
-    device=args.device
+    device = args.device
     output_dir = args.display_output_dir
     if output_dir is None:
         output_dir = os.path.join(DIR,
@@ -109,7 +115,6 @@ if __name__ == '__main__':
     print(model.policy)
     print(type(model.policy))
     print('saving to', output_dir)
-
 
 
     def pose_to_dic(pose):
@@ -166,7 +171,7 @@ if __name__ == '__main__':
         model.policy.obs_to_tensor(dic['obs'])[0] for dic in steps
     ]
     print((converted_observations[0].shape))
-    if type(converted_observations[0])==dict:
+    if type(converted_observations[0]) == dict:
         tensor_observations, ksp = dict_to_tensor(dic=converted_observations)
         wrapped_model = DicWrapper(model.policy,
                                    ksp=ksp,
@@ -174,15 +179,27 @@ if __name__ == '__main__':
                                    model_call_kwargs={'deterministic': True},
                                    )
     else:
-        tensor_observations=torch.concatenate(converted_observations,dim=0)
-        wrapped_model=GymWrapper(network=model.policy,
+        tensor_observations = torch.concatenate(converted_observations, dim=0)
+        wrapped_model = GymWrapper(network=model.policy,
                                    model_call_kwargs={'deterministic': True},
-                                )
-    shap_val(model=wrapped_model,
-             explanation_data=tensor_observations,
-             baseline_tensor=tensor_observations,
-             )
-    quit()
+                                   )
+    # sample a proportion of the data for background
+    if args.baseline_amnt is not None:
+        if args.baseline_amnt < 1:
+            # baseline_amnt is a proportion
+            idxs = torch.randperm(len(tensor_observations))[:int(len(tensor_observations)*args.baseline_amnt)]
+        else:
+            # baseline_amnt is a number
+            idxs = torch.randperm(len(tensor_observations))[:int(args.baseline_amnt)]
+    else:
+        # idxs = torch.arange(len(tensor_observations))
+        idxs = torch.randperm(len(tensor_observations))
+    baseline_tensor = tensor_observations[idxs]
+    explanations = shap_val(model=wrapped_model,
+                            explanation_data=tensor_observations,
+                            baseline=baseline_tensor,
+                            )
+
     # display optic flow
     if ((GoalBee.INPUT_LOG_OF in env.unwrapped.input_img_space) or
             (GoalBee.INPUT_RAW_OF in env.unwrapped.input_img_space)):

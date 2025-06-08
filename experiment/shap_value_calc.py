@@ -138,18 +138,25 @@ class DicWrapper(torch.nn.Module):
                 )
 
 
-def shap_val(model, explanation_data, baseline_tensor, ):
+def shap_val(model, explanation_data, baseline, ):
+    """
+    returns shap values for explanation_data based on baseline
+    Args:
+        model: nn.Module that goes from tensor -> tensor
+        explanation_data: batch of tensor input to explain, shaped (N,*)
+        baseline: baseline of tensor input for use, shaped (M,*)
+    Returns:
+        list of explanations
+            each explanation is a list of shap values (shaped (*)), one for each output dim
+            if model is a (shape_in -> k vector) map,
+                each explanation will be a list (length k), where each element is shaped shape_in
+    """
     # baseline should be about 10% sample from explanation
-    explainer = shap.DeepExplainer(model, baseline_tensor, )
+    explainer = shap.DeepExplainer(model, baseline, )
     explanations = []
     for i in range(len(explanation_data)):
         explanation = explainer.shap_values(explanation_data[i:i + 1], check_additivity=False)
         explanations.append(explanation)
-
-    # print(model.forward(background_tensor).cpu().detach().numpy())
-    print(baseline_tensor.shape)
-    print(model.forward(baseline_tensor).shape)
-    print(explanations[0][0].shape)
     return explanations
 
 
@@ -210,7 +217,7 @@ if __name__ == '__main__':
     model = NeuralNet()
     shap_val(model=model,
              explanation_data=explanation_data,
-             baseline_tensor=explanation_data[torch.randint(0, len(explanation_data), (200,))],
+             baseline=explanation_data[torch.randint(0, len(explanation_data), (200,))],
              )
 
     import gymnasium as gym
@@ -227,7 +234,7 @@ if __name__ == '__main__':
 
     shap_val(model=GymWrapper(model.policy, ),
              explanation_data=explanation_data,
-             baseline_tensor=explanation_data,
+             baseline=explanation_data,
              )
 
     from beehavior.envs.test import Test2, TestNN2
@@ -252,7 +259,7 @@ if __name__ == '__main__':
     print(wrapped_model.forward(explanation_data)[0].shape)
     shap_val(model=wrapped_model,
              explanation_data=explanation_data,
-             baseline_tensor=explanation_data,
+             baseline=explanation_data,
              )
 
     from beehavior.envs.test import Test, TestNN
@@ -281,7 +288,7 @@ if __name__ == '__main__':
     print(wrapped_model.forward(explanation_data_tensor).shape)
     shap_val(model=wrapped_model,
              explanation_data=explanation_data_tensor,
-             baseline_tensor=explanation_data_tensor,
+             baseline=explanation_data_tensor,
              )
 
 
