@@ -155,8 +155,8 @@ def shap_val(model, explanation_data, baseline, ):
     explainer = shap.DeepExplainer(model, baseline, )
     explanations = []
     for i in range(len(explanation_data)):
-        explanation = explainer.shap_values(explanation_data[i:i + 1], check_additivity=False)
-        explanations.append(explanation)
+        expln = explainer.shap_values(explanation_data[i:i + 1], check_additivity=False)
+        explanations.append(expln)
     return explanations
 
 
@@ -251,11 +251,11 @@ if __name__ == '__main__':
                 )
 
     explanation_data = torch.concatenate([model.policy.obs_to_tensor(env.observation_space.sample())[0]
-                        for _ in range(n)],dim=0)
+                                          for _ in range(n)], dim=0)
 
     print(explanation_data.shape)
     print(model.predict(obs))
-    wrapped_model=GymWrapper(network=model.policy)
+    wrapped_model = GymWrapper(network=model.policy)
     print(wrapped_model.forward(explanation_data)[0].shape)
     shap_val(model=wrapped_model,
              explanation_data=explanation_data,
@@ -290,7 +290,6 @@ if __name__ == '__main__':
              explanation_data=explanation_data_tensor,
              baseline=explanation_data_tensor,
              )
-
 
     quit()
 

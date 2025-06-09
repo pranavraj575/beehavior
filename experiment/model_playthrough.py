@@ -83,6 +83,7 @@ if __name__ == '__main__':
     # load previous trajectory if found
     steps = None
     filename = os.path.join(output_dir, 'saved_traj.pkl')
+    expln_filename = os.path.join(output_dir, 'saved_explanations.pkl')
     if os.path.exists(filename) and not args.reset:
         f = open(filename, 'rb')
         steps = pkl.load(f)
@@ -147,10 +148,14 @@ if __name__ == '__main__':
 
                 obs, rwd, done, term, info = env.step(action)
                 pose = env.unwrapped.get_pose()
-
+                if env.unwrapped.concat_obs:
+                    dic_obs=env.unwrapped.obs_to_dict(obs)
+                else:
+                    dic_obs=obs
                 steps.append({
                     'old_pose': pose_to_dic(old_pose),
                     'obs': obs,
+                    'dic_obs':dic_obs,
                     'action': action,
                     'reward': rwd,
                     'pose': pose_to_dic(pose),
@@ -158,6 +163,9 @@ if __name__ == '__main__':
                 })
                 old_pose = pose
         print('completed sample, saving')
+        # if old explanations exist, remove them
+        if os.path.exists(expln_filename):
+            os.remove(expln_filename)
         f = open(filename, 'wb')
         pkl.dump(steps, f)
         f.close()
@@ -167,38 +175,51 @@ if __name__ == '__main__':
 
     capture_interval = args.capture_interval
 
-    converted_observations = [
-        model.policy.obs_to_tensor(dic['obs'])[0] for dic in steps
-    ]
-    print((converted_observations[0].shape))
-    if type(converted_observations[0]) == dict:
-        tensor_observations, ksp = dict_to_tensor(dic=converted_observations)
-        wrapped_model = DicWrapper(model.policy,
-                                   ksp=ksp,
-                                   proc_model_output=lambda x: x[0].flatten(),
-                                   model_call_kwargs={'deterministic': True},
-                                   )
+    explanations = None
+    if os.path.exists(expln_filename):
+        # since every time we edit sampled steps, we delete this file,
+        #   this file only will exist if we have correct info in it
+        f = open(expln_filename, 'rb')
+        explanations = pkl.load(f)
+        f.close()
     else:
-        tensor_observations = torch.concatenate(converted_observations, dim=0)
-        wrapped_model = GymWrapper(network=model.policy,
-                                   model_call_kwargs={'deterministic': True},
-                                   )
-    # sample a proportion of the data for background
-    if args.baseline_amnt is not None:
-        if args.baseline_amnt < 1:
-            # baseline_amnt is a proportion
-            idxs = torch.randperm(len(tensor_observations))[:int(len(tensor_observations)*args.baseline_amnt)]
+        converted_observations = [
+            model.policy.obs_to_tensor(dic['obs'])[0] for dic in steps
+        ]
+        print((converted_observations[0].shape))
+        if type(converted_observations[0]) == dict:
+            tensor_observations, ksp = dict_to_tensor(dic=converted_observations)
+            wrapped_model = DicWrapper(model.policy,
+                                       ksp=ksp,
+                                       proc_model_output=lambda x: x[0].flatten(),
+                                       model_call_kwargs={'deterministic': True},
+                                       )
         else:
-            # baseline_amnt is a number
-            idxs = torch.randperm(len(tensor_observations))[:int(args.baseline_amnt)]
-    else:
-        # idxs = torch.arange(len(tensor_observations))
-        idxs = torch.randperm(len(tensor_observations))
-    baseline_tensor = tensor_observations[idxs]
-    explanations = shap_val(model=wrapped_model,
-                            explanation_data=tensor_observations,
-                            baseline=baseline_tensor,
-                            )
+            tensor_observations = torch.concatenate(converted_observations, dim=0)
+            wrapped_model = GymWrapper(network=model.policy,
+                                       model_call_kwargs={'deterministic': True},
+                                       )
+        # sample a proportion of the data for background
+        if args.baseline_amnt is not None:
+            if args.baseline_amnt < 1:
+                # baseline_amnt is a proportion
+                idxs = torch.randperm(len(tensor_observations))[:int(len(tensor_observations)*args.baseline_amnt)]
+            else:
+                # baseline_amnt is a number
+                idxs = torch.randperm(len(tensor_observations))[:int(args.baseline_amnt)]
+        else:
+            # idxs = torch.arange(len(tensor_observations))
+            idxs = torch.randperm(len(tensor_observations))
+        baseline_tensor = tensor_observations[idxs]
+        explanations = shap_val(model=wrapped_model,
+                                explanation_data=tensor_observations,
+                                baseline=baseline_tensor,
+                                )
+        print('obtained explanations, saving them')
+        f = open(expln_filename, 'wb')
+        pkl.dump(explanations, f)
+        f.close()
+        print('saved')
 
     # display optic flow
     if ((GoalBee.INPUT_LOG_OF in env.unwrapped.input_img_space) or
@@ -215,9 +236,9 @@ if __name__ == '__main__':
             for cam_name in env.unwrapped.of_cameras:
                 OF_scale[cam_name] = np.mean([
                     np.max(
-                        np.exp(dic['obs'][cam_name][-count - 1:][0])
+                        np.exp(dic['dic_obs'][cam_name][-count - 1:][0])
                         if GoalBee.INPUT_LOG_OF in env.unwrapped.input_img_space
-                        else dic['obs'][cam_name][-count - 1:][0]
+                        else dic['dic_obs'][cam_name][-count - 1:][0]
                     )
                     for dic in steps]
                 )
@@ -226,10 +247,11 @@ if __name__ == '__main__':
             if t%capture_interval:
                 continue
             obs = dic['obs']
+            dic_obs=dic['dic_obs']
             np_action, _ = model.predict(obs, deterministic=True)
             # obs_tense, vectorized = model.policy.obs_to_tensor(obs)
-            obs_tense = converted_observations[t]
-            actions, value, log_prob = model.policy.forward(obs_tense, deterministic=True)
+            #obs_tense = converted_observations[t]
+            #actions, value, log_prob = model.policy.forward(obs_tense, deterministic=True)
             # print(actions, value, log_prob)
             for cam_name in env.unwrapped.of_cameras:
                 OF = dict()
@@ -238,7 +260,7 @@ if __name__ == '__main__':
                     width = 2 if input_k == GoalBee.INPUT_OF_ORIENTATION else 1
                     i = i - width
 
-                    im = obs[cam_name]
+                    im = dic_obs[cam_name]
                     OF[input_k] = im[len(im) + i:len(im) + i + width]
                     if width == 1:
                         OF[input_k] = OF[input_k][0]

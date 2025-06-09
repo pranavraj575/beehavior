@@ -660,6 +660,22 @@ class OFBeeseClass(BeeseClass):
     def get_ksp(self):
         return self.ordered_keys, self.shapes, self.partition
 
+    def obs_to_dict(self, obs, ksp=None):
+        if ksp is None:
+            ksp = self.get_ksp()
+        keys, shapes, partition = ksp
+        if len(obs.shape) == 2:
+            stuff = {
+                k: obs[:, partition[i]:partition[i + 1]].reshape(obs.shape[0], *shapes[i])
+                for i, k in enumerate(keys)
+            }
+        else:
+            stuff = {
+                k: obs[partition[i]:partition[i + 1]].reshape(shapes[i])
+                for i, k in enumerate(keys)
+            }
+        return stuff
+
     def get_obs(self):
         obs = dict()
         for camera_name in self.of_cameras:

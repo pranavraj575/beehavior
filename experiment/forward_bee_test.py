@@ -107,7 +107,7 @@ if __name__ == '__main__':
 
     ident = args.ident
     if concat_obs:
-        ident += '_cat_obs_'
+        ident += '_cat_obs'
     ident += '_in_'
     for key in (ForwardBee.INPUT_RAW_OF,
                 ForwardBee.INPUT_LOG_OF,
