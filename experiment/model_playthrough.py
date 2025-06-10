@@ -18,6 +18,7 @@ if __name__ == '__main__':
     from beehavior.envs.goal_bee import GoalBee
     from experiment.trajectory_anal import create_gif
     from experiment.shap_value_calc import shap_val, GymWrapper
+    import cv2 as cv
 
     DIR = os.path.dirname(os.path.dirname(__file__))
 
@@ -60,6 +61,8 @@ if __name__ == '__main__':
     PARSER.add_argument("--append", action='store_true', required=False,
                         help="append sampled trajectory to previously captured trajectories")
 
+    PARSER.add_argument("--avg-kernel", type=int, required=False, default=1,
+                        help="smooth the attention with a moving average using this kernel (1 does nothing)")
     PARSER.add_argument("--reexplain", action='store_true', required=False,
                         help="do not used saved explanations")
     PARSER.add_argument("--display-only", action='store_true', required=False,
@@ -228,7 +231,18 @@ if __name__ == '__main__':
         pkl.dump(explanations, f)
         f.close()
         print('saved')
-
+    sum_abs_explanations = [sum(np.abs(ex) for ex in expln) if type(expln) is list
+                            else np.abs(expln)
+                            for expln in explanations]
+    sum_abs_explanations = [env.unwrapped.obs_to_dict(expln) for expln in sum_abs_explanations]
+    current_sum_abs_explanations = [
+        {k: np.sum(expln_dic[k].reshape(-1, *expln_dic[k].shape[-2:])[-env.unwrapped.imgs_per_step:], axis=0)
+         for k in expln_dic if k in env.unwrapped.of_cameras}
+        for expln_dic in sum_abs_explanations
+    ]
+    max_current_sum_abs_explanations = {k: max(np.max(csae_dic[k])
+                                               for csae_dic in current_sum_abs_explanations)
+                                        for k in env.unwrapped.of_cameras}
     # display optic flow
     if ((GoalBee.INPUT_LOG_OF in env.unwrapped.input_img_space) or
             (GoalBee.INPUT_RAW_OF in env.unwrapped.input_img_space)):
@@ -283,9 +297,11 @@ if __name__ == '__main__':
                         OF[input_k] = OF[input_k][0]
 
                 expln_abs_total = explanation_abs_total[cam_name]
+                csae = current_sum_abs_explanations[t][cam_name]
                 expln = [ex[cam_name] for ex in explanation]
 
                 # (k, H, W), only consider current timestep
+
                 expln_abs_total = expln_abs_total.reshape(-1, *expln_abs_total.shape[-2:])
                 expln_abs_total = expln_abs_total[len(expln_abs_total) + stack_bottom:]
                 # (H, W)
@@ -305,7 +321,12 @@ if __name__ == '__main__':
                 img = img*.5  # mute the OF information
 
                 # change the green channel to attention
-                img[:, :, 1] = np.sqrt(expln_abs_total/np.max(expln_abs_total))
+                # img[:, :, 1] = np.sqrt(csae/max_current_sum_abs_explanations[cam_name])
+                kernel = np.ones((args.avg_kernel, args.avg_kernel), )
+                kernel = cv.getGaussianKernel(ksize=args.avg_kernel, sigma=args.avg_kernel/2)
+                kernel = kernel.dot(kernel.T)
+                blurred_csae = cv.filter2D(csae/np.max(csae), -1, kernel)
+                img[:, :, 1] = (blurred_csae/np.max(blurred_csae))
 
                 img = img*255
                 img = np.ndarray.astype(img, dtype=np.uint8)
@@ -320,12 +341,13 @@ if __name__ == '__main__':
                     of_disp = np.transpose(OF_orientation*np.expand_dims(OF_magnitude, 0),
                                            axes=(0, 2, 1))
                     # inverted from image (height is top down) to np plot (y dim  bottom up)
-                    plt.quiver(w[::ss, ::ss], h[::ss, ::ss],
-                               of_disp[0, ::ss, ::ss],
-                               -of_disp[1, ::ss, ::ss],
-                               color='red',
-                               scale=OF_scale[cam_name]*(max(w.shape)/ss),
-                               )
+                    if False:
+                        plt.quiver(w[::ss, ::ss], h[::ss, ::ss],
+                                   of_disp[0, ::ss, ::ss],
+                                   -of_disp[1, ::ss, ::ss],
+                                   color='red',
+                                   scale=OF_scale[cam_name]*(max(w.shape)/ss),
+                                   )
 
                 # plt.show()
                 filename = os.path.join(img_dir, 'of_' + cam_name + '_' + str(t) + '.png')
