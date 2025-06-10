@@ -59,6 +59,11 @@ if __name__ == '__main__':
                         help="overwrite previous trajectories")
     PARSER.add_argument("--append", action='store_true', required=False,
                         help="append sampled trajectory to previously captured trajectories")
+
+    PARSER.add_argument("--reexplain", action='store_true', required=False,
+                        help="do not used saved explanations")
+    PARSER.add_argument("--display-only", action='store_true', required=False,
+                        help="only display route in simulation, do not save or analyze")
     PARSER.add_argument("--device", action='store', required=False, default='cpu',
                         help="device to store tensors on")
     args = PARSER.parse_args()
@@ -88,8 +93,8 @@ if __name__ == '__main__':
         f = open(filename, 'rb')
         steps = pkl.load(f)
         f.close()
-    # we are grabbing a trajectory if steps is empty, or if we are appending to steps
-    traj_sampling = ((steps is None) or (args.append)) and (args.num_trajectories > 0)
+    # we are grabbing a trajectory if steps is empty, or if we are appending to steps, or displaying
+    traj_sampling = ((steps is None) or args.append or args.display_only) and (args.num_trajectories > 0)
 
     if args.env_config_file is None:
         env_config = {'name': 'GoalBee-v0',
@@ -115,7 +120,8 @@ if __name__ == '__main__':
     model.policy.to(device)
     print(model.policy)
     print(type(model.policy))
-    print('saving to', output_dir)
+    if not args.display_only:
+        print('saving to', output_dir)
 
 
     def pose_to_dic(pose):
@@ -149,19 +155,21 @@ if __name__ == '__main__':
                 obs, rwd, done, term, info = env.step(action)
                 pose = env.unwrapped.get_pose()
                 if env.unwrapped.concat_obs:
-                    dic_obs=env.unwrapped.obs_to_dict(obs)
+                    dic_obs = env.unwrapped.obs_to_dict(obs)
                 else:
-                    dic_obs=obs
+                    dic_obs = obs
                 steps.append({
                     'old_pose': pose_to_dic(old_pose),
                     'obs': obs,
-                    'dic_obs':dic_obs,
+                    'dic_obs': dic_obs,
                     'action': action,
                     'reward': rwd,
                     'pose': pose_to_dic(pose),
                     'info': info,
                 })
                 old_pose = pose
+        if args.display_only:
+            quit()
         print('completed sample, saving')
         # if old explanations exist, remove them
         if os.path.exists(expln_filename):
@@ -176,7 +184,7 @@ if __name__ == '__main__':
     capture_interval = args.capture_interval
 
     explanations = None
-    if os.path.exists(expln_filename):
+    if os.path.exists(expln_filename) and not args.reexplain:
         # since every time we edit sampled steps, we delete this file,
         #   this file only will exist if we have correct info in it
         f = open(expln_filename, 'rb')
@@ -186,7 +194,6 @@ if __name__ == '__main__':
         converted_observations = [
             model.policy.obs_to_tensor(dic['obs'])[0] for dic in steps
         ]
-        print((converted_observations[0].shape))
         if type(converted_observations[0]) == dict:
             tensor_observations, ksp = dict_to_tensor(dic=converted_observations)
             wrapped_model = DicWrapper(model.policy,
@@ -247,22 +254,38 @@ if __name__ == '__main__':
             if t%capture_interval:
                 continue
             obs = dic['obs']
-            dic_obs=dic['dic_obs']
+            dic_obs = dic['dic_obs']
+            explanation = explanations[t]
+            if type(explanation) is not list:
+                # pretty sure this can happen if the output is 1d?
+                explanation = [explanation]
+
+            explanation_abs_total = sum(np.abs(ex) for ex in explanation)
+            explanation = [env.unwrapped.obs_to_dict(ex) for ex in explanation]
+            explanation_abs_total = env.unwrapped.obs_to_dict(explanation_abs_total)
             np_action, _ = model.predict(obs, deterministic=True)
             # obs_tense, vectorized = model.policy.obs_to_tensor(obs)
-            #obs_tense = converted_observations[t]
-            #actions, value, log_prob = model.policy.forward(obs_tense, deterministic=True)
+            # obs_tense = converted_observations[t]
+            # actions, value, log_prob = model.policy.forward(obs_tense, deterministic=True)
             # print(actions, value, log_prob)
             for cam_name in env.unwrapped.of_cameras:
+                expln_abs_total = explanation_abs_total[cam_name]
+                expln = [ex[cam_name] for ex in explanation]
+
+                # (k, H, W)
+                expln_abs_total = expln_abs_total.reshape(-1, *expln_abs_total.shape[-2:])
+                # (H, W)
+                expln_abs_total = np.sum(expln_abs_total, axis=0)
+
                 OF = dict()
                 i = 0
                 for input_k in env.unwrapped.ordered_input_img_space[::-1]:
-                    width = 2 if input_k == GoalBee.INPUT_OF_ORIENTATION else 1
-                    i = i - width
+                    stack_size = 2 if input_k == GoalBee.INPUT_OF_ORIENTATION else 1
+                    i = i - stack_size
 
                     im = dic_obs[cam_name]
-                    OF[input_k] = im[len(im) + i:len(im) + i + width]
-                    if width == 1:
+                    OF[input_k] = im[len(im) + i:len(im) + i + stack_size]
+                    if stack_size == 1:
                         OF[input_k] = OF[input_k][0]
 
                 OF_log_magnitude = (OF[GoalBee.INPUT_LOG_OF] if GoalBee.INPUT_LOG_OF in OF
@@ -275,6 +298,11 @@ if __name__ == '__main__':
                     img = np.zeros_like(img)
                 else:
                     img = img/(log_mag_max - log_mag_min)
+
+                img = img*.5  # mute the OF information
+
+                # change the green channel to attention
+                img[:, :, 1] = np.sqrt(expln_abs_total/np.max(expln_abs_total))
 
                 img = img*255
                 img = np.ndarray.astype(img, dtype=np.uint8)
