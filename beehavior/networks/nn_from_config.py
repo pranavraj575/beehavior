@@ -6,6 +6,8 @@ import gymnasium as gym
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from torch.fx.experimental.proxy_tensor import fetch_sym_proxy
 
+from beehavior.networks.dic_converter import deconcater
+
 
 def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None):
     """
@@ -239,7 +241,7 @@ class CustomNN(BaseFeaturesExtractor):
             observation_space:
             structure: specifies network structure
                 can also put in None, then enter config file
-            ksp: keys, shapes, partition
+            ksp: (keys, shapes, partition), order that INPUT is encoded
                 if the input is a dictionary compressed into a tensor, this is how to uncompress it
                 keys - order of keys in tensor
                 shapes - shape of each element in tensor
@@ -248,6 +250,9 @@ class CustomNN(BaseFeaturesExtractor):
         """
         self.dict_input = False
         self.ksp = ksp
+        # ksp is the way INPUT is ordered
+        # self.keys is the way OUTPUT is ordered
+        #  then for the ith element of output, we will use self.network[self.keys[i]] on the self.keys_permutation[i]th element of concatenated INPUT
         self.keys_permutation = None  # self.keys[i]=keys[self.keys_permutation[i]] for keys,_,_= ksp
         unbatched = observation_space.shape
 
@@ -329,17 +334,7 @@ class CustomNN(BaseFeaturesExtractor):
                                           for k in self.keys],
                                          dim=-1)
             else:
-                keys, shapes, partition = self.ksp
-                if len(observations.shape) == 2:
-                    stuff = [
-                        observations[:, partition[i]:partition[i + 1]].reshape(observations.shape[0],*shapes[i])
-                        for i in range(len(keys))
-                    ]
-                else:
-                    stuff = [
-                        observations[partition[i]:partition[i + 1]].reshape(shapes[i])
-                        for i in range(len(keys))
-                    ]
+                stuff = deconcater(arr=observations, ksp=self.ksp)
                 return torch.concatenate([self.network[k].forward(stuff[self.keys_permutation[i]])
                                           for i, k in enumerate(self.keys)],
                                          dim=-1,

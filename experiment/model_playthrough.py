@@ -17,7 +17,7 @@ if __name__ == '__main__':
     import beehavior
     from beehavior.envs.goal_bee import GoalBee
     from experiment.trajectory_anal import create_gif
-    from experiment.shap_value_calc import shap_val, DicWrapper, dict_to_tensor, GymWrapper
+    from experiment.shap_value_calc import shap_val, GymWrapper
 
     DIR = os.path.dirname(os.path.dirname(__file__))
 
@@ -195,12 +195,13 @@ if __name__ == '__main__':
             model.policy.obs_to_tensor(dic['obs'])[0] for dic in steps
         ]
         if type(converted_observations[0]) == dict:
-            tensor_observations, ksp = dict_to_tensor(dic=converted_observations)
-            wrapped_model = DicWrapper(model.policy,
-                                       ksp=ksp,
-                                       proc_model_output=lambda x: x[0].flatten(),
-                                       model_call_kwargs={'deterministic': True},
-                                       )
+            raise Exception("dict conversion does not work with shap explainer")
+            # tensor_observations, ksp = dict_to_tensor(dic=converted_observations)
+            # wrapped_model = DicWrapper(model.policy,
+            #                           ksp=ksp,
+            #                           proc_model_output=lambda x: x[0].flatten(),
+            #                           model_call_kwargs={'deterministic': True},
+            #                           )
         else:
             tensor_observations = torch.concatenate(converted_observations, dim=0)
             wrapped_model = GymWrapper(network=model.policy,
@@ -269,24 +270,26 @@ if __name__ == '__main__':
             # actions, value, log_prob = model.policy.forward(obs_tense, deterministic=True)
             # print(actions, value, log_prob)
             for cam_name in env.unwrapped.of_cameras:
+
+                OF = dict()
+                stack_bottom = 0
+                for input_k in env.unwrapped.ordered_input_img_space[::-1]:
+                    stack_size = 2 if input_k == GoalBee.INPUT_OF_ORIENTATION else 1
+                    stack_bottom = stack_bottom - stack_size
+
+                    im = dic_obs[cam_name]
+                    OF[input_k] = im[len(im) + stack_bottom:len(im) + stack_bottom + stack_size]
+                    if stack_size == 1:
+                        OF[input_k] = OF[input_k][0]
+
                 expln_abs_total = explanation_abs_total[cam_name]
                 expln = [ex[cam_name] for ex in explanation]
 
-                # (k, H, W)
+                # (k, H, W), only consider current timestep
                 expln_abs_total = expln_abs_total.reshape(-1, *expln_abs_total.shape[-2:])
+                expln_abs_total = expln_abs_total[len(expln_abs_total) + stack_bottom:]
                 # (H, W)
                 expln_abs_total = np.sum(expln_abs_total, axis=0)
-
-                OF = dict()
-                i = 0
-                for input_k in env.unwrapped.ordered_input_img_space[::-1]:
-                    stack_size = 2 if input_k == GoalBee.INPUT_OF_ORIENTATION else 1
-                    i = i - stack_size
-
-                    im = dic_obs[cam_name]
-                    OF[input_k] = im[len(im) + i:len(im) + i + stack_size]
-                    if stack_size == 1:
-                        OF[input_k] = OF[input_k][0]
 
                 OF_log_magnitude = (OF[GoalBee.INPUT_LOG_OF] if GoalBee.INPUT_LOG_OF in OF
                                     else np.log(np.clip(OF[GoalBee.INPUT_RAW_OF], 10e-3, np.inf)))

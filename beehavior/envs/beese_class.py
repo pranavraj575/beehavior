@@ -8,6 +8,7 @@ import numpy as np
 import math
 from collections import deque
 from scipy.spatial.transform import Rotation
+from beehavior.networks.dic_converter import deconcater
 
 from airsim import Vector3r, Pose
 from airsim_interface.interface import connect_client, disconnect_client, step, of_geo, get_of_geo_shape, get_depth_img
@@ -663,18 +664,9 @@ class OFBeeseClass(BeeseClass):
     def obs_to_dict(self, obs, ksp=None):
         if ksp is None:
             ksp = self.get_ksp()
-        keys, shapes, partition = ksp
-        if len(obs.shape) == 2:
-            stuff = {
-                k: obs[:, partition[i]:partition[i + 1]].reshape(obs.shape[0], *shapes[i])
-                for i, k in enumerate(keys)
-            }
-        else:
-            stuff = {
-                k: obs[partition[i]:partition[i + 1]].reshape(shapes[i])
-                for i, k in enumerate(keys)
-            }
-        return stuff
+        keys, _, _ = ksp
+        return {k: o
+                for k, o in zip(keys, deconcater(arr=obs, ksp=ksp))}
 
     def get_obs(self):
         obs = dict()

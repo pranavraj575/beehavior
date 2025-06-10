@@ -4,6 +4,7 @@ import torch
 import shap
 import numpy as np
 import matplotlib.pyplot as plt
+from beehavior.networks.dic_converter import deconcater
 
 
 def dict_to_tensor(dic, ksp=None):
@@ -55,12 +56,10 @@ def tensor_to_dict(tensor, ksp):
     if len(tensor.shape) == 2:  # split the first dimension
         return [tensor_to_dict(tensor=ten, ksp=ksp) for ten in tensor]
 
-    keys, shapes, partition = ksp
-    dic = {
-        key: tensor[partition[i]:partition[i + 1]].reshape(shapes[i])
-        for i, key in enumerate(keys)
-    }
-    return dic
+    keys, _, _ = ksp
+
+    return {k: o
+            for k, o in zip(keys, deconcater(arr=tensor, ksp=ksp))}
 
 
 class GymWrapper(torch.nn.Module):
@@ -155,7 +154,7 @@ def shap_val(model, explanation_data, baseline, ):
     explainer = shap.DeepExplainer(model, baseline, )
     explanations = []
     for i in range(len(explanation_data)):
-        #print(int(100*(i + 1)/len(explanation_data)), '%')
+        # print(int(100*(i + 1)/len(explanation_data)), '%')
         expln = explainer.shap_values(explanation_data[i:i + 1], check_additivity=False)
         explanations.append(expln)
     return explanations
