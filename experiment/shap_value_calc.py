@@ -137,13 +137,14 @@ class DicWrapper(torch.nn.Module):
                 )
 
 
-def shap_val(model, explanation_data, baseline, ):
+def shap_val(model, explanation_data, baseline, progress=False):
     """
     returns shap values for explanation_data based on baseline
     Args:
         model: nn.Module that goes from tensor -> tensor
         explanation_data: batch of tensor input to explain, shaped (N,*)
         baseline: baseline of tensor input for use, shaped (M,*)
+        progress: print progress
     Returns:
         list of explanations
             each explanation is a list of shap values (shaped (*)), one for each output dim
@@ -154,7 +155,8 @@ def shap_val(model, explanation_data, baseline, ):
     explainer = shap.DeepExplainer(model, baseline, )
     explanations = []
     for i in range(len(explanation_data)):
-        # print(int(100*(i + 1)/len(explanation_data)), '%')
+        if progress:
+            print(int(100*(i + 1)/len(explanation_data)), '%')
         expln = explainer.shap_values(explanation_data[i:i + 1], check_additivity=False)
         explanations.append(expln)
     return explanations

@@ -10,15 +10,8 @@ from beehavior.networks.nn_from_config import CustomNN
 if __name__ == '__main__':
 
     import argparse
-    import numpy as np
-    from stable_baselines3 import PPO as MODEL
     import os
-    import pickle as pkl
-    import beehavior
-    from beehavior.envs.goal_bee import GoalBee
-    from experiment.trajectory_anal import create_gif
-    from experiment.shap_value_calc import shap_val, GymWrapper
-    import cv2 as cv
+
 
     DIR = os.path.dirname(os.path.dirname(__file__))
 
@@ -70,6 +63,16 @@ if __name__ == '__main__':
     PARSER.add_argument("--device", action='store', required=False, default='cpu',
                         help="device to store tensors on")
     args = PARSER.parse_args()
+
+    import numpy as np
+    from stable_baselines3 import PPO as MODEL
+    import pickle as pkl
+    import beehavior
+    from beehavior.envs.goal_bee import GoalBee
+    from experiment.trajectory_anal import create_gif
+    from experiment.shap_value_calc import shap_val, GymWrapper
+    import cv2 as cv
+
     device = args.device
     output_dir = args.display_output_dir
     if output_dir is None:
@@ -184,8 +187,7 @@ if __name__ == '__main__':
 
     import matplotlib.pyplot as plt
 
-    capture_interval = args.capture_interval
-
+    # calculate explanations
     explanations = None
     if os.path.exists(expln_filename) and not args.reexplain:
         # since every time we edit sampled steps, we delete this file,
@@ -225,48 +227,89 @@ if __name__ == '__main__':
         explanations = shap_val(model=wrapped_model,
                                 explanation_data=tensor_observations,
                                 baseline=baseline_tensor,
+                                progress=True,
                                 )
         print('obtained explanations, saving them')
         f = open(expln_filename, 'wb')
         pkl.dump(explanations, f)
         f.close()
         print('saved')
-    sum_abs_explanations = [sum(np.abs(ex) for ex in expln) if type(expln) is list
-                            else np.abs(expln)
-                            for expln in explanations]
-    sum_abs_explanations = [env.unwrapped.obs_to_dict(expln) for expln in sum_abs_explanations]
-    current_sum_abs_explanations = [
-        {k: np.sum(expln_dic[k].reshape(-1, *expln_dic[k].shape[-2:])[-env.unwrapped.imgs_per_step:], axis=0)
-         for k in expln_dic if k in env.unwrapped.of_cameras}
-        for expln_dic in sum_abs_explanations
+
+    all_abs_explanations = [
+        {'sum': sum(np.abs(ex) for ex in expln),
+         **{i: np.abs(ex) for i, ex in enumerate(expln)}}
+        if type(expln) is list
+        else {'sum': np.abs(expln)}
+        for expln in explanations
     ]
-    max_current_sum_abs_explanations = {k: max(np.max(csae_dic[k])
-                                               for csae_dic in current_sum_abs_explanations)
-                                        for k in env.unwrapped.of_cameras}
+    all_abs_explanations = [
+        {
+            output: env.unwrapped.obs_to_dict(explnation_for_each_output[output])
+            for output in explnation_for_each_output
+        }
+        for explnation_for_each_output in all_abs_explanations
+    ]
+
+    # for each timestep t, all_abs_explanations[t] is a dictionary dic with
+    #   dic[i]-> abs(explanation of output i)
+    #   dic['sum']-> sum_i(abs(explanation of output i))
+    # each explanation is in the same shape as environmnet observations
+
+    # current_sum_all_abs_explanations looks at only the current timestep, and takes the sum to make a
+    #  'image' the same size as each optic flow input
+    current_sum_all_abs_explanations = []
+    for explnation_for_each_output in all_abs_explanations:
+        dic = dict()
+        for output_key in explnation_for_each_output:
+            explanation = explnation_for_each_output[output_key]
+            current_obs_dic = {
+                obs_key:
+                    explanation[obs_key].reshape(-1, *explanation[obs_key].shape[-2:])[-env.unwrapped.imgs_per_step:]
+                for obs_key in env.unwrapped.of_cameras}
+            current_sum_obs_dic = {
+                obs_key: np.sum(current_obs_dic[obs_key], axis=0)
+                for obs_key in env.unwrapped.of_cameras
+            }
+            dic[output_key] = current_sum_obs_dic
+        current_sum_all_abs_explanations.append(dic)
+
+    output_keys = list(current_sum_all_abs_explanations[0].keys())
+    # max_current_sum_all_abs_explanations[output_key] gives the max across all time steps, across all cameras
+    #  of shap values with respect to a particular output key
+    max_current_sum_all_abs_explanations = {
+        output_key: max(
+            max(
+                np.max(dic[output_key][cam_name])
+                for dic in current_sum_all_abs_explanations
+            )
+            for cam_name in env.unwrapped.of_cameras
+        )
+        for output_key in output_keys
+    }
     # display optic flow
-    if ((GoalBee.INPUT_LOG_OF in env.unwrapped.input_img_space) or
-            (GoalBee.INPUT_RAW_OF in env.unwrapped.input_img_space)):
+    assert ((GoalBee.INPUT_LOG_OF in env.unwrapped.input_img_space) or
+            (GoalBee.INPUT_RAW_OF in env.unwrapped.input_img_space))
 
-        of_img_files = {cam: [] for cam in env.unwrapped.of_cameras}
-        OF_scale = {cam: 1 for cam in env.unwrapped.of_cameras}
+    OF_scale = {cam: 1 for cam in env.unwrapped.of_cameras}
 
-        count = int((GoalBee.INPUT_INV_DEPTH_IMG in env.unwrapped.input_img_space) +
-                    2*(GoalBee.INPUT_OF_ORIENTATION in env.unwrapped.input_img_space)
-                    )
-
-        if GoalBee.INPUT_OF_ORIENTATION in env.unwrapped.input_img_space:
-            for cam_name in env.unwrapped.of_cameras:
-                OF_scale[cam_name] = np.mean([
-                    np.max(
-                        np.exp(dic['dic_obs'][cam_name][-count - 1:][0])
-                        if GoalBee.INPUT_LOG_OF in env.unwrapped.input_img_space
-                        else dic['dic_obs'][cam_name][-count - 1:][0]
-                    )
-                    for dic in steps]
+    count = int((GoalBee.INPUT_INV_DEPTH_IMG in env.unwrapped.input_img_space) +
+                2*(GoalBee.INPUT_OF_ORIENTATION in env.unwrapped.input_img_space)
                 )
 
+    if GoalBee.INPUT_OF_ORIENTATION in env.unwrapped.input_img_space:
+        for cam_name in env.unwrapped.of_cameras:
+            OF_scale[cam_name] = np.mean([
+                np.max(
+                    np.exp(dic['dic_obs'][cam_name][-count - 1:][0])
+                    if GoalBee.INPUT_LOG_OF in env.unwrapped.input_img_space
+                    else dic['dic_obs'][cam_name][-count - 1:][0]
+                )
+                for dic in steps]
+            )
+    for output_key in output_keys + [None]:
+        of_img_files = {cam: [] for cam in env.unwrapped.of_cameras}
         for t, dic in enumerate(steps):
-            if t%capture_interval:
+            if t%args.capture_interval:
                 continue
             obs = dic['obs']
             dic_obs = dic['dic_obs']
@@ -296,17 +339,6 @@ if __name__ == '__main__':
                     if stack_size == 1:
                         OF[input_k] = OF[input_k][0]
 
-                expln_abs_total = explanation_abs_total[cam_name]
-                csae = current_sum_abs_explanations[t][cam_name]
-                expln = [ex[cam_name] for ex in explanation]
-
-                # (k, H, W), only consider current timestep
-
-                expln_abs_total = expln_abs_total.reshape(-1, *expln_abs_total.shape[-2:])
-                expln_abs_total = expln_abs_total[len(expln_abs_total) + stack_bottom:]
-                # (H, W)
-                expln_abs_total = np.sum(expln_abs_total, axis=0)
-
                 OF_log_magnitude = (OF[GoalBee.INPUT_LOG_OF] if GoalBee.INPUT_LOG_OF in OF
                                     else np.log(np.clip(OF[GoalBee.INPUT_RAW_OF], 10e-3, np.inf)))
 
@@ -318,15 +350,17 @@ if __name__ == '__main__':
                 else:
                     img = img/(log_mag_max - log_mag_min)
 
-                img = img*.5  # mute the OF information
 
-                # change the green channel to attention
-                # img[:, :, 1] = np.sqrt(csae/max_current_sum_abs_explanations[cam_name])
-                kernel = np.ones((args.avg_kernel, args.avg_kernel), )
-                kernel = cv.getGaussianKernel(ksize=args.avg_kernel, sigma=args.avg_kernel/2)
-                kernel = kernel.dot(kernel.T)
-                blurred_csae = cv.filter2D(csae/np.max(csae), -1, kernel)
-                img[:, :, 1] = (blurred_csae/np.max(blurred_csae))
+                if output_key is not None:
+                    img = img*.5  # mute the OF information
+                    # change the green channel to attention
+                    csae = current_sum_all_abs_explanations[t][output_key][cam_name]
+                    img[:, :, 1] = np.sqrt(csae/max_current_sum_all_abs_explanations[output_key])
+                    kernel = np.ones((args.avg_kernel, args.avg_kernel), )
+                    kernel = cv.getGaussianKernel(ksize=args.avg_kernel, sigma=args.avg_kernel/2)
+                    kernel = kernel.dot(kernel.T)
+                    blurred_csae = cv.filter2D(csae/np.max(csae), -1, kernel)
+                    img[:, :, 1] = (blurred_csae/np.max(blurred_csae))
 
                 img = img*255
                 img = np.ndarray.astype(img, dtype=np.uint8)
@@ -341,7 +375,7 @@ if __name__ == '__main__':
                     of_disp = np.transpose(OF_orientation*np.expand_dims(OF_magnitude, 0),
                                            axes=(0, 2, 1))
                     # inverted from image (height is top down) to np plot (y dim  bottom up)
-                    if False:
+                    if output_key is None:
                         plt.quiver(w[::ss, ::ss], h[::ss, ::ss],
                                    of_disp[0, ::ss, ::ss],
                                    -of_disp[1, ::ss, ::ss],
@@ -350,16 +384,21 @@ if __name__ == '__main__':
                                    )
 
                 # plt.show()
-                filename = os.path.join(img_dir, 'of_' + cam_name + '_' + str(t) + '.png')
+                filename = os.path.join(img_dir,
+                                        (str(output_key) + '_' if output_key is not None else '') +
+                                        'of_' + cam_name + '_' + str(t) +
+                                        '.png'
+                                        )
                 plt.savefig(filename, bbox_inches='tight')
                 plt.close()
                 of_img_files[cam_name].append(filename)
         for cam_name in of_img_files:
             files = of_img_files[cam_name]
-            filename = os.path.join(output_dir, 'OF_gifed.gif')
+            filename = os.path.join(output_dir,
+                                    (str(output_key) + '_' if output_key is not None else '') + 'OF_gifed.gif')
             create_gif(image_paths=of_img_files[cam_name],
                        output_gif_path=filename,
-                       duration=env.unwrapped.dt*1000*capture_interval,
+                       duration=env.unwrapped.dt*1000*args.capture_interval,
                        )
 
     quit()

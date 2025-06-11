@@ -387,7 +387,7 @@ if __name__ == '__main__':
         structure=None,
     ))
 
-    alex = os.path.join(network_dir, 'configs', 'simplest_alex.txt')
+    alex = os.path.join(network_dir, 'configs', 'simple.txt')
 
     print(CustomNN(
         observation_space=gym.spaces.Box(low=-np.inf, high=np.inf, shape=(8, 240, 320)),
@@ -397,7 +397,7 @@ if __name__ == '__main__':
     f = open(alex, 'r')
     alex_struct = ast.literal_eval(f.read())
     f.close()
-    f = open(os.path.join(network_dir, 'configs', 'simplest_alex.txt'), 'r')
+    f = open(os.path.join(network_dir, 'configs', 'simple.txt'), 'r')
     simplest_struct = ast.literal_eval(f.read())
     f.close()
 
@@ -445,7 +445,7 @@ if __name__ == '__main__':
         print(param.shape)
     print('second should be bigger:', len(list(pp.parameters())), len(list(pp2.parameters())))
 
-    f = open(os.path.join(network_dir, 'configs', 'simplest_gc.txt'), 'r')
+    f = open(os.path.join(network_dir, 'configs', 'simple_gc.txt'), 'r')
     gc_struct = ast.literal_eval(f.read())
     f.close()
 
