@@ -6,6 +6,7 @@ import numpy as np
 import argparse
 from PIL import Image
 
+
 def create_gif(image_paths, output_gif_path, duration=200):
     images = [Image.open(image_path) for image_path in image_paths]
     # Save as GIF
@@ -71,8 +72,8 @@ if __name__ == '__main__':
         # squished tunnel
         {
             # list of vertex lists
-            'walls': [[(-5, -8.35), (3.85, -8.35), (9.35, -6.9), (15.05, -8.35), (20.85, -6.9)],
-                      [(-5, -3.15), (3.85, -3.15), (9.35, -4.6), (15.05, -3.15), (20.85, -4.6)]],
+            'walls': [[(-5, -8.35), (1.05, -8.35), (6.55, -6.9), (12.25, -8.35), (18.05, -6.9), (23.75, -8.35)],
+                      [(-5, -3.15), (1.05, -3.15), (6.55, -4.6), (12.25, -3.15), (18.05, -4.6), (23.75, -3.15)]],
             'xlim': (-3, 21),
             # list of (center, width, height (for ellipse, x axis, y axis))
             'obs': [],

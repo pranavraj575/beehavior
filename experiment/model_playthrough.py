@@ -1,4 +1,5 @@
 import ast
+import itertools
 import shutil
 
 import gymnasium as gym
@@ -11,7 +12,6 @@ if __name__ == '__main__':
 
     import argparse
     import os
-
 
     DIR = os.path.dirname(os.path.dirname(__file__))
 
@@ -164,8 +164,10 @@ if __name__ == '__main__':
                     dic_obs = env.unwrapped.obs_to_dict(obs)
                 else:
                     dic_obs = obs
+                images = env.unwrapped.get_rgb_imgs()
                 steps.append({
                     'old_pose': pose_to_dic(old_pose),
+                    'rgb_imgs': images,
                     'obs': obs,
                     'dic_obs': dic_obs,
                     'action': action,
@@ -286,11 +288,24 @@ if __name__ == '__main__':
         )
         for output_key in output_keys
     }
+    blurring_kernel = cv.getGaussianKernel(ksize=args.avg_kernel, sigma=args.avg_kernel/2)
+    blurring_kernel = blurring_kernel.dot(blurring_kernel.T)
+    blurred_max_current_sum_all_abs_explanations = {
+        output_key: max(
+            max(
+                np.max(cv.filter2D(dic[output_key][cam_name], -1, blurring_kernel))
+                for dic in current_sum_all_abs_explanations
+            )
+            for cam_name in env.unwrapped.of_cameras
+        )
+        for output_key in output_keys
+    }
+
     # display optic flow
     assert ((GoalBee.INPUT_LOG_OF in env.unwrapped.input_img_space) or
             (GoalBee.INPUT_RAW_OF in env.unwrapped.input_img_space))
 
-    OF_scale = {cam: 1 for cam in env.unwrapped.of_cameras}
+    OF_scale = dict()
 
     count = int((GoalBee.INPUT_INV_DEPTH_IMG in env.unwrapped.input_img_space) +
                 2*(GoalBee.INPUT_OF_ORIENTATION in env.unwrapped.input_img_space)
@@ -306,100 +321,226 @@ if __name__ == '__main__':
                 )
                 for dic in steps]
             )
+
+
+    def make_plot(t,
+                  cam_name,
+                  use_OF=True,
+                  quiver_plot=False,
+                  output_key=None,
+                  only_heatmap=False,
+                  plotter=None,
+                  filename=None,
+                  ):
+        """
+        plots and saves optic flow info and attention
+        Args:
+            t: timestep to get dictionary from
+            cam_name: name of OF camera
+            use_OF: use OF as the image instead of RGB view
+            output_key: output key to plot ('sum', 0, ..., n-1, None) where n is the output dimension
+            plotter: plt object
+            filename: filename to save to
+        Returns:
+        """
+        if plotter is None:
+            plotter = plt
+        dic = steps[t]
+
+        # get optic flow information
+        dic_obs = dic['dic_obs']
+        OF = dict()
+        stack_bottom = 0
+        for input_k in env.unwrapped.ordered_input_img_space[::-1]:
+            stack_size = 2 if input_k == GoalBee.INPUT_OF_ORIENTATION else 1
+            stack_bottom = stack_bottom - stack_size
+            im = dic_obs[cam_name]
+            OF[input_k] = im[len(im) + stack_bottom:len(im) + stack_bottom + stack_size]
+            if stack_size == 1:
+                OF[input_k] = OF[input_k][0]
+        OF_log_magnitude = (OF[GoalBee.INPUT_LOG_OF] if GoalBee.INPUT_LOG_OF in OF
+                            else np.log(np.clip(OF[GoalBee.INPUT_RAW_OF], 10e-3, np.inf)))
+        if use_OF:
+            # make an OF image
+            log_mag_min = np.min(OF_log_magnitude)
+            log_mag_max = np.max(OF_log_magnitude)
+            img = (np.stack([OF_log_magnitude for _ in range(3)], axis=-1) - log_mag_min)
+            if log_mag_max == log_mag_min:
+                img = np.zeros_like(img)
+            else:
+                img = img/(log_mag_max - log_mag_min)
+            # scale image to pixels
+            img = img*255
+        else:
+            # use the rgb image
+            img = dic['rgb_imgs'][cam_name][:, :, ::-1]
+
+        # if we want to display attention
+        attention = None
+        if output_key is not None:
+            # img = .5*img  # mute the OF information
+            # change the green channel to attention
+            csae = current_sum_all_abs_explanations[t][output_key][cam_name]
+
+            blurred_csae = cv.filter2D(csae, -1, blurring_kernel)
+            attention = (blurred_csae/np.max(blurred_csae))  # scaled to [0,1]
+            # attention = np.clip(blurred_csae, 0, np.inf)/blurred_max_current_sum_all_abs_explanations[output_key]
+            if not only_heatmap:
+                img[:, :, 1] = attention*255  # scaled to [0,255]
+        if only_heatmap:
+            plotter.imshow(attention,
+                           cmap='coolwarm',
+                           interpolation='nearest',
+                           vmin=0,
+                           vmax=1,
+                           )
+        else:
+            img = np.ndarray.astype(img, dtype=np.uint8)
+            plotter.imshow(img, interpolation='nearest', )
+
+        if quiver_plot:
+            ss = 10
+            h, w = np.meshgrid(np.arange(OF_log_magnitude.shape[0]), np.arange(OF_log_magnitude.shape[1]))
+            OF_orientation = OF[GoalBee.INPUT_OF_ORIENTATION]
+            OF_magnitude = np.exp(OF_log_magnitude)
+            of_disp = np.transpose(OF_orientation*np.expand_dims(OF_magnitude, 0),
+                                   axes=(0, 2, 1))
+            # inverted from image (height is top down) to np plot (y dim  bottom up)
+
+            plotter.quiver(w[::ss, ::ss], h[::ss, ::ss],
+                           of_disp[0, ::ss, ::ss],
+                           -of_disp[1, ::ss, ::ss],
+                           color='red',
+                           scale=OF_scale[cam_name]*(max(w.shape)/ss),
+                           )
+        plotter.set_xticklabels([])
+        plotter.set_xticks([])
+
+        plotter.set_yticklabels([])
+        plotter.set_yticks([])
+        # plotter.show()
+        if filename is not None:
+            plotter.savefig(filename, bbox_inches='tight')
+
+
+    all_settings = []
     for output_key in output_keys + [None]:
-        of_img_files = {cam: [] for cam in env.unwrapped.of_cameras}
+        for use_OF, only_heatmap in itertools.product((True, False), repeat=2):
+            if output_key is not None and not use_OF:
+                # is we are using the rgb image, we do not need to define output_key
+                continue
+            if output_key is None and only_heatmap:
+                # only use heatmaps when output key is defined
+                continue
+            for cam_name in env.unwrapped.of_cameras:
+                sett = {
+                    'output_key': output_key,
+                    'use_OF': use_OF,
+                    'only_heatmap': only_heatmap,
+                    'cam_name': cam_name,
+                    'ident': (str(output_key) + '_' if output_key is not None else '') +
+                             ('heat_' if only_heatmap else '') +
+                             ('of_' if use_OF else 'raw_') + cam_name
+                }
+                all_settings.append(sett)
+    all_settings.append(
+        ((3, 1),
+         [
+             {
+                 'plt coords': (0, 0),
+                 'output_key': None,
+                 'quiver_plot': False,
+                 'use_OF': False,
+                 'only_heatmap': False,
+                 'cam_name': 'front',
+             },
+             {
+                 'plt coords': (1, 0),
+                 'output_key': None,
+                 'quiver_plot': True,
+                 'use_OF': True,
+                 'only_heatmap': False,
+                 'cam_name': 'front',
+             },
+             {
+                 'plt coords': (2, 0),
+                 'output_key': 'sum',
+                 'quiver_plot': False,
+                 'use_OF': False,
+                 'only_heatmap': True,
+                 'cam_name': 'front',
+             },
+         ],
+         'all'
+         )
+    )
+    all_settings = all_settings[::-1]
+    # make plots for all output keys, all timesteps, all cameras
+    for settings in all_settings:
+        ident = None
+        subplot_dim = None
+        if type(settings) == dict:
+            settings = [settings]
+        else:
+            subplot_dim, settings, ident = settings
+        img_files = []
         for t, dic in enumerate(steps):
             if t%args.capture_interval:
                 continue
-            obs = dic['obs']
-            dic_obs = dic['dic_obs']
-            explanation = explanations[t]
-            if type(explanation) is not list:
-                # pretty sure this can happen if the output is 1d?
-                explanation = [explanation]
-
-            explanation_abs_total = sum(np.abs(ex) for ex in explanation)
-            explanation = [env.unwrapped.obs_to_dict(ex) for ex in explanation]
-            explanation_abs_total = env.unwrapped.obs_to_dict(explanation_abs_total)
-            np_action, _ = model.predict(obs, deterministic=True)
-            # obs_tense, vectorized = model.policy.obs_to_tensor(obs)
-            # obs_tense = converted_observations[t]
-            # actions, value, log_prob = model.policy.forward(obs_tense, deterministic=True)
-            # print(actions, value, log_prob)
-            for cam_name in env.unwrapped.of_cameras:
-
-                OF = dict()
-                stack_bottom = 0
-                for input_k in env.unwrapped.ordered_input_img_space[::-1]:
-                    stack_size = 2 if input_k == GoalBee.INPUT_OF_ORIENTATION else 1
-                    stack_bottom = stack_bottom - stack_size
-
-                    im = dic_obs[cam_name]
-                    OF[input_k] = im[len(im) + stack_bottom:len(im) + stack_bottom + stack_size]
-                    if stack_size == 1:
-                        OF[input_k] = OF[input_k][0]
-
-                OF_log_magnitude = (OF[GoalBee.INPUT_LOG_OF] if GoalBee.INPUT_LOG_OF in OF
-                                    else np.log(np.clip(OF[GoalBee.INPUT_RAW_OF], 10e-3, np.inf)))
-
-                log_mag_min = np.min(OF_log_magnitude)
-                log_mag_max = np.max(OF_log_magnitude)
-                img = (np.stack([OF_log_magnitude for _ in range(3)], axis=-1) - log_mag_min)
-                if log_mag_max == log_mag_min:
-                    img = np.zeros_like(img)
+            if subplot_dim is not None:
+                fig, axs = plt.subplots(subplot_dim[0], subplot_dim[1])
+                w, h = fig.get_size_inches()
+                fig.set_size_inches(w*subplot_dim[1], h*subplot_dim[0])
+                plt.subplots_adjust(
+                    # left=0.125, right=0.9,
+                    # bottom=0.1, top=0.9,
+                    wspace=0.0, hspace=0.0
+                )
+                if any(p == 1 for p in subplot_dim):
+                    # ignore the 0 and just index once
+                    plotters = [axs[max(stuff['plt coords'])] for stuff in settings]
                 else:
-                    img = img/(log_mag_max - log_mag_min)
+                    plotters = [axs[stuff['plt coords']] for stuff in settings]
+            else:
+                plotters = [plt.gca()]
 
-
-                if output_key is not None:
-                    img = img*.5  # mute the OF information
-                    # change the green channel to attention
-                    csae = current_sum_all_abs_explanations[t][output_key][cam_name]
-                    img[:, :, 1] = np.sqrt(csae/max_current_sum_all_abs_explanations[output_key])
-                    kernel = np.ones((args.avg_kernel, args.avg_kernel), )
-                    kernel = cv.getGaussianKernel(ksize=args.avg_kernel, sigma=args.avg_kernel/2)
-                    kernel = kernel.dot(kernel.T)
-                    blurred_csae = cv.filter2D(csae/np.max(csae), -1, kernel)
-                    img[:, :, 1] = (blurred_csae/np.max(blurred_csae))
-
-                img = img*255
-                img = np.ndarray.astype(img, dtype=np.uint8)
-
-                plt.imshow(img, interpolation='nearest', )
-
-                if (GoalBee.INPUT_OF_ORIENTATION in OF) and (not args.ignorientation):
-                    ss = 10
-                    h, w = np.meshgrid(np.arange(OF_log_magnitude.shape[0]), np.arange(OF_log_magnitude.shape[1]))
-                    OF_orientation = OF[GoalBee.INPUT_OF_ORIENTATION]
-                    OF_magnitude = np.exp(OF_log_magnitude)
-                    of_disp = np.transpose(OF_orientation*np.expand_dims(OF_magnitude, 0),
-                                           axes=(0, 2, 1))
-                    # inverted from image (height is top down) to np plot (y dim  bottom up)
-                    if output_key is None:
-                        plt.quiver(w[::ss, ::ss], h[::ss, ::ss],
-                                   of_disp[0, ::ss, ::ss],
-                                   -of_disp[1, ::ss, ::ss],
-                                   color='red',
-                                   scale=OF_scale[cam_name]*(max(w.shape)/ss),
+            for plotter, stuff in zip(plotters, settings):
+                output_key = stuff['output_key']
+                only_heatmap = stuff['only_heatmap']
+                use_OF = stuff['use_OF']
+                cam_name = stuff['cam_name']
+                if ident is None:
+                    ident = stuff['ident']
+                if 'quiver_plot' in stuff:
+                    quiver_plot = stuff['quiver_plot']
+                else:
+                    quiver_plot = ((output_key is None) and
+                                   (GoalBee.INPUT_OF_ORIENTATION in env.unwrapped.input_img_space) and
+                                   (not args.ignorientation)
                                    )
-
-                # plt.show()
-                filename = os.path.join(img_dir,
-                                        (str(output_key) + '_' if output_key is not None else '') +
-                                        'of_' + cam_name + '_' + str(t) +
-                                        '.png'
-                                        )
-                plt.savefig(filename, bbox_inches='tight')
-                plt.close()
-                of_img_files[cam_name].append(filename)
-        for cam_name in of_img_files:
-            files = of_img_files[cam_name]
-            filename = os.path.join(output_dir,
-                                    (str(output_key) + '_' if output_key is not None else '') + 'OF_gifed.gif')
-            create_gif(image_paths=of_img_files[cam_name],
-                       output_gif_path=filename,
-                       duration=env.unwrapped.dt*1000*args.capture_interval,
-                       )
+                make_plot(t=t,
+                          cam_name=cam_name,
+                          output_key=output_key,
+                          use_OF=use_OF,
+                          plotter=plotter,
+                          only_heatmap=only_heatmap,
+                          quiver_plot=quiver_plot,
+                          filename=None,
+                          )
+            filename = os.path.join(img_dir,
+                                    ident + '_' + str(t) +
+                                    '.png'
+                                    )
+            plt.savefig(filename)
+            img_files.append(filename)
+            plt.close()
+        filename = os.path.join(output_dir,
+                                ident + '_' +
+                                'OF_gifed.gif')
+        create_gif(image_paths=img_files,
+                   output_gif_path=filename,
+                   duration=env.unwrapped.dt*1000*args.capture_interval,
+                   )
 
     quit()
 

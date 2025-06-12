@@ -120,7 +120,8 @@ def step(client, seconds=.5, cmd=lambda: None, pause_after=True):
             if None, runs cmd and pauses after
                 in this case, cmd should probably be a .join()
         cmd: ASYNCRHONOUS command to run for frames
-            if cmd is not asyncronous, it will run fully on a paused simulation
+            if cmd is not asyncronous, it will run fully then run the sim for seconds (if seconds is not None)
+        pause_after: pause after
     Returns:
 
     """

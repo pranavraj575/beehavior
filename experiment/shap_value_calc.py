@@ -156,7 +156,7 @@ def shap_val(model, explanation_data, baseline, progress=False):
     explanations = []
     for i in range(len(explanation_data)):
         if progress:
-            print(int(100*(i + 1)/len(explanation_data)), '%')
+            print(int(100*(i + 1)/len(explanation_data)), '%', end='\r')
         expln = explainer.shap_values(explanation_data[i:i + 1], check_additivity=False)
         explanations.append(expln)
     return explanations

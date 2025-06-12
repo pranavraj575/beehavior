@@ -24,6 +24,7 @@ class BeeseClass(gym.Env):
     terminates upon collision
     """
     ACTION_ROLL_PITCH_THRUST = 'rpt'  # action bounds about np.pi/18 (10 degrees tilt)
+    ACTION_ROTORS = 'rotors'  # control thrust to each rotor directly, value between 0 and 1
 
     ACTION_VELOCITY = 'vel'  # action bounds about 1.5 m/s
     ACTION_VELOCITY_XY = 'vel_xy'  # action bounds aboutn 1.5 m/s
@@ -149,6 +150,13 @@ class BeeseClass(gym.Env):
                 shape=(3,),
                 dtype=np.float64,
             )
+        elif self.action_type == self.ACTION_ROTORS:
+            self.action_space = gym.spaces.Box(
+                low=0,
+                high=1,
+                shape=(4,),
+                dtype=np.float64,
+            )
         else:
             raise NotImplementedError
         self.observation_space = self.define_observation_space()
@@ -246,13 +254,24 @@ class BeeseClass(gym.Env):
                                                                           duration=self.dt,
                                                                           vehicle_name=self.vehicle_name,
                                                                           )
+        elif self.action_type == self.ACTION_ROTORS:
+            front_right, front_left, rear_left, rear_right = action
+            cmd = lambda: self.client.moveByMotorPWMsAsync(
+                front_right_pwm=front_right,
+                front_left_pwm=front_left,
+                rear_left_pwm=rear_left,
+                rear_right_pwm=rear_right,
+                duration=self.dt,
+                vehicle_name=self.vehicle_name,
+            )
         else:
             raise NotImplementedError
-        step(client=self.client,
-             seconds=self.dt,
-             cmd=cmd,
-             pause_after=not self.real_time,
-             )
+        step(
+            client=self.client,
+            seconds=self.dt,
+            cmd=cmd,
+            pause_after=not self.real_time,
+        )
 
         if self.col_cnt > 0:
             # if we are still in the takeoff grace period, just update so ground is not registered as a collision
@@ -667,6 +686,23 @@ class OFBeeseClass(BeeseClass):
         keys, _, _ = ksp
         return {k: o
                 for k, o in zip(keys, deconcater(arr=obs, ksp=ksp))}
+
+    def get_rgb_imgs(self):
+        imgs = dict()
+        for camera_name in self.of_cameras:
+            img_data = None
+            image = None
+            while not img_data:
+                response = self.client.simGetImages(
+                    [airsim.ImageRequest(camera_name, airsim.ImageType.Scene, False, False)]
+                )
+                img_data = response[0].image_data_uint8
+                if img_data:
+                    image = np.frombuffer(img_data, dtype=np.uint8).reshape(response[0].height, response[0].width, 3)
+                else:
+                    print("COLOR IMAGE NOT FORMED, TRYING AGAIN")
+            imgs[camera_name] = image
+        return imgs
 
     def get_obs(self):
         obs = dict()
