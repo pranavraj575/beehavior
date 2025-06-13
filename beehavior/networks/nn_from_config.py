@@ -313,7 +313,11 @@ class CustomNN(BaseFeaturesExtractor):
                             keys, shapes, partition = self.ksp
                             b = torch.as_tensor(observation_space.sample()[None], device=None).float()
                             idx = keys.index(k)
-                            b = b[partition[idx]:partition[idx + 1]].reshape(shapes[idx])
+                            if len(b.shape)==1:
+                                b = b[partition[idx]:partition[idx + 1]].reshape(shapes[idx])
+                            else:
+                                b = b[:,partition[idx]:partition[idx + 1]].reshape(shapes[idx])
+
                         lys = layers[k]
                         if type(lys) == str:
                             lys = layers[lys]

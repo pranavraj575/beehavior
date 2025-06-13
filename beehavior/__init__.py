@@ -29,8 +29,15 @@ gym.envs.register(
     entry_point='beehavior.envs.forward_bee:ForwardBee',
     max_episode_steps=10000,
 )
+
 gym.envs.register(
     id='GoalBee-v0',
     entry_point='beehavior.envs.goal_bee:GoalBee',
+    max_episode_steps=10000,
+)
+
+gym.envs.register(
+    id='StationBee-v0',
+    entry_point='beehavior.envs.goal_bee:StationBee',
     max_episode_steps=10000,
 )

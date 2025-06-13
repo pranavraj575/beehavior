@@ -29,7 +29,7 @@ if __name__ == '__main__':
     PARSER.add_argument("--env-config-file", action='store', required=False, default=None,
                         help="environment specification file, formatted as dictionary {'name':<env name>,'kwargs':<kwargs dict>}")
 
-    PARSER.add_argument("--display-output-dir", action='store', required=False, default=None,
+    PARSER.add_argument("--output-dir-display", action='store', required=False, default=None,
                         help="directory to output saved info, defaults to output/<parent dir(parent dir(model path)>/display")
 
     PARSER.add_argument("--initial-pos", type=float, nargs=3, required=False, default=None,
@@ -37,8 +37,6 @@ if __name__ == '__main__':
 
     PARSER.add_argument("--capture-interval", type=int, required=False, default=3,
                         help="skip this many timesteps when displaying OF video")
-    PARSER.add_argument("--ignorientation", action='store_true', required=False,
-                        help="ignore OF orientation")
 
     PARSER.add_argument("--num-trajectories", type=int, required=False, default=1,
                         help="number of trajectories to capture")
@@ -69,12 +67,12 @@ if __name__ == '__main__':
     import pickle as pkl
     import beehavior
     from beehavior.envs.goal_bee import GoalBee
-    from experiment.trajectory_anal import create_gif
+    from experiment.trajectory_anal import create_mp4
     from experiment.shap_value_calc import shap_val, GymWrapper
     import cv2 as cv
 
     device = args.device
-    output_dir = args.display_output_dir
+    output_dir = args.output_dir_display
     if output_dir is None:
         output_dir = os.path.join(DIR,
                                   'output',
@@ -176,6 +174,7 @@ if __name__ == '__main__':
                     'info': info,
                 })
                 old_pose = pose
+            print(info)
         if args.display_only:
             quit()
         print('completed sample, saving')
@@ -187,7 +186,7 @@ if __name__ == '__main__':
         f.close()
         print('saved')
 
-    import matplotlib.pyplot as plt
+    print('timesteps:', len(steps))
 
     # calculate explanations
     explanations = None
@@ -323,6 +322,8 @@ if __name__ == '__main__':
             )
 
 
+    import matplotlib.pyplot as plt
+
     def make_plot(t,
                   cam_name,
                   use_OF=True,
@@ -380,11 +381,16 @@ if __name__ == '__main__':
         if output_key is not None:
             # img = .5*img  # mute the OF information
             # change the green channel to attention
-            csae = current_sum_all_abs_explanations[t][output_key][cam_name]
+            cam_to_csae = current_sum_all_abs_explanations[t][output_key]
 
-            blurred_csae = cv.filter2D(csae, -1, blurring_kernel)
-            attention = (blurred_csae/np.max(blurred_csae))  # scaled to [0,1]
-            # attention = np.clip(blurred_csae, 0, np.inf)/blurred_max_current_sum_all_abs_explanations[output_key]
+            blurred_csae = cv.filter2D(cam_to_csae[cam_name], -1, blurring_kernel)
+            max_over_each_frame = False
+            if max_over_each_frame:
+                attention = (blurred_csae/max(
+                    np.max(cv.filter2D(cam_to_csae[cn], -1, blurring_kernel))
+                    for cn in env.unwrapped.of_cameras))  # scaled to [0,1]
+            else:
+                attention = np.clip(blurred_csae, 0, np.inf)/blurred_max_current_sum_all_abs_explanations[output_key]
             if not only_heatmap:
                 img[:, :, 1] = attention*255  # scaled to [0,255]
         if only_heatmap:
@@ -424,6 +430,40 @@ if __name__ == '__main__':
 
 
     all_settings = []
+
+    all_settings.append(
+        ((3, len(env.unwrapped.of_cameras)),
+         sum(
+         [[
+             {
+                 'plt coords': (0, i),
+                 'output_key': None,
+                 'quiver_plot': False,
+                 'use_OF': False,
+                 'only_heatmap': False,
+                 'cam_name': cam_name,
+             },
+             {
+                 'plt coords': (1, i),
+                 'output_key': None,
+                 'quiver_plot': True,
+                 'use_OF': True,
+                 'only_heatmap': False,
+                 'cam_name': cam_name,
+             },
+             {
+                 'plt coords': (2, i),
+                 'output_key': 'sum',
+                 'quiver_plot': False,
+                 'use_OF': False,
+                 'only_heatmap': True,
+                 'cam_name': cam_name,
+             },
+         ] for i,cam_name in enumerate(env.unwrapped.of_cameras)],[]
+         ),
+         'all'
+         )
+    )
     for output_key in output_keys + [None]:
         for use_OF, only_heatmap in itertools.product((True, False), repeat=2):
             if output_key is not None and not use_OF:
@@ -443,38 +483,6 @@ if __name__ == '__main__':
                              ('of_' if use_OF else 'raw_') + cam_name
                 }
                 all_settings.append(sett)
-    all_settings.append(
-        ((3, 1),
-         [
-             {
-                 'plt coords': (0, 0),
-                 'output_key': None,
-                 'quiver_plot': False,
-                 'use_OF': False,
-                 'only_heatmap': False,
-                 'cam_name': 'front',
-             },
-             {
-                 'plt coords': (1, 0),
-                 'output_key': None,
-                 'quiver_plot': True,
-                 'use_OF': True,
-                 'only_heatmap': False,
-                 'cam_name': 'front',
-             },
-             {
-                 'plt coords': (2, 0),
-                 'output_key': 'sum',
-                 'quiver_plot': False,
-                 'use_OF': False,
-                 'only_heatmap': True,
-                 'cam_name': 'front',
-             },
-         ],
-         'all'
-         )
-    )
-    all_settings = all_settings[::-1]
     # make plots for all output keys, all timesteps, all cameras
     for settings in all_settings:
         ident = None
@@ -515,8 +523,7 @@ if __name__ == '__main__':
                     quiver_plot = stuff['quiver_plot']
                 else:
                     quiver_plot = ((output_key is None) and
-                                   (GoalBee.INPUT_OF_ORIENTATION in env.unwrapped.input_img_space) and
-                                   (not args.ignorientation)
+                                   (GoalBee.INPUT_OF_ORIENTATION in env.unwrapped.input_img_space)
                                    )
                 make_plot(t=t,
                           cam_name=cam_name,
@@ -536,10 +543,11 @@ if __name__ == '__main__':
             plt.close()
         filename = os.path.join(output_dir,
                                 ident + '_' +
-                                'OF_gifed.gif')
-        create_gif(image_paths=img_files,
-                   output_gif_path=filename,
+                                'OF.mp4')
+        create_mp4(image_paths=img_files,
+                   output_mp4_path=filename,
                    duration=env.unwrapped.dt*1000*args.capture_interval,
+                   debug=True,
                    )
 
     quit()

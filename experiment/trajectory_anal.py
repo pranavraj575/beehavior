@@ -6,6 +6,34 @@ import numpy as np
 import argparse
 from PIL import Image
 
+import cv2
+import skvideo.io
+
+
+def create_mp4(image_paths, output_mp4_path, duration=200, debug=False):
+    writer = skvideo.io.FFmpegWriter(output_mp4_path, outputdict={
+        '-vcodec': 'libx264',  # use the h.264 codec
+        '-crf': '0',  # set the constant rate factor to 0, which is lossless
+        # '-framerate':str(1), # frequency, inverse of duration
+        '-preset': 'veryslow'  # the slower the better compression, in princple, try
+        # other options see https://trac.ffmpeg.org/wiki/Encode/H.264
+    })
+    default_fps = 25
+    duration = duration/1000  # convert to seconds/image
+    time_elapsed = 0
+    while time_elapsed < duration*len(image_paths):
+        # time_elapsed//duration<= time_elapsed/duration<len(image_paths)
+        image_path = image_paths[int(time_elapsed//duration)]
+        img = cv2.imread(filename=image_path)
+        writer.writeFrame(img[:, :, ::-1])
+        time_elapsed += 1/default_fps
+        if debug:
+            print('wrote', time_elapsed, 'of', duration*len(image_paths),end='\r')
+    if debug:
+        print('wrote video of length', time_elapsed - 1/default_fps)
+    writer.close()
+    cv2.destroyAllWindows()
+
 
 def create_gif(image_paths, output_gif_path, duration=200):
     images = [Image.open(image_path) for image_path in image_paths]

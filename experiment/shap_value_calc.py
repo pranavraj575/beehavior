@@ -1,7 +1,7 @@
-import gymnasium.spaces
 import pandas as pd
 import torch
 import shap
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 from beehavior.networks.dic_converter import deconcater
@@ -154,11 +154,16 @@ def shap_val(model, explanation_data, baseline, progress=False):
     # baseline should be about 10% sample from explanation
     explainer = shap.DeepExplainer(model, baseline, )
     explanations = []
+    if progress:
+        print('using', len(baseline), 'baseline samples to explain', len(explanation_data), 'inputs')
+    timothy = time.time()
     for i in range(len(explanation_data)):
-        if progress:
-            print(int(100*(i + 1)/len(explanation_data)), '%', end='\r')
         expln = explainer.shap_values(explanation_data[i:i + 1], check_additivity=False)
         explanations.append(expln)
+        if progress:
+            dur = time.time() - timothy
+            rem = len(explanation_data)*(dur/(i+1)) - dur
+            print(round(100*(i + 1)/len(explanation_data), 2), '%, time remaining:', int(rem), 's   ', end='\r')
     return explanations
 
 
