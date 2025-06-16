@@ -26,6 +26,8 @@ if __name__ == '__main__':
     PARSER.add_argument("--model", action='store', required=True,
                         help="model file (.pkl) to load")
 
+    PARSER.add_argument("--comparisons", nargs='*', required=False, default=[],
+                        help="model file (.pkl) of same input/ouput type as <--model> to compare to")
     PARSER.add_argument("--env-config-file", action='store', required=False, default=None,
                         help="environment specification file, formatted as dictionary {'name':<env name>,'kwargs':<kwargs dict>}")
 
@@ -54,6 +56,9 @@ if __name__ == '__main__':
 
     PARSER.add_argument("--avg-kernel", type=int, required=False, default=1,
                         help="smooth the attention with a moving average using this kernel (1 does nothing)")
+
+    PARSER.add_argument("--max-over-each-frame", action='store_true', required=False,
+                        help="take max over each frame for scaling instead of a global max over trajectories")
     PARSER.add_argument("--reexplain", action='store_true', required=False,
                         help="do not used saved explanations")
     PARSER.add_argument("--display-only", action='store_true', required=False,
@@ -189,67 +194,92 @@ if __name__ == '__main__':
     print('timesteps:', len(steps))
 
     # calculate explanations
-    explanations = None
+    explanations = dict()
     if os.path.exists(expln_filename) and not args.reexplain:
         # since every time we edit sampled steps, we delete this file,
         #   this file only will exist if we have correct info in it
         f = open(expln_filename, 'rb')
         explanations = pkl.load(f)
         f.close()
-    else:
-        converted_observations = [
-            model.policy.obs_to_tensor(dic['obs'])[0] for dic in steps
-        ]
-        if type(converted_observations[0]) == dict:
-            raise Exception("dict conversion does not work with shap explainer")
-            # tensor_observations, ksp = dict_to_tensor(dic=converted_observations)
-            # wrapped_model = DicWrapper(model.policy,
-            #                           ksp=ksp,
-            #                           proc_model_output=lambda x: x[0].flatten(),
-            #                           model_call_kwargs={'deterministic': True},
-            #                           )
-        else:
-            tensor_observations = torch.concatenate(converted_observations, dim=0)
-            wrapped_model = GymWrapper(network=model.policy,
-                                       model_call_kwargs={'deterministic': True},
-                                       )
-        # sample a proportion of the data for background
-        if args.baseline_amnt is not None:
-            if args.baseline_amnt < 1:
-                # baseline_amnt is a proportion
-                idxs = torch.randperm(len(tensor_observations))[:int(len(tensor_observations)*args.baseline_amnt)]
+    expln_keys = [args.model] + args.comparisons
+
+    updated_exp = False
+    for expln_key in expln_keys:
+        if expln_key not in explanations:
+            updated_exp = True
+            print('explainin', expln_key)
+            model = MODEL.load(expln_key, env=env)
+            model.policy.to(device)
+
+            converted_observations = [
+                model.policy.obs_to_tensor(dic['obs'])[0] for dic in steps
+            ]
+            if type(converted_observations[0]) == dict:
+                raise Exception("dict conversion does not work with shap explainer")
             else:
-                # baseline_amnt is a number
-                idxs = torch.randperm(len(tensor_observations))[:int(args.baseline_amnt)]
-        else:
-            # idxs = torch.arange(len(tensor_observations))
-            idxs = torch.randperm(len(tensor_observations))
-        baseline_tensor = tensor_observations[idxs]
-        explanations = shap_val(model=wrapped_model,
-                                explanation_data=tensor_observations,
-                                baseline=baseline_tensor,
-                                progress=True,
-                                )
+                tensor_observations = torch.concatenate(converted_observations, dim=0)
+                wrapped_model = GymWrapper(network=model.policy,
+                                           model_call_kwargs={'deterministic': True},
+                                           )
+            # sample a proportion of the data for background
+            if args.baseline_amnt is not None:
+                if args.baseline_amnt < 1:
+                    # baseline_amnt is a proportion
+                    idxs = torch.randperm(len(tensor_observations))[:int(len(tensor_observations)*args.baseline_amnt)]
+                else:
+                    # baseline_amnt is a number
+                    idxs = torch.randperm(len(tensor_observations))[:int(args.baseline_amnt)]
+            else:
+                # idxs = torch.arange(len(tensor_observations))
+                idxs = torch.randperm(len(tensor_observations))
+            baseline_tensor = tensor_observations[idxs]
+            explanations[expln_key] = shap_val(
+                model=wrapped_model,
+                explanation_data=tensor_observations,
+                baseline=baseline_tensor,
+                progress=True,
+            )
+
+    if updated_exp:
         print('obtained explanations, saving them')
         f = open(expln_filename, 'wb')
         pkl.dump(explanations, f)
         f.close()
         print('saved')
 
-    all_abs_explanations = [
-        {'sum': sum(np.abs(ex) for ex in expln),
-         **{i: np.abs(ex) for i, ex in enumerate(expln)}}
-        if type(expln) is list
-        else {'sum': np.abs(expln)}
-        for expln in explanations
-    ]
-    all_abs_explanations = [
+    all_abs_explanations = {
+        expln_key: [
+            {'sum': sum(np.abs(ex) for ex in expln),
+             **{i: np.abs(ex) for i, ex in enumerate(expln)}
+             }
+            if type(expln) is list
+            else {'sum': np.abs(expln)}
+            for expln in explanations[expln_key]
+        ]
+        for expln_key in explanations
+    }
+    output_keys = list(all_abs_explanations[expln_keys[0]][0].keys())
+    avg_explanation = {}
+    # take avg across comparison models
+    all_abs_explanations['avg'] = [
         {
-            output: env.unwrapped.obs_to_dict(explnation_for_each_output[output])
-            for output in explnation_for_each_output
+            output_key: sum(all_abs_explanations[expln_key][i][output_key] for expln_key in expln_keys)/len(expln_keys)
+            for output_key in output_keys
         }
-        for explnation_for_each_output in all_abs_explanations
+        for i in range(len(steps))
     ]
+
+    expln_keys = ['avg'] + expln_keys
+    all_abs_explanations = {
+        expln_key: [
+            {
+                output: env.unwrapped.obs_to_dict(explnation_for_each_output[output])
+                for output in explnation_for_each_output
+            }
+            for explnation_for_each_output in all_abs_explanations[expln_key]
+        ]
+        for expln_key in all_abs_explanations
+    }
 
     # for each timestep t, all_abs_explanations[t] is a dictionary dic with
     #   dic[i]-> abs(explanation of output i)
@@ -258,48 +288,57 @@ if __name__ == '__main__':
 
     # current_sum_all_abs_explanations looks at only the current timestep, and takes the sum to make a
     #  'image' the same size as each optic flow input
-    current_sum_all_abs_explanations = []
-    for explnation_for_each_output in all_abs_explanations:
-        dic = dict()
-        for output_key in explnation_for_each_output:
-            explanation = explnation_for_each_output[output_key]
-            current_obs_dic = {
-                obs_key:
-                    explanation[obs_key].reshape(-1, *explanation[obs_key].shape[-2:])[-env.unwrapped.imgs_per_step:]
-                for obs_key in env.unwrapped.of_cameras}
-            current_sum_obs_dic = {
-                obs_key: np.sum(current_obs_dic[obs_key], axis=0)
-                for obs_key in env.unwrapped.of_cameras
-            }
-            dic[output_key] = current_sum_obs_dic
-        current_sum_all_abs_explanations.append(dic)
+    current_sum_all_abs_explanations = dict()
+    for expln_key in expln_keys:
+        csaae = []
+        for explnation_for_each_output in all_abs_explanations[expln_key]:
+            dic = dict()
+            for output_key in explnation_for_each_output:
+                explanation = explnation_for_each_output[output_key]
+                current_obs_dic = {
+                    obs_key:
+                        explanation[obs_key].reshape(-1, *explanation[obs_key].shape[-2:])[
+                        -env.unwrapped.imgs_per_step:]
+                    for obs_key in env.unwrapped.of_cameras}
+                current_sum_obs_dic = {
+                    obs_key: np.sum(current_obs_dic[obs_key], axis=0)
+                    for obs_key in env.unwrapped.of_cameras
+                }
+                dic[output_key] = current_sum_obs_dic
+            csaae.append(dic)
+        current_sum_all_abs_explanations[expln_key] = csaae
 
-    output_keys = list(current_sum_all_abs_explanations[0].keys())
+    output_keys = list(current_sum_all_abs_explanations[args.model][0].keys())
     # max_current_sum_all_abs_explanations[output_key] gives the max across all time steps, across all cameras
     #  of shap values with respect to a particular output key
     max_current_sum_all_abs_explanations = {
-        output_key: max(
-            max(
-                np.max(dic[output_key][cam_name])
-                for dic in current_sum_all_abs_explanations
+        expln_key: {
+            output_key: max(
+                max(
+                    np.max(dic[output_key][cam_name])
+                    for dic in current_sum_all_abs_explanations[expln_key]
+                )
+                for cam_name in env.unwrapped.of_cameras
             )
-            for cam_name in env.unwrapped.of_cameras
-        )
-        for output_key in output_keys
+            for output_key in output_keys
+        }
+        for expln_key in expln_keys
     }
     blurring_kernel = cv.getGaussianKernel(ksize=args.avg_kernel, sigma=args.avg_kernel/2)
     blurring_kernel = blurring_kernel.dot(blurring_kernel.T)
     blurred_max_current_sum_all_abs_explanations = {
-        output_key: max(
-            max(
-                np.max(cv.filter2D(dic[output_key][cam_name], -1, blurring_kernel))
-                for dic in current_sum_all_abs_explanations
+        expln_key: {
+            output_key: max(
+                max(
+                    np.max(cv.filter2D(dic[output_key][cam_name], -1, blurring_kernel))
+                    for dic in current_sum_all_abs_explanations[expln_key]
+                )
+                for cam_name in env.unwrapped.of_cameras
             )
-            for cam_name in env.unwrapped.of_cameras
-        )
-        for output_key in output_keys
+            for output_key in output_keys
+        }
+        for expln_key in expln_keys
     }
-
     # display optic flow
     assert ((GoalBee.INPUT_LOG_OF in env.unwrapped.input_img_space) or
             (GoalBee.INPUT_RAW_OF in env.unwrapped.input_img_space))
@@ -321,11 +360,12 @@ if __name__ == '__main__':
                 for dic in steps]
             )
 
-
     import matplotlib.pyplot as plt
+
 
     def make_plot(t,
                   cam_name,
+                  expln_key,
                   use_OF=True,
                   quiver_plot=False,
                   output_key=None,
@@ -381,16 +421,16 @@ if __name__ == '__main__':
         if output_key is not None:
             # img = .5*img  # mute the OF information
             # change the green channel to attention
-            cam_to_csae = current_sum_all_abs_explanations[t][output_key]
+            cam_to_csae = current_sum_all_abs_explanations[expln_key][t][output_key]
 
             blurred_csae = cv.filter2D(cam_to_csae[cam_name], -1, blurring_kernel)
-            max_over_each_frame = False
-            if max_over_each_frame:
+            if args.max_over_each_frame:
                 attention = (blurred_csae/max(
                     np.max(cv.filter2D(cam_to_csae[cn], -1, blurring_kernel))
                     for cn in env.unwrapped.of_cameras))  # scaled to [0,1]
             else:
-                attention = np.clip(blurred_csae, 0, np.inf)/blurred_max_current_sum_all_abs_explanations[output_key]
+                attention = np.clip(blurred_csae, 0, np.inf)/blurred_max_current_sum_all_abs_explanations[expln_key][
+                    output_key]
             if not only_heatmap:
                 img[:, :, 1] = attention*255  # scaled to [0,255]
         if only_heatmap:
@@ -432,38 +472,92 @@ if __name__ == '__main__':
     all_settings = []
 
     all_settings.append(
-        ((3, len(env.unwrapped.of_cameras)),
-         sum(
-         [[
-             {
-                 'plt coords': (0, i),
-                 'output_key': None,
-                 'quiver_plot': False,
-                 'use_OF': False,
-                 'only_heatmap': False,
-                 'cam_name': cam_name,
-             },
-             {
-                 'plt coords': (1, i),
-                 'output_key': None,
-                 'quiver_plot': True,
-                 'use_OF': True,
-                 'only_heatmap': False,
-                 'cam_name': cam_name,
-             },
-             {
-                 'plt coords': (2, i),
-                 'output_key': 'sum',
-                 'quiver_plot': False,
-                 'use_OF': False,
-                 'only_heatmap': True,
-                 'cam_name': cam_name,
-             },
-         ] for i,cam_name in enumerate(env.unwrapped.of_cameras)],[]
-         ),
-         'all'
-         )
+        (sum(
+            [[
+                {
+                    'plt coords': (0, i),
+                    'output_key': None,
+                    'quiver_plot': False,
+                    'use_OF': False,
+                    'only_heatmap': False,
+                    'cam_name': cam_name,
+                },
+                {
+                    'plt coords': (1, i),
+                    'output_key': None,
+                    'quiver_plot': True,
+                    'use_OF': True,
+                    'only_heatmap': False,
+                    'cam_name': cam_name,
+                },
+                {
+                    'plt coords': (2, i),
+                    'output_key': 'sum',
+                    'quiver_plot': False,
+                    'use_OF': False,
+                    'only_heatmap': True,
+                    'cam_name': cam_name,
+                },
+            ] for i, cam_name in enumerate(env.unwrapped.of_cameras)], []
+        ),
+         {
+             'ident': 'all',
+             'subplot_dim': (3, len(env.unwrapped.of_cameras)),
+             'xlabels': env.unwrapped.of_cameras,
+             'ylabels': ['visual', 'optic flow', 'attention'],
+             'xlabel_kwargs': {'fontsize': 20},
+             'ylabel_kwargs': {'fontsize': 20},
+         },
+        )
     )
+    if len(expln_keys) > 2:  # if expln keys is not just [avg][model]
+        for cam_name in env.unwrapped.of_cameras:
+            all_settings.append(
+                (sum(
+                    [[
+                         {
+                             'plt coords': (0, i),
+                             'output_key': None,
+                             'quiver_plot': False,
+                             'use_OF': False,
+                             'only_heatmap': False,
+                             'cam_name': cam_name,
+                             'expln_key': expln_key,
+                         },
+                         {
+                             'plt coords': (1, i),
+                             'output_key': None,
+                             'quiver_plot': True,
+                             'use_OF': True,
+                             'only_heatmap': False,
+                             'cam_name': cam_name,
+                             'expln_key': expln_key,
+                         },
+                         {
+                             'plt coords': (2, i),
+                             'output_key': 'sum',
+                             'quiver_plot': False,
+                             'use_OF': False,
+                             'only_heatmap': True,
+                             'cam_name': cam_name,
+                             'expln_key': expln_key,
+                         },
+                     ][0 if i == 0 else -1:]  # if i>0, first two plots are redundant
+                     for i, expln_key in enumerate(expln_keys)
+                     ],
+                    []
+                ),
+                 {
+                     'subplot_dim': (3, len(expln_keys)),
+                     'ident': 'comp_' + cam_name,
+                     'xlabels': ['average'] + ['model ' + str(i) for i in (range(len(expln_keys) - 1))],
+                     'ylabels': ['visual', 'optic flow', 'attention'],
+                     'xlabel_kwargs': {'fontsize': 20},
+                     'ylabel_kwargs': {'fontsize': 20},
+                 }
+                )
+            )
+
     for output_key in output_keys + [None]:
         for use_OF, only_heatmap in itertools.product((True, False), repeat=2):
             if output_key is not None and not use_OF:
@@ -483,20 +577,30 @@ if __name__ == '__main__':
                              ('of_' if use_OF else 'raw_') + cam_name
                 }
                 all_settings.append(sett)
-    # make plots for all output keys, all timesteps, all cameras
+    # make plots
     for settings in all_settings:
         ident = None
         subplot_dim = None
         if type(settings) == dict:
             settings = [settings]
+            info = dict()
         else:
-            subplot_dim, settings, ident = settings
+            settings, info = settings
+            ident = info['ident']
+            subplot_dim = info['subplot_dim']
         img_files = []
         for t, dic in enumerate(steps):
             if t%args.capture_interval:
                 continue
             if subplot_dim is not None:
                 fig, axs = plt.subplots(subplot_dim[0], subplot_dim[1])
+                axs = axs.reshape(subplot_dim)
+                for ax in axs.flatten():
+                    ax.set_xticklabels([])
+                    ax.set_xticks([])
+
+                    ax.set_yticklabels([])
+                    ax.set_yticks([])
                 w, h = fig.get_size_inches()
                 fig.set_size_inches(w*subplot_dim[1], h*subplot_dim[0])
                 plt.subplots_adjust(
@@ -504,11 +608,13 @@ if __name__ == '__main__':
                     # bottom=0.1, top=0.9,
                     wspace=0.0, hspace=0.0
                 )
-                if any(p == 1 for p in subplot_dim):
-                    # ignore the 0 and just index once
-                    plotters = [axs[max(stuff['plt coords'])] for stuff in settings]
-                else:
-                    plotters = [axs[stuff['plt coords']] for stuff in settings]
+                if 'xlabels' in info:
+                    for xlabel, ax in zip(info['xlabels'], axs[-1, :]):
+                        ax.set_xlabel(xlabel, **info.get('xlabel_kwargs', dict()))
+                if 'ylabels' in info:
+                    for ylabel, ax in zip(info['ylabels'], axs[:, 0]):
+                        ax.set_ylabel(ylabel, **info.get('ylabel_kwargs', dict()))
+                plotters = [axs[stuff['plt coords']] for stuff in settings]
             else:
                 plotters = [plt.gca()]
 
@@ -517,6 +623,7 @@ if __name__ == '__main__':
                 only_heatmap = stuff['only_heatmap']
                 use_OF = stuff['use_OF']
                 cam_name = stuff['cam_name']
+                expln_key = stuff.get('expln_key', 'avg')
                 if ident is None:
                     ident = stuff['ident']
                 if 'quiver_plot' in stuff:
@@ -526,6 +633,7 @@ if __name__ == '__main__':
                                    (GoalBee.INPUT_OF_ORIENTATION in env.unwrapped.input_img_space)
                                    )
                 make_plot(t=t,
+                          expln_key=expln_key,
                           cam_name=cam_name,
                           output_key=output_key,
                           use_OF=use_OF,

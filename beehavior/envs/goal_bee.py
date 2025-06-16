@@ -74,7 +74,7 @@ FLOWER_LOCS = tuple(
         flower['X']/100 + 93.85,
         flower['Y']/100 + 221.45,
         -flower['Z']/100,  # z is negated
-        flower.get('radius', 1),
+        flower.get('radius', .6),
     ])
           for flower in tunnel)
     for tunnel in FLOWER_LOCS_SIM
@@ -140,7 +140,7 @@ class GoalBee(OFBeeseClass):
                                   )
                  },
                  landing_positions_by_tunnel=None,
-                 landing_speed_goal=.5,
+                 # landing_speed_goal=.5,
                  station_tau=.5,
                  station_c=.5,
                  timeout=30,
@@ -170,7 +170,7 @@ class GoalBee(OFBeeseClass):
         # list of (m,4) shaped arrays of landing positions
         self.landing_positions_by_tunnel = tuple(np.array(s) for s in landing_positions_by_tunnel)
 
-        self.landing_speed_goal = landing_speed_goal
+        # self.landing_speed_goal = landing_speed_goal
 
         self.station_c = station_c
         self.station_tau = station_tau
@@ -179,6 +179,8 @@ class GoalBee(OFBeeseClass):
         self.GOAL_HOVER = False
         self.GOAL_STATION_KEEP = False
         self.GOAL_LAND_ON = False
+
+        self.past_goal_rwds = dict()
 
     def set_forward_goal(self, activate=True):
         """
@@ -284,6 +286,31 @@ class GoalBee(OFBeeseClass):
                 return True
         return False
 
+    def within_landing_area(self, position=None):
+        """
+        checks if drone is within a specified landing area
+            currently if drone is within a cylinder of radius rad, height 2*rad above the target
+        Args:
+            position:
+        Returns:
+        """
+        if position is None:
+            pose = self.get_pose()
+            position = np.array([pose.position.x_val,
+                                 pose.position.y_val,
+                                 pose.position.z_val,
+                                 ])
+        landing, distxy = self.closest_landing(position=position,
+                                               ignore_z=True,
+                                               )
+        land_xyz = landing[:3]
+        rad = landing[3]
+
+        # z values are inverted for some reason
+        z = -position[-1]
+        z_land = -land_xyz[2]
+        return (z_land + rad*2 >= z) and (z >= z_land) and (distxy <= rad)
+
     def get_termination(self, collided):
         """
         terminate if out of bounds or in goal region
@@ -297,16 +324,8 @@ class GoalBee(OFBeeseClass):
         term = term or self.out_of_bounds(pose=pose)
 
         if self.GOAL_LAND_ON and (not term) and collided:
-            # somtimes ignore collisisons
-            # currently ignores if drone is within a cylinder of radius rad, height 2*rad
-            pos = np.array([pose.position.x_val,
-                            pose.position.y_val,
-                            pose.position.z_val,
-                            ])
-            landing, distxy = self.closest_landing(ignore_z=True)
-            xyz = landing[:3]
-            rad = landing[3]
-            if (xyz[-1] + rad*2 >= pos[-1]) and (pos[-1] >= xyz[-1]) and (distxy <= rad):
+            # somtimes ignore collisisons, if drone is about to land
+            if self.within_landing_area(position=pos):
                 term = term or collided
             # otherwise, ignore collision
         else:
@@ -322,7 +341,9 @@ class GoalBee(OFBeeseClass):
         should be conditioned on self.get_goal_vector_part
         """
         info_dic = dict()
-        if collided:
+
+        if (not self.GOAL_LAND_ON) and collided:
+            # for every other goal, collsion is bad
             return -1., info_dic
         pose = self.get_pose()
         if self.out_of_bounds(pose=pose):
@@ -332,19 +353,23 @@ class GoalBee(OFBeeseClass):
         rwd = 0
         if self.GOAL_FORWARD:
             new_furthest = max(self.get_pose().position.x_val, self.farthest_reached)
-            rwd += new_furthest - self.farthest_reached
+            fwd_rwd = new_furthest - self.farthest_reached
             self.farthest_reached = new_furthest
+            rwd += fwd_rwd
+            self.past_goal_rwds[self.GOAL_FORWARD] = fwd_rwd
 
         if self.GOAL_HOVER:
-            pose = self.get_pose()
             dp = np.array([
                 pose.position.x_val - self.old_pose.position.x_val,
                 pose.position.y_val - self.old_pose.position.y_val,
                 pose.position.z_val - self.old_pose.position.z_val,
             ])
-            rwd += (self.velocity_bounds*self.dt - np.linalg.norm(dp))
+            hover_rwd = (self.velocity_bounds*self.dt - np.linalg.norm(dp))
 
+            rwd += hover_rwd
+            self.past_goal_rwds[self.GOAL_HOVER] = hover_rwd
             self.old_pose = pose
+
         if self.GOAL_STATION_KEEP:
             landing, dist = self.closest_landing(position=np.array([pose.position.x_val,
                                                                     pose.position.y_val,
@@ -354,11 +379,23 @@ class GoalBee(OFBeeseClass):
                                                  )
 
             if dist < landing[-1]:
-                rwd += 1
+                station_rwd_shape = 1
+                station_rwd_bonus = self.station_c
             else:
-                rwd += self.station_c*np.exp2(-(dist - landing[-1])/self.station_tau)
+                station_rwd_shape = self.station_c*np.exp2(-(dist - landing[-1])/self.station_tau)
+                station_rwd_bonus = 0
+            rwd += station_rwd_bonus + (station_rwd_shape - self.past_goal_rwds[self.GOAL_STATION_KEEP])
+            self.past_goal_rwds[self.GOAL_STATION_KEEP] = station_rwd_shape
 
         if self.GOAL_LAND_ON:
+            position = np.array([
+                pose.position.x_val,
+                pose.position.y_val,
+                pose.position.z_val,
+            ])
+            if collided and (not self.within_landing_area(position=position)):
+                # collided outside landing area
+                return -1., info_dic
             # TODO THIS
             # https://github.com/openai/gym/blob/master/gym/envs/box2d/lunar_lander.py
 
@@ -409,9 +446,9 @@ class GoalBee(OFBeeseClass):
             # reward leg touching ground
             landing_rwd_shape += -lnd_contact_c*leg_ground_contact
 
-            rwd += landing_rwd_shape - self.past_landing_rwd_shape
+            rwd += landing_rwd_shape - self.past_goal_rwds[self.GOAL_LAND_ON]
             rwd += air_penalty
-            self.past_landing_rwd_shape = landing_rwd_shape
+            self.past_goal_rwds[self.GOAL_LAND_ON] = landing_rwd_shape
         return rwd
 
     def reset(
@@ -425,7 +462,13 @@ class GoalBee(OFBeeseClass):
                               )
         self.old_pose = self.get_pose()
         self.farthest_reached = self.get_pose().position.x_val
-        self.past_landing_rwd_shape = 0.
+        self.past_goal_rwds = {k: 0
+                               for k in (self.GOAL_FORWARD,
+                                         self.GOAL_HOVER,
+                                         self.GOAL_STATION_KEEP,
+                                         self.GOAL_LAND_ON,
+                                         )
+                               }
         return stuff
 
 
@@ -468,7 +511,7 @@ class StationBee(GoalBee):
 
     def __init__(self,
                  initial_position='OVER_FLOWER',
-                 bounds=((-7,np.inf), None, None),
+                 bounds=((-7, np.inf), None, None),
                  timeout=15,
                  **kwargs,
                  ):
@@ -485,8 +528,7 @@ class StationBee(GoalBee):
                     rad = 2*r
                     xbnd = (x - rad, x + rad)
                     ybnd = (max(tunnel_bounds[0], y - rad), min(y + rad, tunnel_bounds[1]))
-                    zbnd = (z - 3 - rad, z - 3 + rad)
-
+                    zbnd = (z - 1, z - 1 - 2*rad)
                     initial_position.append((xbnd, ybnd, zbnd))
             initial_position = {bnds: 1/len(initial_position)
                                 for bnds in initial_position}
@@ -502,16 +544,17 @@ class StationBee(GoalBee):
 if __name__ == '__main__':
     import time
 
-    env = StationBee(dt=.1, action_type=GoalBee.ACTION_ACCELERATION_XY, velocity_bounds=1)
-    for _ in range(10):
-        env.reset()
-        for i in range(0, int(10/env.dt), 1):
-            action = env.action_space.sample()
-            obs, rwd, term, _, _ = env.step(action=action)
-            print(rwd)
-            if term:
-                print("CRASHED")
-                break
+    env = StationBee(dt=.1, action_type=GoalBee.ACTION_VELOCITY_XY)
+    env.reset(options={'initial_pos': env.landing_positions_by_tunnel[1][0][:3] + (-2, 0, -.6)})
+    for i in range(0, int(10/env.dt), 1):
+        action = np.array([.3, 0])
+        obs, rwd, term, _, _ = env.step(action=action)
+        print(rwd)
+        print('within landing', env.within_landing_area())
+        print()
+        if term:
+            print("CRASHED")
+            break
     env.close()
 
     env = GoalBee(dt=.1, action_type=GoalBee.ACTION_ROLL_PITCH_THRUST)
