@@ -63,6 +63,8 @@ if __name__ == '__main__':
                         help="do not used saved explanations")
     PARSER.add_argument("--display-only", action='store_true', required=False,
                         help="only display route in simulation, do not save or analyze")
+    PARSER.add_argument("--flip-axes", action='store_true', required=False,
+                        help="flip any axes you are holding")
     PARSER.add_argument("--device", action='store', required=False, default='cpu',
                         help="device to store tensors on")
     args = PARSER.parse_args()
@@ -125,10 +127,6 @@ if __name__ == '__main__':
                    **env_config['kwargs'],
                    )
 
-    model = MODEL.load(args.model, env=env)
-    model.policy.to(device)
-    print(model.policy)
-    print(type(model.policy))
     if not args.display_only:
         print('saving to', output_dir)
 
@@ -152,6 +150,10 @@ if __name__ == '__main__':
         steps = []
 
     if traj_sampling:
+        model = MODEL.load(args.model, env=env)
+        model.policy.to(device)
+        print(model.policy)
+        print(type(model.policy))
         for _ in range(args.num_trajectories):
             obs, info = env.reset(options={
                 'initial_pos': args.initial_pos if args.initial_pos is not None else None
@@ -471,6 +473,8 @@ if __name__ == '__main__':
 
     all_settings = []
 
+    # all cameras in the x axis
+    # in the y axis, (visual, optic flow, attention)
     all_settings.append(
         (sum(
             [[
@@ -504,12 +508,47 @@ if __name__ == '__main__':
              'ident': 'all',
              'subplot_dim': (3, len(env.unwrapped.of_cameras)),
              'xlabels': env.unwrapped.of_cameras,
-             'ylabels': ['visual', 'optic flow', 'attention'],
+             'ylabels': ['visual',
+                         'optic flow',
+                         'attention'
+                         ],
              'xlabel_kwargs': {'fontsize': 20},
              'ylabel_kwargs': {'fontsize': 20},
+             'flip_axes': args.flip_axes,
          },
         )
     )
+
+    # split previous into each row
+    for single_plt in ('visual', 'optic flow', 'attention'):
+        all_settings.append(
+            (
+                [
+                    {
+                        'plt coords': (0, i),
+                        'output_key': 'sum' if single_plt == 'attention' else None,
+                        'quiver_plot': single_plt == 'optic flow',
+                        'use_OF': single_plt == 'optic flow',
+                        'only_heatmap': single_plt == 'attention',
+                        'cam_name': cam_name,
+                    }
+                    for i, cam_name in enumerate(env.unwrapped.of_cameras)],
+                {
+                    'ident': single_plt.replace(' ', '_'),
+                    'subplot_dim': (1, len(env.unwrapped.of_cameras)),
+                    'xlabels': env.unwrapped.of_cameras if len(env.unwrapped.of_cameras) > 1 else None,
+                    'xlabel_kwargs': {'fontsize': 20},
+                    'flip_axes': args.flip_axes,
+                    'vid': False,
+                },
+            )
+        )
+
+    # comparison of different models for each camera
+    # x axis is (avg, individual model 1, ... )
+    # y axis is (visual, optic flow, attention)
+    # visual and optic flow only are shown for one model, since the rest are duplicates
+    # also a version with y axis being cameras
     if len(expln_keys) > 2:  # if expln keys is not just [avg][model]
         for cam_name in env.unwrapped.of_cameras:
             all_settings.append(
@@ -549,34 +588,104 @@ if __name__ == '__main__':
                 ),
                  {
                      'subplot_dim': (3, len(expln_keys)),
-                     'ident': 'comp_' + cam_name,
+                     'ident': 'comp_vis_' + cam_name,
                      'xlabels': ['average'] + ['model ' + str(i) for i in (range(len(expln_keys) - 1))],
                      'ylabels': ['visual', 'optic flow', 'attention'],
                      'xlabel_kwargs': {'fontsize': 20},
                      'ylabel_kwargs': {'fontsize': 20},
+                     'flip_axes': args.flip_axes,
                  }
                 )
             )
-
-    for output_key in output_keys + [None]:
-        for use_OF, only_heatmap in itertools.product((True, False), repeat=2):
-            if output_key is not None and not use_OF:
-                # is we are using the rgb image, we do not need to define output_key
-                continue
-            if output_key is None and only_heatmap:
-                # only use heatmaps when output key is defined
-                continue
-            for cam_name in env.unwrapped.of_cameras:
-                sett = {
-                    'output_key': output_key,
-                    'use_OF': use_OF,
-                    'only_heatmap': only_heatmap,
-                    'cam_name': cam_name,
-                    'ident': (str(output_key) + '_' if output_key is not None else '') +
-                             ('heat_' if only_heatmap else '') +
-                             ('of_' if use_OF else 'raw_') + cam_name
+        # cameras in y axis
+        # explanation model in x axis
+        all_settings.append((
+            sum(
+                [
+                    [
+                        {
+                            'plt coords': (i, j),
+                            'output_key': 'sum',
+                            'quiver_plot': False,
+                            'use_OF': False,
+                            'only_heatmap': True,
+                            'cam_name': cam_name,
+                            'expln_key': expln_key,
+                        }
+                        for i, cam_name in enumerate(env.unwrapped.of_cameras)]
+                    for j, expln_key in enumerate(expln_keys)
+                ],
+                []
+            ),
+            {
+                'subplot_dim': (len(env.unwrapped.of_cameras), len(expln_keys)),
+                'ident': 'comp',
+                'xlabels': ['Average attention'] + ['Model ' + str(i) for i in (range(len(expln_keys) - 1))],
+                'ylabels': env.unwrapped.of_cameras if len(env.unwrapped.of_cameras) > 1 else None,
+                'xlabel_kwargs': {'fontsize': 30},
+                'ylabel_kwargs': {'fontsize': 30},
+                'flip_axes': args.flip_axes,
+                'vid': False,
+            }
+        )
+        )
+        # split the previous up by explain key
+        for j, expln_key in enumerate(expln_keys):
+            name = (['average'] + ['model ' + str(i) for i in (range(len(expln_keys) - 1))])[j]
+            all_settings.append((
+                [
+                    {
+                        'plt coords': (i, 0),
+                        'output_key': 'sum',
+                        'quiver_plot': False,
+                        'use_OF': False,
+                        'only_heatmap': True,
+                        'cam_name': cam_name,
+                        'expln_key': expln_key,
+                    }
+                    for i, cam_name in enumerate(env.unwrapped.of_cameras)
+                ],
+                {
+                    'subplot_dim': (len(env.unwrapped.of_cameras), 1),
+                    'ident': 'comp_' + name.replace(' ', '_'),
+                    'ylabels': env.unwrapped.of_cameras if len(env.unwrapped.of_cameras) > 1 else None,
+                    'xlabel_kwargs': {'fontsize': 20},
+                    'ylabel_kwargs': {'fontsize': 20},
+                    'flip_axes': args.flip_axes,
+                    'vid': False,
                 }
-                all_settings.append(sett)
+            )
+            )
+
+    # comparison of attention for each output key
+    # cameras in y axis
+    # output keys in x axis
+    all_settings.append((
+        sum(
+            [[
+                {
+                    'plt coords': (j, i),
+                    'output_key': output_key,
+                    'quiver_plot': False,
+                    'use_OF': True,
+                    'only_heatmap': False,
+                    'cam_name': cam_name,
+                }
+                for j, output_key in enumerate(output_keys)
+            ] for i, cam_name in enumerate(env.unwrapped.of_cameras)], []
+        ),
+        {
+            'ident': 'keys',
+            'subplot_dim': (len(output_keys), len(env.unwrapped.of_cameras)),
+            'xlabels': env.unwrapped.of_cameras if len(env.unwrapped.of_cameras) > 1 else None,
+            'ylabels': output_keys,
+            'xlabel_kwargs': {'fontsize': 20},
+            'ylabel_kwargs': {'fontsize': 20},
+            'flip_axes': args.flip_axes,
+        },
+    )
+    )
+
     # make plots
     for settings in all_settings:
         ident = None
@@ -588,12 +697,18 @@ if __name__ == '__main__':
             settings, info = settings
             ident = info['ident']
             subplot_dim = info['subplot_dim']
+            flip_axes = info.get('flip_axes', False)
+            if flip_axes:
+                subplot_dim = subplot_dim[::-1]
+                info['xlabels'], info['ylabels'] = info.get('ylabels', None), info.get('xlabels', None)
         img_files = []
         for t, dic in enumerate(steps):
             if t%args.capture_interval:
                 continue
             if subplot_dim is not None:
                 fig, axs = plt.subplots(subplot_dim[0], subplot_dim[1])
+                if type(axs) != np.ndarray:
+                    axs = np.array(axs)
                 axs = axs.reshape(subplot_dim)
                 for ax in axs.flatten():
                     ax.set_xticklabels([])
@@ -608,13 +723,14 @@ if __name__ == '__main__':
                     # bottom=0.1, top=0.9,
                     wspace=0.0, hspace=0.0
                 )
-                if 'xlabels' in info:
+
+                if 'xlabels' in info and info['xlabels'] is not None:
                     for xlabel, ax in zip(info['xlabels'], axs[-1, :]):
                         ax.set_xlabel(xlabel, **info.get('xlabel_kwargs', dict()))
-                if 'ylabels' in info:
+                if 'ylabels' in info and info['ylabels'] is not None:
                     for ylabel, ax in zip(info['ylabels'], axs[:, 0]):
                         ax.set_ylabel(ylabel, **info.get('ylabel_kwargs', dict()))
-                plotters = [axs[stuff['plt coords']] for stuff in settings]
+                plotters = [axs[stuff['plt coords'][::-1 if flip_axes else 1]] for stuff in settings]
             else:
                 plotters = [plt.gca()]
 
@@ -646,17 +762,19 @@ if __name__ == '__main__':
                                     ident + '_' + str(t) +
                                     '.png'
                                     )
-            plt.savefig(filename)
+            plt.savefig(filename, bbox_inches='tight')
             img_files.append(filename)
             plt.close()
-        filename = os.path.join(output_dir,
-                                ident + '_' +
-                                'OF.mp4')
-        create_mp4(image_paths=img_files,
-                   output_mp4_path=filename,
-                   duration=env.unwrapped.dt*1000*args.capture_interval,
-                   debug=True,
-                   )
+        if info.get('vid', True):
+            filename = os.path.join(output_dir,
+                                    ident + '_' +
+                                    'OF.mp4')
+            print('made frames, forming video:', filename)
+            create_mp4(image_paths=img_files,
+                       output_mp4_path=filename,
+                       duration=env.unwrapped.dt*1000*args.capture_interval,
+                       debug=True,
+                       )
 
     quit()
 

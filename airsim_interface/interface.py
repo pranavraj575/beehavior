@@ -205,7 +205,6 @@ def get_of_geo_shape(client: airsim.MultirotorClient, camera_name='front'):
     """
     if type(camera_name) == tuple:
         return tuple(get_of_geo_shape(client=client, camera_name=c) for c in camera_name)
-
     depth_image = get_depth_img(client=client, camera_name=camera_name)
     return (2, depth_image.height, depth_image.width)
 

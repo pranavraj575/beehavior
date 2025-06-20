@@ -28,7 +28,7 @@ def create_mp4(image_paths, output_mp4_path, duration=200, debug=False):
         writer.writeFrame(img[:, :, ::-1])
         time_elapsed += 1/default_fps
         if debug:
-            print('wrote', time_elapsed, 'of', duration*len(image_paths),end='\r')
+            print('wrote', time_elapsed, 'of', duration*len(image_paths), end='\r')
     if debug:
         print('wrote video of length', time_elapsed - 1/default_fps)
     writer.close()
@@ -61,6 +61,9 @@ if __name__ == '__main__':
                         help='frequency to look for traj files')
     PARSER.add_argument('--dx', type=float, required=False, default=.5,
                         help='dx to use for space averaging positions/velocities')
+
+    PARSER.add_argument('--remove-axis-ticks', action='store_true', required=False,
+                        help='dont plot values for x and y axis')
 
     args = PARSER.parse_args()
     dx = args.dx
@@ -208,11 +211,21 @@ if __name__ == '__main__':
 
         def plt_env():
             fig, ax = plt.subplots()
+            walled = False
             for pt_list in walls:
                 ax.plot([wx for (wx, wy) in pt_list],
                         [wy for (wx, wy) in pt_list],
-                        color='black', linewidth=4)
+                        color='black', linewidth=4, label='wall' if not walled else None)
+                walled = True
             ylim = plt.ylim()  # y limits should be bounded by walls
+
+            xbnd = test_tunnel_info['finish_x']
+            ax.plot([xbnd, xbnd], plt.ylim(),
+                    color='black', linewidth=2, linestyle='--', label='goal'
+                    )
+
+
+            obstacled = False
             for effective_bnd in (False, True):
                 alpha = [1, .5][int(effective_bnd)]
                 for c, (w, h) in test_tunnel_info['obs']:
@@ -230,12 +243,17 @@ if __name__ == '__main__':
                                          height=h,
                                          angle=0,
                                          alpha=alpha,
+                                         label='obstacle' if (effective_bnd and (not obstacled)) else None,
                                          ))
+                    if effective_bnd:
+                        obstacled = True
 
-            xbnd = test_tunnel_info['finish_x']
-            ax.plot([xbnd, xbnd], plt.ylim(),
-                    color='black', linewidth=2, linestyle='--'
-                    )
+            if args.remove_axis_ticks:
+                ax.set_xticklabels([])
+                ax.set_xticks([])
+
+                ax.set_yticklabels([])
+                ax.set_yticks([])
             return ylim
 
 
@@ -320,7 +338,7 @@ if __name__ == '__main__':
                 kwargs = dict()
                 last_info = traj[-1]['info']
                 collided = last_info['collided']
-                succ = last_info['succ']
+                succ = last_info.get('succ', not collided)
                 prop_succ += succ/len(trajs)
                 rewards = np.array([dic['reward'] for dic in traj])
                 kwargs['color'] = 'red'
