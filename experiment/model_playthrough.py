@@ -65,6 +65,8 @@ if __name__ == '__main__':
                         help="only display route in simulation, do not save or analyze")
     PARSER.add_argument("--flip-axes", action='store_true', required=False,
                         help="flip any axes you are holding")
+    PARSER.add_argument("--coolwarm-of", action='store_true', required=False,
+                        help="optic flow in coolwarm map")
     PARSER.add_argument("--device", action='store', required=False, default='cpu',
                         help="device to store tensors on")
     args = PARSER.parse_args()
@@ -254,100 +256,146 @@ if __name__ == '__main__':
         pkl.dump(explanations, f)
         f.close()
         print('saved')
+    # all_abs_explanations[explain (model) key][output key] gives a list of explanations
+    # if type of each explanations[expln_key] is a list, there are multiple output keys, 'sum', 0, 1, ...
+    # otherwise, there is only one ouput key, 'sum'
 
     all_abs_explanations = {
-        expln_key: [
-            {'sum': sum(np.abs(ex) for ex in expln),
-             **{i: np.abs(ex) for i, ex in enumerate(expln)}
-             }
-            if type(expln) is list
-            else {'sum': np.abs(expln)}
-            for expln in explanations[expln_key]
-        ]
+        expln_key: {
+            'sum': [sum(np.abs(ex) for ex in expln) if type(expln) is list else np.abs(expln)
+                    for expln in explanations[expln_key]
+                    ],
+            **{
+                i: [np.abs(ex[i]) for ex in explanations[expln_key]] for i in range(len(explanations[expln_key][0]))
+                if type(explanations[expln_key][0]) is list
+            },
+        }
         for expln_key in explanations
     }
-    output_keys = list(all_abs_explanations[expln_keys[0]][0].keys())
-    avg_explanation = {}
-    # take avg across comparison models
-    all_abs_explanations['avg'] = [
-        {
-            output_key: sum(all_abs_explanations[expln_key][i][output_key] for expln_key in expln_keys)/len(expln_keys)
-            for output_key in output_keys
-        }
-        for i in range(len(steps))
-    ]
+    output_keys = list(all_abs_explanations[expln_keys[0]].keys())
+    total_timesteps = len(all_abs_explanations[expln_keys[0]][output_keys[0]])
 
+    # take avg across comparison models
+    all_abs_explanations['avg'] = {
+        output_key: [
+            sum(all_abs_explanations[expln_key][output_key][t] for expln_key in expln_keys)/len(expln_keys)
+            for t in range(total_timesteps)
+        ]
+        for output_key in output_keys
+    }
     expln_keys = ['avg'] + expln_keys
     all_abs_explanations = {
-        expln_key: [
-            {
-                output: env.unwrapped.obs_to_dict(explnation_for_each_output[output])
-                for output in explnation_for_each_output
-            }
-            for explnation_for_each_output in all_abs_explanations[expln_key]
-        ]
-        for expln_key in all_abs_explanations
-    }
-
-    # for each timestep t, all_abs_explanations[t] is a dictionary dic with
-    #   dic[i]-> abs(explanation of output i)
-    #   dic['sum']-> sum_i(abs(explanation of output i))
-    # each explanation is in the same shape as environmnet observations
-
-    # current_sum_all_abs_explanations looks at only the current timestep, and takes the sum to make a
-    #  'image' the same size as each optic flow input
-    current_sum_all_abs_explanations = dict()
-    for expln_key in expln_keys:
-        csaae = []
-        for explnation_for_each_output in all_abs_explanations[expln_key]:
-            dic = dict()
-            for output_key in explnation_for_each_output:
-                explanation = explnation_for_each_output[output_key]
-                current_obs_dic = {
-                    obs_key:
-                        explanation[obs_key].reshape(-1, *explanation[obs_key].shape[-2:])[
-                        -env.unwrapped.imgs_per_step:]
-                    for obs_key in of_camera_names
-                }
-                current_sum_obs_dic = {
-                    obs_key: np.sum(current_obs_dic[obs_key], axis=0)
-                    for obs_key in of_camera_names
-                }
-                dic[output_key] = current_sum_obs_dic
-            csaae.append(dic)
-        current_sum_all_abs_explanations[expln_key] = csaae
-
-    output_keys = list(current_sum_all_abs_explanations[default_model_dir][0].keys())
-    # max_current_sum_all_abs_explanations[output_key] gives the max across all time steps, across all cameras
-    #  of shap values with respect to a particular output key
-    max_current_sum_all_abs_explanations = {
         expln_key: {
-            output_key: max(
-                max(
-                    np.max(dic[output_key][cam_name])
-                    for dic in current_sum_all_abs_explanations[expln_key]
-                )
-                for cam_name in of_camera_names
-            )
-            for output_key in output_keys
+            output_key: [env.unwrapped.obs_to_dict(expln) for expln in explaination_list]
+            for output_key, explaination_list in output_key_to_list.items()
         }
-        for expln_key in expln_keys
+        for expln_key, output_key_to_list in all_abs_explanations.items()
     }
+
+    # all_abs_explanations[explain(model) key][output key] is a list with explanations
+    # each explanation is in the same shape as environmnet observations (usually dictionary(camera key -> tensor))
+
+    # in this, each explanation is restricted to OF types at current timesteps
+    # explanation is a dictionary (camera key -> (OF key -> tensor))
+    #  OF keys are every possible input type, as well as a sum over all input types
+    current_img_abs_explanations = dict()
+    obs_type_keys = set()
+    for expln_key, output_key_to_list in all_abs_explanations.items():
+        current_img_abs_explanations[expln_key] = dict()
+        for output_key, explaination_list in output_key_to_list.items():
+            current_img_abs_explanations[expln_key][output_key] = []
+            for expln in explaination_list:
+                thing = dict()
+                for cam_name in of_camera_names:
+                    camera_obs_tensor = expln[cam_name]
+                    camera_obs_tensor = camera_obs_tensor.reshape(camera_obs_tensor.shape[-3:])
+                    thing[cam_name] = dict()
+                    i = len(camera_obs_tensor)
+                    for obs_type_key in env.unwrapped.ordered_input_img_space[::-1]:
+                        if obs_type_key == GoalBee.INPUT_OF_ORIENTATION:
+                            i -= 2
+                            for k, dimkey in enumerate(('x', 'y')):
+                                thing[cam_name][(obs_type_key, dimkey)] = camera_obs_tensor[i + k]
+                                obs_type_keys.add((obs_type_key, dimkey))
+                        else:
+                            i -= 1
+                            thing[cam_name][obs_type_key] = camera_obs_tensor[i]
+                            obs_type_keys.add(obs_type_key)
+                    thing[cam_name]['sum'] = sum(ex for obs_type_key, ex in thing[cam_name].items())
+                    obs_type_keys.add('sum')
+                current_img_abs_explanations[expln_key][output_key].append(thing)
+    obs_type_keys = list(obs_type_keys)
+    # episode_maxes[explain(model) key][output key][obs_type_key] is a max over
+    # current_img_abs_explanations[explain(model) key][output key][i][camera key][obs_type_key] for i in all displayed time, and all camera key
+    #  IF output_key is not 'sum', takes max over all non-sum output keys as well
+    #  IF obs_type_key is not 'sum', takes max over all non-sum obs_type_keys as well
+    # if max over each frame:
+    # episode_maxes_per_frame[explain(model) key][output key][i][obs_type_key]
+
+    # episode_maxes = dict()
     blurring_kernel = cv.getGaussianKernel(ksize=args.avg_kernel, sigma=args.avg_kernel/2)
     blurring_kernel = blurring_kernel.dot(blurring_kernel.T)
-    blurred_max_current_sum_all_abs_explanations = {
-        expln_key: {
-            output_key: max(
-                max(
-                    np.max(cv.filter2D(dic[output_key][cam_name], -1, blurring_kernel))
-                    for dic in current_sum_all_abs_explanations[expln_key]
+    blurred_episode_maxes = dict()
+    blurred_episode_maxes_per_frm = dict()
+    for expln_key, output_key_to_list in current_img_abs_explanations.items():
+        # episode_maxes[expln_key] = dict()
+        blurred_episode_maxes[expln_key] = dict()
+        blurred_episode_maxes_per_frm[expln_key] = dict()
+        for output_key in output_keys:
+            if output_key == 'sum':
+                output_key_iter = [output_key]
+            else:
+                output_key_iter = [ok for ok in output_keys if ok != 'sum']
+                if output_key_iter[0] in blurred_episode_maxes[expln_key]:
+                    # the max is the same for all output keys in output_key_iter
+                    # episode_maxes[expln_key][output_key]=episode_maxes[expln_key][output_key_iter[0]]
+                    blurred_episode_maxes[expln_key][output_key] = blurred_episode_maxes[expln_key][output_key_iter[0]]
+                    blurred_episode_maxes_per_frm[expln_key][output_key] = \
+                        blurred_episode_maxes_per_frm[expln_key][output_key_iter[0]]
+                    continue
+            # episode_maxes[expln_key][output_key] = dict()
+            blurred_episode_maxes[expln_key][output_key] = dict()
+            blurred_episode_maxes_per_frm[expln_key][output_key] = [dict() for _ in range(total_timesteps)]
+
+            for obs_type_key in obs_type_keys:
+                if obs_type_key == 'sum':
+                    obs_type_key_iter = [obs_type_key]
+                else:
+                    obs_type_key_iter = [otk for otk in obs_type_keys if otk != 'sum']
+                    if obs_type_key_iter[0] in blurred_episode_maxes[expln_key][output_key]:
+                        blurred_episode_maxes[expln_key][output_key][obs_type_key] = \
+                            blurred_episode_maxes[expln_key][output_key][obs_type_key_iter[0]]
+                        if args.max_over_each_frame:
+                            for t in range(total_timesteps):
+                                blurred_episode_maxes_per_frm[expln_key][output_key][t][obs_type_key] = \
+                                    blurred_episode_maxes_per_frm[expln_key][output_key][t][obs_type_key_iter[0]]
+                        continue
+                blurred_episode_maxes[expln_key][output_key][obs_type_key] = max(
+                    max(
+                        max(
+                            max(
+                                np.max(cv.filter2D(obs_key_to_expln[otk], -1, blurring_kernel))
+                                for otk in obs_type_key_iter
+                            )
+                            for _, obs_key_to_expln in cam_key_obs_key_to_expln.items()
+                        )
+                        for cam_key_obs_key_to_expln in output_key_to_list[ok]
+                    )
+                    for ok in output_key_iter
                 )
-                for cam_name in of_camera_names
-            )
-            for output_key in output_keys
-        }
-        for expln_key in expln_keys
-    }
+                if args.max_over_each_frame:
+                    for t in range(total_timesteps):
+                        blurred_episode_maxes_per_frm[expln_key][output_key][t][obs_type_key] = max(
+                            max(
+                                max(
+                                    np.max(cv.filter2D(obs_key_to_expln[otk], -1, blurring_kernel))
+                                    for otk in obs_type_key_iter
+                                )
+                                for _, obs_key_to_expln in output_key_to_list[ok][t].items()
+                            )
+                            for ok in output_key_iter
+                        )
+
     # display optic flow
     assert ((GoalBee.INPUT_LOG_OF in env.unwrapped.input_img_space) or
             (GoalBee.INPUT_RAW_OF in env.unwrapped.input_img_space))
@@ -375,6 +423,7 @@ if __name__ == '__main__':
     def make_plot(t,
                   cam_name,
                   expln_key,
+                  obs_type_key='sum',
                   use_OF=True,
                   quiver_plot=False,
                   output_key=None,
@@ -401,6 +450,7 @@ if __name__ == '__main__':
         dic_obs = dic['dic_obs']
         OF = dict()
         stack_bottom = 0
+        cmap = None
         for input_k in env.unwrapped.ordered_input_img_space[::-1]:
             stack_size = 2 if input_k == GoalBee.INPUT_OF_ORIENTATION else 1
             stack_bottom = stack_bottom - stack_size
@@ -408,19 +458,29 @@ if __name__ == '__main__':
             OF[input_k] = im[len(im) + stack_bottom:len(im) + stack_bottom + stack_size]
             if stack_size == 1:
                 OF[input_k] = OF[input_k][0]
+
+        OF_magnitude = (OF[GoalBee.INPUT_RAW_OF] if GoalBee.INPUT_RAW_OF in OF
+                        else np.exp(OF[GoalBee.INPUT_LOG_OF]))
         OF_log_magnitude = (OF[GoalBee.INPUT_LOG_OF] if GoalBee.INPUT_LOG_OF in OF
                             else np.log(np.clip(OF[GoalBee.INPUT_RAW_OF], 10e-3, np.inf)))
+
         if use_OF:
             # make an OF image
-            log_mag_min = np.min(OF_log_magnitude)
-            log_mag_max = np.max(OF_log_magnitude)
-            img = (np.stack([OF_log_magnitude for _ in range(3)], axis=-1) - log_mag_min)
-            if log_mag_max == log_mag_min:
-                img = np.zeros_like(img)
+            if args.coolwarm_of:
+                # not making quivers, use heatmap
+                img = 255*OF_magnitude/np.max(OF_magnitude)  # np.stack([OF_magnitude for _ in range(3)], axis=-1)
+                cmap = 'coolwarm'
             else:
-                img = img/(log_mag_max - log_mag_min)
-            # scale image to pixels
-            img = img*255
+                # making quivers, so make a black and white image
+                log_mag_min = np.min(OF_log_magnitude)
+                log_mag_max = np.max(OF_log_magnitude)
+                img = (np.stack([OF_log_magnitude for _ in range(3)], axis=-1) - log_mag_min)
+                if log_mag_max == log_mag_min:
+                    img = np.zeros_like(img)
+                else:
+                    img = img/(log_mag_max - log_mag_min)
+                # scale image to pixels
+                img = img*255
         else:
             # use the rgb image
             img = dic['rgb_imgs'][cam_name][:, :, ::-1]
@@ -430,17 +490,22 @@ if __name__ == '__main__':
         if output_key is not None:
             # img = .5*img  # mute the OF information
             # change the green channel to attention
-            cam_to_csae = current_sum_all_abs_explanations[expln_key][t][output_key]
+            # current_img_abs_explanations[explain(model) key][output key][i][camera key][obs_type_key]
+            expln = current_img_abs_explanations[expln_key][output_key][t][cam_name][obs_type_key]
+            # cam_name_to_obs_type_to_expln = current_img_abs_explanations[expln_key][output_key][t]
 
-            blurred_csae = cv.filter2D(cam_to_csae[cam_name], -1, blurring_kernel)
+            blurred_attention = cv.filter2D(expln, -1, blurring_kernel)
+
             if args.max_over_each_frame:
-                attention = (blurred_csae/max(
-                    np.max(cv.filter2D(cam_to_csae[cn], -1, blurring_kernel))
-                    for cn in of_camera_names))  # scaled to [0,1]
+                scale = blurred_episode_maxes_per_frm[expln_key][output_key][t][obs_type_key]
             else:
-                attention = np.clip(blurred_csae, 0, np.inf)/blurred_max_current_sum_all_abs_explanations[expln_key][
-                    output_key]
+                scale = blurred_episode_maxes[expln_key][output_key][obs_type_key]
+                # episode_maxes[explain(model) key][output key][obs_type_key]
+            attention = np.clip(blurred_attention, 0, np.inf)/scale
             if not only_heatmap:
+                cmap = None
+                if len(img.shape) == 2:
+                    img = np.stack([img for _ in range(3)], axis=-1)  # todo : make this better
                 img[:, :, 1] = attention*255  # scaled to [0,255]
         if only_heatmap:
             plotter.imshow(attention,
@@ -451,7 +516,7 @@ if __name__ == '__main__':
                            )
         else:
             img = np.ndarray.astype(img, dtype=np.uint8)
-            plotter.imshow(img, interpolation='nearest', )
+            plotter.imshow(img, interpolation='nearest', cmap=cmap)
 
         if quiver_plot:
             ss = args.subsample_quiver
@@ -465,7 +530,7 @@ if __name__ == '__main__':
             plotter.quiver(w[::ss, ::ss], h[::ss, ::ss],
                            of_disp[0, ::ss, ::ss],
                            -of_disp[1, ::ss, ::ss],
-                           color='red',
+                           color='black' if args.coolwarm_of else 'red',
                            scale=OF_scale[cam_name]*(max(w.shape)/ss),
                            # width=.005,
                            )
@@ -552,7 +617,7 @@ if __name__ == '__main__':
             )
         )
         # split OF into individual plots
-        if single_plt == 'optic flow':
+        if single_plt == 'optic flow' and len(of_camera_names) > 1:
             for i, cam_name in enumerate(of_camera_names):
                 all_settings.append(
                     (
@@ -660,7 +725,9 @@ if __name__ == '__main__':
         )
         )
         # split the previous up by explain key
+        # dont need this
         for j, expln_key in enumerate(expln_keys):
+            continue
             name = (['average'] + ['model ' + str(i) for i in (range(len(expln_keys) - 1))])[j]
             all_settings.append((
                 [
@@ -715,7 +782,57 @@ if __name__ == '__main__':
         },
     )
     )
-
+    # for each camera
+    # visual, OF, attention in y axis
+    # each obs_type_key in x axis
+    for cam_name in of_camera_names:
+        all_settings.append(
+            (sum(
+                [[
+                     {
+                         'plt coords': (0, i),
+                         'output_key': None,
+                         'quiver_plot': False,
+                         'use_OF': False,
+                         'only_heatmap': False,
+                         'cam_name': cam_name,
+                         'obs_type_key': otk,
+                     },
+                     {
+                         'plt coords': (1, i),
+                         'output_key': None,
+                         'quiver_plot': True,
+                         'use_OF': True,
+                         'only_heatmap': False,
+                         'cam_name': cam_name,
+                         'obs_type_key': otk,
+                     },
+                     {
+                         'plt coords': (2, i),
+                         'output_key': 'sum',
+                         'quiver_plot': False,
+                         'use_OF': False,
+                         'only_heatmap': True,
+                         'cam_name': cam_name,
+                         'obs_type_key': otk,
+                     },
+                 ][0 if i == 0 else -1:]  # if i>0, first two plots are redundant
+                 for i, otk in enumerate(filter(lambda x: x != 'sum', obs_type_keys))
+                 ],
+                []
+            ),
+             {
+                 'subplot_dim': (3, len(obs_type_keys) - 1),
+                 'ident': 'obs_layer_comp_' + cam_name,
+                 'xlabels': list(filter(lambda x: x != 'sum', obs_type_keys)),
+                 'ylabels': ['visual', 'optic flow', 'attention'],
+                 'xlabel_kwargs': {'fontsize': 20},
+                 'ylabel_kwargs': {'fontsize': 20},
+                 'flip_axes': args.flip_axes,
+                 'vid': True,
+             }
+            )
+        )
     # make plots
     for settings in all_settings:
         ident = None
@@ -776,6 +893,7 @@ if __name__ == '__main__':
                 use_OF = stuff['use_OF']
                 cam_name = stuff['cam_name']
                 expln_key = stuff.get('expln_key', 'avg')
+                obs_type_key = stuff.get('obs_type_key', 'sum')
                 if ident is None:
                     ident = stuff['ident']
                 if 'quiver_plot' in stuff:
@@ -787,6 +905,7 @@ if __name__ == '__main__':
                 make_plot(t=t,
                           expln_key=expln_key,
                           cam_name=cam_name,
+                          obs_type_key=obs_type_key,
                           output_key=output_key,
                           use_OF=use_OF,
                           plotter=plotter,
