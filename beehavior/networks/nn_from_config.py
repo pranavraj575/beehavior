@@ -313,23 +313,25 @@ class CustomNN(BaseFeaturesExtractor):
                             keys, shapes, partition = self.ksp
                             b = torch.as_tensor(observation_space.sample()[None], device=None).float()
                             idx = keys.index(k)
-                            if len(b.shape)==1:
+                            if len(b.shape) == 1:
                                 b = b[partition[idx]:partition[idx + 1]].reshape(shapes[idx])
                             else:
-                                b = b[:,partition[idx]:partition[idx + 1]].reshape(shapes[idx])
+                                b = b[:, partition[idx]:partition[idx + 1]].reshape(shapes[idx])
+                            b=b.unsqueeze(dim=0)
 
+                        print(b.shape[1:])
                         lys = layers[k]
                         if type(lys) == str:
                             lys = layers[lys]
                         for layer in lys:
                             b = layer.forward(b)
-                            print(b.shape, layer)
+                            print(b.shape[1:], layer)
                 else:
                     b = torch.as_tensor(observation_space.sample()[None]).float()
-                    print(b.shape)
+                    print(b.shape[1:])
                     for layer in layers:
                         b = layer.forward(b)
-                        print(b.shape, layer)
+                        print(b.shape[1:], layer)
 
     def forward(self, observations):
         if self.dict_input:

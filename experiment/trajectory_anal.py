@@ -65,6 +65,9 @@ if __name__ == '__main__':
     PARSER.add_argument('--remove-axis-ticks', action='store_true', required=False,
                         help='dont plot values for x and y axis')
 
+    PARSER.add_argument('--no-legend', action='store_true', required=False,
+                        help='dont plot legend')
+
     args = PARSER.parse_args()
     dx = args.dx
     dt = .1
@@ -224,7 +227,6 @@ if __name__ == '__main__':
                     color='black', linewidth=2, linestyle='--', label='goal'
                     )
 
-
             obstacled = False
             for effective_bnd in (False, True):
                 alpha = [1, .5][int(effective_bnd)]
@@ -304,7 +306,7 @@ if __name__ == '__main__':
             plt.xlabel('x')
             plt.ylabel('y')
             plt.title('average y positions epoch ' + str(epoch))
-            plt.legend(loc='center left', bbox_to_anchor=(.69, -.35))
+            if not args.no_legend: plt.legend(loc='center left', bbox_to_anchor=(.69, -.35))
             plt.xlim(xlim)
             plt.ylim(ylim)
             fname = os.path.join(individual_traj_dir,
@@ -375,7 +377,7 @@ if __name__ == '__main__':
 
             plt.ylim(ylim)
 
-            plt.legend(loc='center left', bbox_to_anchor=(1., .5))
+            if not args.no_legend: plt.legend(loc='center left', bbox_to_anchor=(1., .5))
             plt.title('epoch ' + str(epoch))
             plt.xlim(xlim)
 
@@ -413,7 +415,7 @@ if __name__ == '__main__':
         plt.ylabel('distance traveled')
         plt.title("Distance traveled throughout training")
 
-        plt.legend()
+        if not args.no_legend: plt.legend()
         plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_distance_summary.png'),
                     bbox_inches='tight')
         plt.close()
@@ -425,7 +427,7 @@ if __name__ == '__main__':
         plt.xlabel('epochs')
         plt.ylabel('reward sum')
         plt.title("Rewards throughout training")
-        plt.legend()
+        if not args.no_legend: plt.legend()
         plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_rwd_summary.png'),
                     bbox_inches='tight')
         plt.close()

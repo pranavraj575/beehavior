@@ -1,6 +1,7 @@
 import ast
 import itertools
 import shutil
+import time
 
 import gymnasium as gym
 import stable_baselines3.common.policies
@@ -19,15 +20,9 @@ if __name__ == '__main__':
         description='run RL on envionrment'
     )
 
-    # PARSER.add_argument("--env", action='store', required=False, default='HiBee-v0',
-    #                    choices=('Beese-v0', 'HiBee-v0', 'ForwardBee-v0'),
-    #                   help="RL gym class to run")
+    PARSER.add_argument("--models", nargs='+', required=True,
+                        help="model file(s) (.pkl) to load. if multiple, uses first as default to gather trajectories, compares with rest (must be same input/output type)")
 
-    PARSER.add_argument("--model", action='store', required=True,
-                        help="model file (.pkl) to load")
-
-    PARSER.add_argument("--comparisons", nargs='*', required=False, default=[],
-                        help="model file (.pkl) of same input/ouput type as <--model> to compare to")
     PARSER.add_argument("--env-config-file", action='store', required=False, default=None,
                         help="environment specification file, formatted as dictionary {'name':<env name>,'kwargs':<kwargs dict>}")
 
@@ -43,6 +38,9 @@ if __name__ == '__main__':
     PARSER.add_argument("--num-trajectories", type=int, required=False, default=1,
                         help="number of trajectories to capture")
 
+    PARSER.add_argument("--subsample-quiver", type=int, required=False, default=15,
+                        help="how far to space quivers when displaying OF orientation")
+
     PARSER.add_argument("--baseline-amnt", type=float, required=False, default=None,
                         help="number of observations to use as background. "
                              "If None, uses all, "
@@ -57,6 +55,8 @@ if __name__ == '__main__':
     PARSER.add_argument("--avg-kernel", type=int, required=False, default=1,
                         help="smooth the attention with a moving average using this kernel (1 does nothing)")
 
+    PARSER.add_argument("--range-to-display", type=int, nargs=2, required=False, default=[0, float('inf')],
+                        help="display this range of frames")
     PARSER.add_argument("--max-over-each-frame", action='store_true', required=False,
                         help="take max over each frame for scaling instead of a global max over trajectories")
     PARSER.add_argument("--reexplain", action='store_true', required=False,
@@ -80,10 +80,11 @@ if __name__ == '__main__':
 
     device = args.device
     output_dir = args.output_dir_display
+    default_model_dir = args.models[0]
     if output_dir is None:
         output_dir = os.path.join(DIR,
                                   'output',
-                                  os.path.basename(os.path.dirname(os.path.dirname(args.model))),
+                                  os.path.basename(os.path.dirname(os.path.dirname(default_model_dir))),
                                   'display'
                                   )
     # traj_dir = os.path.join(output_dir, 'trajectories')
@@ -126,6 +127,8 @@ if __name__ == '__main__':
     env = gym.make(env_config['name'],
                    **env_config['kwargs'],
                    )
+    # so the order is 'front', 'bottom'
+    of_camera_names = tuple(sorted(env.unwrapped.of_cameras, reverse=True))
 
     if not args.display_only:
         print('saving to', output_dir)
@@ -150,7 +153,7 @@ if __name__ == '__main__':
         steps = []
 
     if traj_sampling:
-        model = MODEL.load(args.model, env=env)
+        model = MODEL.load(default_model_dir, env=env)
         model.policy.to(device)
         print(model.policy)
         print(type(model.policy))
@@ -185,6 +188,9 @@ if __name__ == '__main__':
         if args.display_only:
             quit()
         print('completed sample, saving')
+        time.sleep(4)
+        print('saving for real')
+        time.sleep(1)
         # if old explanations exist, remove them
         if os.path.exists(expln_filename):
             os.remove(expln_filename)
@@ -203,7 +209,7 @@ if __name__ == '__main__':
         f = open(expln_filename, 'rb')
         explanations = pkl.load(f)
         f.close()
-    expln_keys = [args.model] + args.comparisons
+    expln_keys = args.models
 
     updated_exp = False
     for expln_key in expln_keys:
@@ -301,16 +307,17 @@ if __name__ == '__main__':
                     obs_key:
                         explanation[obs_key].reshape(-1, *explanation[obs_key].shape[-2:])[
                         -env.unwrapped.imgs_per_step:]
-                    for obs_key in env.unwrapped.of_cameras}
+                    for obs_key in of_camera_names
+                }
                 current_sum_obs_dic = {
                     obs_key: np.sum(current_obs_dic[obs_key], axis=0)
-                    for obs_key in env.unwrapped.of_cameras
+                    for obs_key in of_camera_names
                 }
                 dic[output_key] = current_sum_obs_dic
             csaae.append(dic)
         current_sum_all_abs_explanations[expln_key] = csaae
 
-    output_keys = list(current_sum_all_abs_explanations[args.model][0].keys())
+    output_keys = list(current_sum_all_abs_explanations[default_model_dir][0].keys())
     # max_current_sum_all_abs_explanations[output_key] gives the max across all time steps, across all cameras
     #  of shap values with respect to a particular output key
     max_current_sum_all_abs_explanations = {
@@ -320,7 +327,7 @@ if __name__ == '__main__':
                     np.max(dic[output_key][cam_name])
                     for dic in current_sum_all_abs_explanations[expln_key]
                 )
-                for cam_name in env.unwrapped.of_cameras
+                for cam_name in of_camera_names
             )
             for output_key in output_keys
         }
@@ -335,7 +342,7 @@ if __name__ == '__main__':
                     np.max(cv.filter2D(dic[output_key][cam_name], -1, blurring_kernel))
                     for dic in current_sum_all_abs_explanations[expln_key]
                 )
-                for cam_name in env.unwrapped.of_cameras
+                for cam_name in of_camera_names
             )
             for output_key in output_keys
         }
@@ -352,7 +359,7 @@ if __name__ == '__main__':
                 )
 
     if GoalBee.INPUT_OF_ORIENTATION in env.unwrapped.input_img_space:
-        for cam_name in env.unwrapped.of_cameras:
+        for cam_name in of_camera_names:
             OF_scale[cam_name] = np.mean([
                 np.max(
                     np.exp(dic['dic_obs'][cam_name][-count - 1:][0])
@@ -429,7 +436,7 @@ if __name__ == '__main__':
             if args.max_over_each_frame:
                 attention = (blurred_csae/max(
                     np.max(cv.filter2D(cam_to_csae[cn], -1, blurring_kernel))
-                    for cn in env.unwrapped.of_cameras))  # scaled to [0,1]
+                    for cn in of_camera_names))  # scaled to [0,1]
             else:
                 attention = np.clip(blurred_csae, 0, np.inf)/blurred_max_current_sum_all_abs_explanations[expln_key][
                     output_key]
@@ -447,7 +454,7 @@ if __name__ == '__main__':
             plotter.imshow(img, interpolation='nearest', )
 
         if quiver_plot:
-            ss = 10
+            ss = args.subsample_quiver
             h, w = np.meshgrid(np.arange(OF_log_magnitude.shape[0]), np.arange(OF_log_magnitude.shape[1]))
             OF_orientation = OF[GoalBee.INPUT_OF_ORIENTATION]
             OF_magnitude = np.exp(OF_log_magnitude)
@@ -460,6 +467,7 @@ if __name__ == '__main__':
                            -of_disp[1, ::ss, ::ss],
                            color='red',
                            scale=OF_scale[cam_name]*(max(w.shape)/ss),
+                           # width=.005,
                            )
         plotter.set_xticklabels([])
         plotter.set_xticks([])
@@ -502,12 +510,12 @@ if __name__ == '__main__':
                     'only_heatmap': True,
                     'cam_name': cam_name,
                 },
-            ] for i, cam_name in enumerate(env.unwrapped.of_cameras)], []
+            ] for i, cam_name in enumerate(of_camera_names)], []
         ),
          {
              'ident': 'all',
-             'subplot_dim': (3, len(env.unwrapped.of_cameras)),
-             'xlabels': env.unwrapped.of_cameras,
+             'subplot_dim': (3, len(of_camera_names)),
+             'xlabels': of_camera_names,
              'ylabels': ['visual',
                          'optic flow',
                          'attention'
@@ -532,17 +540,39 @@ if __name__ == '__main__':
                         'only_heatmap': single_plt == 'attention',
                         'cam_name': cam_name,
                     }
-                    for i, cam_name in enumerate(env.unwrapped.of_cameras)],
+                    for i, cam_name in enumerate(of_camera_names)],
                 {
                     'ident': single_plt.replace(' ', '_'),
-                    'subplot_dim': (1, len(env.unwrapped.of_cameras)),
-                    'xlabels': env.unwrapped.of_cameras if len(env.unwrapped.of_cameras) > 1 else None,
+                    'subplot_dim': (1, len(of_camera_names)),
+                    'xlabels': of_camera_names if len(of_camera_names) > 1 else None,
                     'xlabel_kwargs': {'fontsize': 20},
                     'flip_axes': args.flip_axes,
                     'vid': False,
                 },
             )
         )
+        # split OF into individual plots
+        if single_plt == 'optic flow':
+            for i, cam_name in enumerate(of_camera_names):
+                all_settings.append(
+                    (
+                        [
+                            {
+                                'plt coords': (0, 0),
+                                'output_key': None,
+                                'quiver_plot': True,
+                                'use_OF': True,
+                                'only_heatmap': False,
+                                'cam_name': cam_name,
+                            }
+                        ],
+                        {
+                            'ident': 'optic_flow_' + cam_name,
+                            'subplot_dim': (1, 1),
+                            'vid': False,
+                        },
+                    )
+                )
 
     # comparison of different models for each camera
     # x axis is (avg, individual model 1, ... )
@@ -550,7 +580,7 @@ if __name__ == '__main__':
     # visual and optic flow only are shown for one model, since the rest are duplicates
     # also a version with y axis being cameras
     if len(expln_keys) > 2:  # if expln keys is not just [avg][model]
-        for cam_name in env.unwrapped.of_cameras:
+        for cam_name in of_camera_names:
             all_settings.append(
                 (sum(
                     [[
@@ -612,16 +642,16 @@ if __name__ == '__main__':
                             'cam_name': cam_name,
                             'expln_key': expln_key,
                         }
-                        for i, cam_name in enumerate(env.unwrapped.of_cameras)]
+                        for i, cam_name in enumerate(of_camera_names)]
                     for j, expln_key in enumerate(expln_keys)
                 ],
                 []
             ),
             {
-                'subplot_dim': (len(env.unwrapped.of_cameras), len(expln_keys)),
+                'subplot_dim': (len(of_camera_names), len(expln_keys)),
                 'ident': 'comp',
                 'xlabels': ['Average attention'] + ['Model ' + str(i) for i in (range(len(expln_keys) - 1))],
-                'ylabels': env.unwrapped.of_cameras if len(env.unwrapped.of_cameras) > 1 else None,
+                'ylabels': of_camera_names if len(of_camera_names) > 1 else None,
                 'xlabel_kwargs': {'fontsize': 30},
                 'ylabel_kwargs': {'fontsize': 30},
                 'flip_axes': args.flip_axes,
@@ -643,12 +673,12 @@ if __name__ == '__main__':
                         'cam_name': cam_name,
                         'expln_key': expln_key,
                     }
-                    for i, cam_name in enumerate(env.unwrapped.of_cameras)
+                    for i, cam_name in enumerate(of_camera_names)
                 ],
                 {
-                    'subplot_dim': (len(env.unwrapped.of_cameras), 1),
+                    'subplot_dim': (len(of_camera_names), 1),
                     'ident': 'comp_' + name.replace(' ', '_'),
-                    'ylabels': env.unwrapped.of_cameras if len(env.unwrapped.of_cameras) > 1 else None,
+                    'ylabels': of_camera_names if len(of_camera_names) > 1 else None,
                     'xlabel_kwargs': {'fontsize': 20},
                     'ylabel_kwargs': {'fontsize': 20},
                     'flip_axes': args.flip_axes,
@@ -672,12 +702,12 @@ if __name__ == '__main__':
                     'cam_name': cam_name,
                 }
                 for j, output_key in enumerate(output_keys)
-            ] for i, cam_name in enumerate(env.unwrapped.of_cameras)], []
+            ] for i, cam_name in enumerate(of_camera_names)], []
         ),
         {
             'ident': 'keys',
-            'subplot_dim': (len(output_keys), len(env.unwrapped.of_cameras)),
-            'xlabels': env.unwrapped.of_cameras if len(env.unwrapped.of_cameras) > 1 else None,
+            'subplot_dim': (len(output_keys), len(of_camera_names)),
+            'xlabels': of_camera_names if len(of_camera_names) > 1 else None,
             'ylabels': output_keys,
             'xlabel_kwargs': {'fontsize': 20},
             'ylabel_kwargs': {'fontsize': 20},
@@ -692,7 +722,7 @@ if __name__ == '__main__':
         subplot_dim = None
         if type(settings) == dict:
             settings = [settings]
-            info = dict()
+            info = dict(ident='')
         else:
             settings, info = settings
             ident = info['ident']
@@ -701,9 +731,15 @@ if __name__ == '__main__':
             if flip_axes:
                 subplot_dim = subplot_dim[::-1]
                 info['xlabels'], info['ylabels'] = info.get('ylabels', None), info.get('xlabels', None)
+        print('collecting frames for', ident)
         img_files = []
         for t, dic in enumerate(steps):
-            if t%args.capture_interval:
+            low_rng, high_rng = args.range_to_display
+            if (t - low_rng)%args.capture_interval:
+                # capture every 'capture_interval'th frame starting at low_rng
+                continue
+            if t < low_rng or t >= high_rng:
+                # ouf of display range
                 continue
             if subplot_dim is not None:
                 fig, axs = plt.subplots(subplot_dim[0], subplot_dim[1])
