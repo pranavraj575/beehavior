@@ -67,6 +67,8 @@ if __name__ == '__main__':
 
     PARSER.add_argument('--no-legend', action='store_true', required=False,
                         help='dont plot legend')
+    PARSER.add_argument('--take', type=int, required=False, default=None,
+                        help='take this many trajs')
 
     args = PARSER.parse_args()
     dx = args.dx
@@ -336,7 +338,9 @@ if __name__ == '__main__':
 
             plot_stuff = []
             prop_succ = 0
-            for traj in trajs:
+            for trag_idx,traj in enumerate( trajs):
+                if args.take is not None and trag_idx>=args.take:
+                    continue
                 kwargs = dict()
                 last_info = traj[-1]['info']
                 collided = last_info['collided']
@@ -383,7 +387,7 @@ if __name__ == '__main__':
 
             fname = os.path.join(individual_traj_dir,
                                  'tunnel_' + str(tunnel_idx) + '_' +
-                                 'epoch_' + str(epoch) + '_trajectories.png'
+                                 'epoch_' + str(epoch) + '_trajectories'+('_no_leg' if args.no_legend else '')+'.png'
                                  )
             plt.savefig(fname, bbox_inches='tight')
             plt.close()
