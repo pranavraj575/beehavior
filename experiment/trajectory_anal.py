@@ -338,14 +338,16 @@ if __name__ == '__main__':
 
             plot_stuff = []
             prop_succ = 0
-            for trag_idx,traj in enumerate( trajs):
-                if args.take is not None and trag_idx>=args.take:
+            cnt = 0
+            for trag_idx, traj in enumerate(trajs):
+                if args.take is not None and trag_idx >= args.take:
                     continue
+                cnt += 1
                 kwargs = dict()
                 last_info = traj[-1]['info']
                 collided = last_info['collided']
                 succ = last_info.get('succ', not collided)
-                prop_succ += succ/len(trajs)
+                prop_succ += int(succ)
                 rewards = np.array([dic['reward'] for dic in traj])
                 kwargs['color'] = 'red'
                 kwargs['zorder'] = 1
@@ -361,7 +363,7 @@ if __name__ == '__main__':
 
             dists = np.array([get_dist_traveled(traj) for traj in trajs])
             epochs.append(epoch)
-            prop_successful.append(prop_succ)
+            prop_successful.append(prop_succ/cnt)
             medians.append(np.median(dists))
             maxes.append(np.max(dists))
             means.append(np.mean(dists))
@@ -387,7 +389,8 @@ if __name__ == '__main__':
 
             fname = os.path.join(individual_traj_dir,
                                  'tunnel_' + str(tunnel_idx) + '_' +
-                                 'epoch_' + str(epoch) + '_trajectories'+('_no_leg' if args.no_legend else '')+'.png'
+                                 'epoch_' + str(epoch) + '_trajectories' + (
+                                     '_no_leg' if args.no_legend else '') + '.png'
                                  )
             plt.savefig(fname, bbox_inches='tight')
             plt.close()
