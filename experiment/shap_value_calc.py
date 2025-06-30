@@ -142,6 +142,7 @@ def shap_val(model, explanation_data, baseline, progress=False):
     returns shap values for explanation_data based on baseline
     Args:
         model: nn.Module that goes from tensor -> tensor
+            input is batched, usually shaped (1,...)
         explanation_data: batch of tensor input to explain, shaped (N,*)
         baseline: baseline of tensor input for use, shaped (M,*)
         progress: print progress
@@ -162,7 +163,7 @@ def shap_val(model, explanation_data, baseline, progress=False):
         explanations.append(expln)
         if progress:
             dur = time.time() - timothy
-            rem = len(explanation_data)*(dur/(i+1)) - dur
+            rem = len(explanation_data)*(dur/(i + 1)) - dur
             print(round(100*(i + 1)/len(explanation_data), 2), '%, time remaining:', int(rem), 's   ', end='\r')
     return explanations
 
@@ -293,11 +294,51 @@ if __name__ == '__main__':
                                proc_model_output=lambda x: x[0].flatten(),
                                )
     print(wrapped_model.forward(explanation_data_tensor).shape)
-    shap_val(model=wrapped_model,
-             explanation_data=explanation_data_tensor,
-             baseline=explanation_data_tensor,
-             )
+    try:
+        shap_val(model=wrapped_model,
+                 explanation_data=explanation_data_tensor,
+                 baseline=explanation_data_tensor,
+                 )
+        print('FAILED, this should be an error')
+        quit()
+    except:
+        print("BROKEN SHAP, WHICH IS EXPECTED")
 
+    vec_size = 10
+
+
+    class ManualModel(torch.nn.Module):
+        def __init__(self, vec=None):
+            super(ManualModel, self).__init__()
+            if vec is None:
+                vec = torch.ones(vec_size)
+            self.vec = vec.reshape(-1, 1)
+
+        def forward(self, x):
+            return torch.matmul(x, self.vec)
+
+
+    explanation_data_tensor = torch.rand(100, vec_size)
+    explanations = shap_val(model=ManualModel(),
+                            explanation_data=explanation_data_tensor,
+                            baseline=explanation_data_tensor,
+                            )
+    for inp, exp in zip(explanation_data_tensor, explanations):
+        print((inp - torch.mean(inp)).flatten().cpu().detach().numpy())
+        print(exp.flatten())
+        print()
+    abs_values = sum(np.abs(ex) for ex in explanations).flatten()
+
+    print(np.round(abs_values, 2))
+    print(np.round(abs_values/np.mean(abs_values), 2))
+    print()
+    explanations = shap_val(model=ManualModel(vec=torch.arange(vec_size, dtype=torch.float)),
+                            explanation_data=explanation_data_tensor,
+                            baseline=explanation_data_tensor,
+                            )
+    weighted_abs_values = sum(np.abs(ex) for ex in explanations).flatten()
+    print(np.round(weighted_abs_values, 2))
+    print(np.round(weighted_abs_values/weighted_abs_values[1], 2))
     quit()
 
     plt.close('all')

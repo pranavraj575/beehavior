@@ -937,9 +937,7 @@ if __name__ == '__main__':
             img_files.append(filename)
             plt.close()
         if info.get('vid', True):
-            filename = os.path.join(output_dir,
-                                    ident + '_' +
-                                    'OF.mp4')
+            filename = os.path.join(output_dir, ident + '.mp4')
             print('made frames, forming video:', filename)
             create_mp4(image_paths=img_files,
                        output_mp4_path=filename,
