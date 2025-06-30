@@ -9,6 +9,22 @@ import torch.cuda
 
 from beehavior.networks.nn_from_config import CustomNN
 
+
+def pose_to_dic(pose):
+    return {'position':
+                np.array((pose.position.x_val,
+                          pose.position.y_val,
+                          pose.position.z_val,
+                          )),
+            'orientation':
+                np.array((pose.orientation.x_val,
+                          pose.orientation.y_val,
+                          pose.orientation.z_val,
+                          pose.orientation.w_val,
+                          ))
+            }
+
+
 if __name__ == '__main__':
 
     import argparse
@@ -95,7 +111,6 @@ if __name__ == '__main__':
 
     if os.path.exists(img_dir):
         shutil.rmtree(img_dir)
-
     for d in (output_dir, img_dir):
         if not os.path.exists(d): os.makedirs(d)
 
@@ -126,6 +141,7 @@ if __name__ == '__main__':
     if not traj_sampling:
         # disable client
         env_config['kwargs']['client'] = False
+
     env = gym.make(env_config['name'],
                    **env_config['kwargs'],
                    )
@@ -135,22 +151,6 @@ if __name__ == '__main__':
     if not args.display_only:
         print('saving to', output_dir)
 
-
-    def pose_to_dic(pose):
-        return {'position':
-                    np.array((pose.position.x_val,
-                              pose.position.y_val,
-                              pose.position.z_val,
-                              )),
-                'orientation':
-                    np.array((pose.orientation.x_val,
-                              pose.orientation.y_val,
-                              pose.orientation.z_val,
-                              pose.orientation.w_val,
-                              ))
-                }
-
-
     if steps is None:
         steps = []
 
@@ -158,7 +158,6 @@ if __name__ == '__main__':
         model = MODEL.load(default_model_dir, env=env)
         model.policy.to(device)
         print(model.policy)
-        print(type(model.policy))
         for _ in range(args.num_trajectories):
             obs, info = env.reset(options={
                 'initial_pos': args.initial_pos if args.initial_pos is not None else None
@@ -332,13 +331,11 @@ if __name__ == '__main__':
     # if max over each frame:
     # episode_maxes_per_frame[explain(model) key][output key][i][obs_type_key]
 
-    # episode_maxes = dict()
     blurring_kernel = cv.getGaussianKernel(ksize=args.avg_kernel, sigma=args.avg_kernel/2)
     blurring_kernel = blurring_kernel.dot(blurring_kernel.T)
     blurred_episode_maxes = dict()
     blurred_episode_maxes_per_frm = dict()
     for expln_key, output_key_to_list in current_img_abs_explanations.items():
-        # episode_maxes[expln_key] = dict()
         blurred_episode_maxes[expln_key] = dict()
         blurred_episode_maxes_per_frm[expln_key] = dict()
         for output_key in output_keys:
@@ -348,12 +345,10 @@ if __name__ == '__main__':
                 output_key_iter = [ok for ok in output_keys if ok != 'sum']
                 if output_key_iter[0] in blurred_episode_maxes[expln_key]:
                     # the max is the same for all output keys in output_key_iter
-                    # episode_maxes[expln_key][output_key]=episode_maxes[expln_key][output_key_iter[0]]
                     blurred_episode_maxes[expln_key][output_key] = blurred_episode_maxes[expln_key][output_key_iter[0]]
                     blurred_episode_maxes_per_frm[expln_key][output_key] = \
                         blurred_episode_maxes_per_frm[expln_key][output_key_iter[0]]
                     continue
-            # episode_maxes[expln_key][output_key] = dict()
             blurred_episode_maxes[expln_key][output_key] = dict()
             blurred_episode_maxes_per_frm[expln_key][output_key] = [dict() for _ in range(total_timesteps)]
 
@@ -424,10 +419,9 @@ if __name__ == '__main__':
                   cam_name,
                   expln_key,
                   obs_type_key='sum',
-                  use_OF=True,
+                  plot_OF=True,
                   quiver_plot=False,
                   output_key=None,
-                  only_heatmap=False,
                   plotter=None,
                   filename=None,
                   ):
@@ -436,8 +430,9 @@ if __name__ == '__main__':
         Args:
             t: timestep to get dictionary from
             cam_name: name of OF camera
-            use_OF: use OF as the image instead of RGB view
-            output_key: output key to plot ('sum', 0, ..., n-1, None) where n is the output dimension
+            plot_OF: use OF as the image instead of RGB view
+            output_key: output key of attention to plot ('sum', 0, ..., n-1, None) where n is the output dimension
+              if None, does not plot attention
             plotter: plt object
             filename: filename to save to
         Returns:
@@ -464,7 +459,7 @@ if __name__ == '__main__':
         OF_log_magnitude = (OF[GoalBee.INPUT_LOG_OF] if GoalBee.INPUT_LOG_OF in OF
                             else np.log(np.clip(OF[GoalBee.INPUT_RAW_OF], 10e-3, np.inf)))
 
-        if use_OF:
+        if plot_OF:
             # make an OF image
             if args.coolwarm_of:
                 # not making quivers, use heatmap
@@ -502,12 +497,12 @@ if __name__ == '__main__':
                 scale = blurred_episode_maxes[expln_key][output_key][obs_type_key]
                 # episode_maxes[explain(model) key][output key][obs_type_key]
             attention = np.clip(blurred_attention, 0, np.inf)/scale
-            if not only_heatmap:
+            if plot_OF:  # need to split the channels
                 cmap = None
                 if len(img.shape) == 2:
                     img = np.stack([img for _ in range(3)], axis=-1)  # todo : make this better
                 img[:, :, 1] = attention*255  # scaled to [0,255]
-        if only_heatmap:
+        if (output_key is not None) and (not plot_OF):  # only attention is being plotted, can use a heatmap
             plotter.imshow(attention,
                            cmap='coolwarm',
                            interpolation='nearest',
@@ -515,10 +510,13 @@ if __name__ == '__main__':
                            vmax=1,
                            )
         else:
+            # either we are plotting attention alongside OF, in which case we split channels
+            #  or we are plotting visual info, in which case img is the visual image
             img = np.ndarray.astype(img, dtype=np.uint8)
             plotter.imshow(img, interpolation='nearest', cmap=cmap)
 
         if quiver_plot:
+            # quiver of OF
             ss = args.subsample_quiver
             h, w = np.meshgrid(np.arange(OF_log_magnitude.shape[0]), np.arange(OF_log_magnitude.shape[1]))
             OF_orientation = OF[GoalBee.INPUT_OF_ORIENTATION]
@@ -555,24 +553,21 @@ if __name__ == '__main__':
                     'plt coords': (0, i),
                     'output_key': None,
                     'quiver_plot': False,
-                    'use_OF': False,
-                    'only_heatmap': False,
+                    'plot_OF': False,
                     'cam_name': cam_name,
                 },
                 {
                     'plt coords': (1, i),
                     'output_key': None,
                     'quiver_plot': True,
-                    'use_OF': True,
-                    'only_heatmap': False,
+                    'plot_OF': True,
                     'cam_name': cam_name,
                 },
                 {
                     'plt coords': (2, i),
                     'output_key': 'sum',
                     'quiver_plot': False,
-                    'use_OF': False,
-                    'only_heatmap': True,
+                    'plot_OF': False,
                     'cam_name': cam_name,
                 },
             ] for i, cam_name in enumerate(of_camera_names)], []
@@ -601,8 +596,7 @@ if __name__ == '__main__':
                         'plt coords': (0, i),
                         'output_key': 'sum' if single_plt == 'attention' else None,
                         'quiver_plot': single_plt == 'optic flow',
-                        'use_OF': single_plt == 'optic flow',
-                        'only_heatmap': single_plt == 'attention',
+                        'plot_OF': single_plt == 'optic flow',
                         'cam_name': cam_name,
                     }
                     for i, cam_name in enumerate(of_camera_names)],
@@ -626,8 +620,7 @@ if __name__ == '__main__':
                                 'plt coords': (0, 0),
                                 'output_key': None,
                                 'quiver_plot': True,
-                                'use_OF': True,
-                                'only_heatmap': False,
+                                'plot_OF': True,
                                 'cam_name': cam_name,
                             }
                         ],
@@ -653,8 +646,7 @@ if __name__ == '__main__':
                              'plt coords': (0, i),
                              'output_key': None,
                              'quiver_plot': False,
-                             'use_OF': False,
-                             'only_heatmap': False,
+                             'plot_OF': False,
                              'cam_name': cam_name,
                              'expln_key': expln_key,
                          },
@@ -662,8 +654,7 @@ if __name__ == '__main__':
                              'plt coords': (1, i),
                              'output_key': None,
                              'quiver_plot': True,
-                             'use_OF': True,
-                             'only_heatmap': False,
+                             'plot_OF': True,
                              'cam_name': cam_name,
                              'expln_key': expln_key,
                          },
@@ -671,8 +662,7 @@ if __name__ == '__main__':
                              'plt coords': (2, i),
                              'output_key': 'sum',
                              'quiver_plot': False,
-                             'use_OF': False,
-                             'only_heatmap': True,
+                             'plot_OF': False,
                              'cam_name': cam_name,
                              'expln_key': expln_key,
                          },
@@ -702,8 +692,7 @@ if __name__ == '__main__':
                             'plt coords': (i, j),
                             'output_key': 'sum',
                             'quiver_plot': False,
-                            'use_OF': False,
-                            'only_heatmap': True,
+                            'plot_OF': False,
                             'cam_name': cam_name,
                             'expln_key': expln_key,
                         }
@@ -735,8 +724,7 @@ if __name__ == '__main__':
                         'plt coords': (i, 0),
                         'output_key': 'sum',
                         'quiver_plot': False,
-                        'use_OF': False,
-                        'only_heatmap': True,
+                        'plot_OF': False,
                         'cam_name': cam_name,
                         'expln_key': expln_key,
                     }
@@ -764,8 +752,7 @@ if __name__ == '__main__':
                     'plt coords': (j, i),
                     'output_key': output_key,
                     'quiver_plot': False,
-                    'use_OF': True,
-                    'only_heatmap': False,
+                    'plot_OF': True,
                     'cam_name': cam_name,
                 }
                 for j, output_key in enumerate(output_keys)
@@ -793,8 +780,7 @@ if __name__ == '__main__':
                          'plt coords': (0, i),
                          'output_key': None,
                          'quiver_plot': False,
-                         'use_OF': False,
-                         'only_heatmap': False,
+                         'plot_OF': False,
                          'cam_name': cam_name,
                          'obs_type_key': otk,
                      },
@@ -802,8 +788,7 @@ if __name__ == '__main__':
                          'plt coords': (1, i),
                          'output_key': None,
                          'quiver_plot': True,
-                         'use_OF': True,
-                         'only_heatmap': False,
+                         'plot_OF': True,
                          'cam_name': cam_name,
                          'obs_type_key': otk,
                      },
@@ -811,8 +796,7 @@ if __name__ == '__main__':
                          'plt coords': (2, i),
                          'output_key': 'sum',
                          'quiver_plot': False,
-                         'use_OF': False,
-                         'only_heatmap': True,
+                         'plot_OF': False,
                          'cam_name': cam_name,
                          'obs_type_key': otk,
                      },
@@ -830,6 +814,40 @@ if __name__ == '__main__':
                  'ylabel_kwargs': {'fontsize': 20},
                  'flip_axes': args.flip_axes,
                  'vid': True,
+             }
+            )
+        )
+    # for each camera
+    # plot obs type keys in x
+    # output key in y
+    #  i.e. for each observation type, which output does it influence most
+    for cam_name in of_camera_names:
+        all_settings.append(
+            (sum(
+                [[
+                    {
+                        'plt coords': (i, j),
+                        'output_key': output_key,
+                        'quiver_plot': False,
+                        'plot_OF': False,
+                        'cam_name': cam_name,
+                        'obs_type_key': otk,
+                    }
+                    for i, output_key in enumerate(filter(lambda x: x != 'sum', output_keys))
+                ]
+                    for j, otk in enumerate(filter(lambda x: x != 'sum', obs_type_keys))
+                ],
+                []
+            ),
+             {
+                 'subplot_dim': (len(output_keys) - 1, len(obs_type_keys) - 1),
+                 'ident': 'key_to_output_' + cam_name,
+                 'xlabels': list(filter(lambda x: x != 'sum', obs_type_keys)),
+                 'ylabels': list(filter(lambda x: x != 'sum', output_keys)),
+                 'xlabel_kwargs': {'fontsize': 20},
+                 'ylabel_kwargs': {'fontsize': 20},
+                 'flip_axes': args.flip_axes,
+                 'vid': False,
              }
             )
         )
@@ -889,8 +907,7 @@ if __name__ == '__main__':
 
             for plotter, stuff in zip(plotters, settings):
                 output_key = stuff['output_key']
-                only_heatmap = stuff['only_heatmap']
-                use_OF = stuff['use_OF']
+                plot_OF = stuff['plot_OF']
                 cam_name = stuff['cam_name']
                 expln_key = stuff.get('expln_key', 'avg')
                 obs_type_key = stuff.get('obs_type_key', 'sum')
@@ -907,9 +924,8 @@ if __name__ == '__main__':
                           cam_name=cam_name,
                           obs_type_key=obs_type_key,
                           output_key=output_key,
-                          use_OF=use_OF,
+                          plot_OF=plot_OF,
                           plotter=plotter,
-                          only_heatmap=only_heatmap,
                           quiver_plot=quiver_plot,
                           filename=None,
                           )
