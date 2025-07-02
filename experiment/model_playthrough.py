@@ -36,8 +36,13 @@ if __name__ == '__main__':
         description='run RL on envionrment'
     )
 
-    PARSER.add_argument("--models", nargs='+', required=True,
+    PARSER.add_argument("--models", nargs='+', required=False, default=[],
                         help="model file(s) (.pkl) to load. if multiple, uses first as default to gather trajectories, compares with rest (must be same input/output type)")
+    PARSER.add_argument("--control-laws", nargs='+', required=False, default=[],
+                        help="control law file(s) (.pkl) to load.")
+
+    PARSER.add_argument("--default-to-ctrl-law", action='store_true', required=False,
+                        help="use control law as default model for trajectories and such")
 
     PARSER.add_argument("--env-config-file", action='store', required=False, default=None,
                         help="environment specification file, formatted as dictionary {'name':<env name>,'kwargs':<kwargs dict>}")
@@ -95,10 +100,18 @@ if __name__ == '__main__':
     from experiment.trajectory_anal import create_mp4
     from experiment.shap_value_calc import shap_val, GymWrapper
     import cv2 as cv
+    from beehavior.control_laws.controller_hardly import *
 
     device = args.device
     output_dir = args.output_dir_display
-    default_model_dir = args.models[0]
+    nn_models = args.models
+    ctrl_laws = args.control_laws
+    all_models = ctrl_laws + nn_models if args.default_to_ctrl_law else nn_models + ctrl_laws
+    if len(nn_models + ctrl_laws) == 0:
+        raise Exception('must include --models or --control-laws')
+    default_model_dir = all_models[0]
+    default_is_ctrl_law = (len(ctrl_laws) > 0) and default_model_dir == ctrl_laws[0]
+
     if output_dir is None:
         output_dir = os.path.join(DIR,
                                   'output',
@@ -154,10 +167,43 @@ if __name__ == '__main__':
     if steps is None:
         steps = []
 
+
+    def get_model_out(model_dir, is_ctrl_law):
+        if is_ctrl_law:
+            return torch.load(model_dir)
+        else:
+            model = MODEL.load(default_model_dir, env=env)
+            model.policy.to(device)
+            return model
+
+
+    def model_prediction(model, obs, is_ctrl_law):
+        if is_ctrl_law:
+            action= model.forward(obs)
+            return action.cpu().detach().flatten().numpy()
+        else:
+            action, _ = model.predict(observation=obs, deterministic=True)
+            return action
+
+
+    def model_convert_to_tensor(model, obs, is_ctrl_law):
+        if is_ctrl_law:
+            return torch.tensor(obs,dtype=torch.float).unsqueeze(0)
+        else:
+            return model.policy.obs_to_tensor(obs)[0]
+
+
+    def wrap_model(model, is_ctrl_law):
+        if is_ctrl_law:
+            return model
+        else:
+            return GymWrapper(network=model.policy,
+                              model_call_kwargs={'deterministic': True},
+                              )
+
+
     if traj_sampling:
-        model = MODEL.load(default_model_dir, env=env)
-        model.policy.to(device)
-        print(model.policy)
+        model = get_model_out(model_dir=default_model_dir, is_ctrl_law=default_is_ctrl_law)
         for _ in range(args.num_trajectories):
             obs, info = env.reset(options={
                 'initial_pos': args.initial_pos if args.initial_pos is not None else None
@@ -165,7 +211,7 @@ if __name__ == '__main__':
             old_pose = env.unwrapped.get_pose()
             done = False
             while not done:
-                action, _ = model.predict(observation=obs, deterministic=True)
+                action = model_prediction(model=model, obs=obs, is_ctrl_law=default_is_ctrl_law)
 
                 obs, rwd, done, term, info = env.step(action)
                 pose = env.unwrapped.get_pose()
@@ -185,6 +231,7 @@ if __name__ == '__main__':
                     'info': info,
                 })
                 old_pose = pose
+
             print(info)
         if args.display_only:
             quit()
@@ -210,26 +257,26 @@ if __name__ == '__main__':
         f = open(expln_filename, 'rb')
         explanations = pkl.load(f)
         f.close()
-    expln_keys = args.models
+    expln_keys = all_models
 
     updated_exp = False
     for expln_key in expln_keys:
         if expln_key not in explanations:
             updated_exp = True
             print('explainin', expln_key)
-            model = MODEL.load(expln_key, env=env)
-            model.policy.to(device)
-
+            # model = MODEL.load(expln_key, env=env)
+            # model.policy.to(device)
+            model = get_model_out(model_dir=expln_key, is_ctrl_law=(expln_key in ctrl_laws))
             converted_observations = [
-                model.policy.obs_to_tensor(dic['obs'])[0] for dic in steps
+                model_convert_to_tensor(model=model, is_ctrl_law=(expln_key in ctrl_laws), obs=dic['obs'])
+                for dic in steps
             ]
             if type(converted_observations[0]) == dict:
                 raise Exception("dict conversion does not work with shap explainer")
             else:
                 tensor_observations = torch.concatenate(converted_observations, dim=0)
-                wrapped_model = GymWrapper(network=model.policy,
-                                           model_call_kwargs={'deterministic': True},
-                                           )
+                wrapped_model = wrap_model(model=model, is_ctrl_law=(expln_key in ctrl_laws))
+
             # sample a proportion of the data for background
             if args.baseline_amnt is not None:
                 if args.baseline_amnt < 1:
