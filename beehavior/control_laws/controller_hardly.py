@@ -58,9 +58,9 @@ class ProprotionalControl(BaseController):
 
     def __init__(self,
                  c,
-                 output_shape=(1,2,),
-                 forward_idx=(0,0),
-                 sideways_idx=(0,1),
+                 output_shape=(1, 2,),
+                 forward_idx=(0, 0),
+                 sideways_idx=(0, 1),
                  proportions=(.1, .1),
                  ksp=None,
                  divergence_kernel_size=3,
@@ -115,6 +115,9 @@ class ProprotionalControl(BaseController):
         )
         mean_OF = torch.mean(OF[0])
         lateral_mean = torch.mean(OF_x)
+
+        _, H, W = OF.shape
+        lateral_magnitude_diff = torch.mean(OF[0, :, int(np.ceil(W/2)):]) - torch.mean(OF[0, :, :int(np.floor(W/2))])
 
         output_vector = torch.zeros(self.output_shape)
         output_vector[self.fwd_idx] = self.k1*(self.c - mean_OF)

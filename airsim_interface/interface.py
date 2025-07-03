@@ -208,14 +208,17 @@ def get_of_geo_shape(client: airsim.MultirotorClient, camera_name='front'):
     depth_image = get_depth_img(client=client, camera_name=camera_name)
     return (2, depth_image.height, depth_image.width)
 
-CAMERA_NAME_TO_BASIS={
-    #'front':np.identity(3),
-    'bottom':np.array([
-        [1.,0.,0],
-        [0.,0.,-1.],
-        [0.,1.,0.],
+
+CAMERA_NAME_TO_BASIS = {
+    # 'front':np.identity(3),
+    'bottom': np.array([
+        [1., 0., 0],
+        [0., 0., -1.],
+        [0., 1., 0.],
     ]),
 }
+
+
 def of_geo(client: airsim.MultirotorClient,
            camera_name='front',
            vehicle_name='',
@@ -263,66 +266,59 @@ def of_geo(client: airsim.MultirotorClient,
     FOVx = math.radians(FOVx)  # in radians now
     # FOVy = 2*math.atan((image_height/image_width)*math.tan(FOVx/2))
 
-    T = np.array(
-        [-kinematics.linear_velocity.y_val, -kinematics.linear_velocity.z_val, kinematics.linear_velocity.x_val])
+    T = np.array([-kinematics.linear_velocity.y_val,
+                  -kinematics.linear_velocity.z_val,
+                  kinematics.linear_velocity.x_val
+                  ])
     if camera_name in CAMERA_NAME_TO_BASIS:
-        T=T@CAMERA_NAME_TO_BASIS[camera_name]
+        T = T@CAMERA_NAME_TO_BASIS[camera_name]
 
     # Rotational velocity (angular velocity)
-    omega = np.array(
-        [-kinematics.angular_velocity.y_val, -kinematics.angular_velocity.z_val, kinematics.angular_velocity.x_val])
+    omega = np.array([-kinematics.angular_velocity.y_val,
+                      -kinematics.angular_velocity.z_val,
+                      kinematics.angular_velocity.x_val
+                      ])
 
     # Convert depth data to a numpy array and reshape it to the image dimensions
     depth_map = get_depth_img(client=client, camera_name=camera_name, numpee=True)
     image_height, image_width = depth_map.shape
-
-    # depth_image = get_depth_img(client=client, camera_name=camera_name)
-    # image_width = depth_image.width
-    # image_height = depth_image.height
-    # Convert depth data to a numpy array and reshape it to the image dimensions
-    # depth_map = np.array(depth_image.image_data_float, dtype=np.float32).reshape(image_height, image_width)
 
     # Assuming these are already defined in your code
     Fx = image_width/(2*math.tan(FOVx/2))  # focal length in pixels (Horizontal = Vertical)
     # Fy = image_height/(2*math.tan(FOVy/2))
     Fy = Fx  # Fx and Fx are the same value
 
-    Z = depth_map  # Depth map
-
-    X_dot, Y_dot, Z_dot = T  # Linear velocities
-    p, q, r = omega  # Angular velocities
     if ignore_angular_velocity:
-        p, q, r = 0., 0., 0.  # ignore angular motion of drone
+        # ignore angular motion of drone
+        omega = np.zeros_like(omega)
     # Combine velocities and rotations into a single state vector
-    state_vector = np.array([X_dot, Y_dot, Z_dot, p, q, r])
-
-    # Get image dimensions
-    Z_height, Z_width = Z.shape
+    # state_vector = np.array([X_dot, Y_dot, Z_dot, p, q, r])
+    state_vector = np.concatenate((T, omega))
 
     # Define the center of the image
-    u_center = Z_width//2
-    v_center = Z_height//2
+    u_center = image_width//2
+    v_center = image_height//2
 
     # Create a meshgrid of pixel coordinates
-    u, v = np.meshgrid(np.arange(Z_width), np.arange(Z_height))
+    u, v = np.meshgrid(np.arange(image_width), np.arange(image_height))
 
     # Shift u and v to center the origin
     u_shifted = -(u - u_center)  # Shift horizontally
     v_shifted = v_center - v  # Shift vertically
 
     a_row1 = np.array([
-        Fx/Z,
-        np.zeros_like(Z),
-        -u_shifted/Z,
+        Fx/depth_map,
+        np.zeros_like(depth_map),
+        -u_shifted/depth_map,
         -u_shifted*v_shifted/Fx,
         -Fx - (u_shifted**2)/Fx,
         -v_shifted,
     ])
 
     a_row2 = np.array([
-        np.zeros_like(Z),
-        Fy/Z,
-        -v_shifted/Z,
+        np.zeros_like(depth_map),
+        Fy/depth_map,
+        -v_shifted/depth_map,
         -Fy - (v_shifted**2)/Fy,
         -u_shifted*v_shifted/Fy,
         u_shifted,

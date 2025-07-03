@@ -204,8 +204,8 @@ if __name__ == '__main__':
         ((-4., -3.), (14.7, 15.3), (-2., -6.9)),
         ((-4., -3.), (19, 25), (-2., -6.9)),
         ((-4., -3.), (30, 33), (-2., -6.9)),
-        #((-4., -3.), (38.5, 39.5), (-2., -6.9)),  # empty tunnel
-        ((-4., -3.), (40., 40.69), (-2., -6.9)) , # empty tunnel (skewed)
+        # ((-4., -3.), (38.5, 39.5), (-2., -6.9)),  # empty tunnel
+        ((-4., -3.), (40., 40.69), (-2., -6.9)),  # empty tunnel (skewed)
     ]
 
 
@@ -233,13 +233,17 @@ if __name__ == '__main__':
 
 
     def collect_testjectories(model, env, testjectories=None, num_to_collect=None, debug=False):
+        collected_any = False
         if testjectories is None:
             testjectories = dict()
         if num_to_collect is None:
             num_to_collect = args.testjectories
         for tunnel_idx in testing_tunnels:
             trajectories = testjectories.get(tunnel_idx, [])
+            if debug and len(trajectories) < num_to_collect:
+                print('sampling', num_to_collect - len(trajectories), 'from tunnel', tunnel_idx)
             while len(trajectories) < num_to_collect:
+                collected_any = True
                 traj = collect_testjectory(model=model, env=env, tunnel_idx=tunnel_idx)
                 trajectories.append(traj)
                 if debug:
@@ -249,7 +253,7 @@ if __name__ == '__main__':
                           traj[-1]['info'],
                           )
             testjectories[tunnel_idx] = trajectories
-        return testjectories
+        return testjectories, collected_any
 
 
     for epoch in range(epoch_init, args.epochs):
@@ -276,17 +280,18 @@ if __name__ == '__main__':
             clear_model_history(save_model_history=args.save_model_history, model_dir=model_dir)
         if args.testjectories and (not (epoch + 1)%test_freq):
             print('getting trajectories for epoch', epoch)
-            testjectories = collect_testjectories(model=model,
-                                                  env=env,
-                                                  testjectories=None,
-                                                  num_to_collect=args.testjectories,
-                                                  debug=True,
-                                                  )
-            print('saving trajectories of epoch', epoch, 'info to ', traj_filename)
-            f = open(traj_filename, 'wb')
-            pkl.dump(testjectories, f)
-            f.close()
-            print('saved trajectories')
+            testjectories, collected_any = collect_testjectories(model=model,
+                                                                 env=env,
+                                                                 testjectories=None,
+                                                                 num_to_collect=args.testjectories,
+                                                                 debug=True,
+                                                                 )
+            if collected_any:
+                print('saving trajectories of epoch', epoch, 'info to ', traj_filename)
+                f = open(traj_filename, 'wb')
+                pkl.dump(testjectories, f)
+                f.close()
+                print('saved trajectories')
 
     if args.recollect and args.testjectories and (args.display is None):
         for epoch in range(args.epochs):
@@ -306,18 +311,18 @@ if __name__ == '__main__':
                     testjectories = pkl.load(f)
                     f.close()
                     print('loaded previous trajectories')
-                testjectories = collect_testjectories(model=model,
-                                                      env=env,
-                                                      testjectories=testjectories,
-                                                      num_to_collect=args.testjectories,
-                                                      debug=True,
-                                                      )
-
-                print('saving trajectories of epoch', epoch, 'info to ', traj_filename)
-                f = open(traj_filename, 'wb')
-                pkl.dump(testjectories, f)
-                f.close()
-                print('saved trajectories')
+                testjectories, collected_any = collect_testjectories(model=model,
+                                                                     env=env,
+                                                                     testjectories=testjectories,
+                                                                     num_to_collect=args.testjectories,
+                                                                     debug=True,
+                                                                     )
+                if collected_any:
+                    print('saving trajectories of epoch', epoch, 'info to ', traj_filename)
+                    f = open(traj_filename, 'wb')
+                    pkl.dump(testjectories, f)
+                    f.close()
+                    print('saved trajectories')
     if args.display is not None:
         if args.display < 0:
             past_models = get_model_history_srt(model_dir=model_dir)
@@ -335,9 +340,9 @@ if __name__ == '__main__':
         else:
             raise Exception('model', model_filename, 'not saved')
 
-        testjectories = collect_testjectories(model=model,
-                                              env=env,
-                                              testjectories=None,
-                                              num_to_collect=1,
-                                              debug=True,
-                                              )
+        testjectories, collected_any = collect_testjectories(model=model,
+                                                             env=env,
+                                                             testjectories=None,
+                                                             num_to_collect=1,
+                                                             debug=True,
+                                                             )
