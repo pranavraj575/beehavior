@@ -90,6 +90,10 @@ if __name__ == '__main__':
                         help="optic flow in coolwarm map")
     PARSER.add_argument("--device", action='store', required=False, default='cpu',
                         help="device to store tensors on")
+    PARSER.add_argument('--dpi', type=int, required=False, default=100,
+                        help='dpi for saved images')
+    PARSER.add_argument("--no-video", action='store_true', required=False,
+                        help="dont plot video")
     args = PARSER.parse_args()
 
     import numpy as np
@@ -179,7 +183,7 @@ if __name__ == '__main__':
 
     def model_prediction(model, obs, is_ctrl_law):
         if is_ctrl_law:
-            action= model.forward(obs)
+            action = model.forward(obs)
             return action.cpu().detach().flatten().numpy()
         else:
             action, _ = model.predict(observation=obs, deterministic=True)
@@ -188,7 +192,7 @@ if __name__ == '__main__':
 
     def model_convert_to_tensor(model, obs, is_ctrl_law):
         if is_ctrl_law:
-            return torch.tensor(obs,dtype=torch.float).unsqueeze(0)
+            return torch.tensor(obs, dtype=torch.float).unsqueeze(0)
         else:
             return model.policy.obs_to_tensor(obs)[0]
 
@@ -586,7 +590,7 @@ if __name__ == '__main__':
         plotter.set_yticks([])
         # plotter.show()
         if filename is not None:
-            plotter.savefig(filename, bbox_inches='tight')
+            plotter.savefig(filename, bbox_inches='tight', dpi=args.dpi)
 
 
     all_settings = []
@@ -622,7 +626,7 @@ if __name__ == '__main__':
          {
              'ident': 'all',
              'subplot_dim': (3, len(of_camera_names)),
-             'xlabels': of_camera_names,
+             'xlabels': of_camera_names if len(of_camera_names) > 1 else None,
              'ylabels': ['visual',
                          'optic flow',
                          'attention'
@@ -980,10 +984,10 @@ if __name__ == '__main__':
                                     ident + '_' + str(t) +
                                     '.png'
                                     )
-            plt.savefig(filename, bbox_inches='tight')
+            plt.savefig(filename, bbox_inches='tight', dpi=args.dpi)
             img_files.append(filename)
             plt.close()
-        if info.get('vid', True):
+        if (not args.no_video) and info.get('vid', True):
             filename = os.path.join(output_dir, ident + '.mp4')
             print('made frames, forming video:', filename)
             create_mp4(image_paths=img_files,

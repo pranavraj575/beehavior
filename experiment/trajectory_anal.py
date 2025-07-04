@@ -61,16 +61,30 @@ if __name__ == '__main__':
                         help='frequency to look for traj files')
     PARSER.add_argument('--dx', type=float, required=False, default=.5,
                         help='dx to use for space averaging positions/velocities')
+    PARSER.add_argument('--alpha-traj', type=float, required=False, default=.69,
+                        help='opacity of trajectory lines')
 
     PARSER.add_argument('--remove-axis-ticks', action='store_true', required=False,
                         help='dont plot values for x and y axis')
 
     PARSER.add_argument('--no-legend', action='store_true', required=False,
                         help='dont plot legend')
+
+    PARSER.add_argument('--necessary-leg', action='store_true', required=False,
+                        help='dont plot things in legend that arent in plot')
     PARSER.add_argument('--take', type=int, required=False, default=None,
                         help='take this many trajs')
+    PARSER.add_argument('--dpi', type=int, required=False, default=100,
+                        help='dpi for saved images')
+    PARSER.add_argument('--fontsize', type=int, required=False, default=None,
+                        help='font size for saved images')
+    PARSER.add_argument('--inversion', action='store_true', required=False,
+                        help='plot y axis inverted')
 
     args = PARSER.parse_args()
+    if args.fontsize is not None:
+        plt.rcParams.update({'font.size': args.fontsize})
+    yinversion = -1 if args.inversion else 1
     dx = args.dx
     dt = .1
     load_dir = args.load_dir
@@ -219,7 +233,7 @@ if __name__ == '__main__':
             walled = False
             for pt_list in walls:
                 ax.plot([wx for (wx, wy) in pt_list],
-                        [wy for (wx, wy) in pt_list],
+                        [yinversion*wy for (wx, wy) in pt_list],
                         color='black', linewidth=4, label='wall' if not walled else None)
                 walled = True
             ylim = plt.ylim()  # y limits should be bounded by walls
@@ -240,7 +254,7 @@ if __name__ == '__main__':
 
                         w += 1
                         h += 1
-                    c = (c[0] + 9390)/100, (c[1] + 22145)/100
+                    c = (c[0] + 9390)/100, yinversion*(c[1] + 22145)/100
                     # ax.add_patch(plt.Circle(c, r, alpha=alpha))
                     ax.add_patch(Ellipse(xy=c,
                                          width=w,
@@ -295,7 +309,7 @@ if __name__ == '__main__':
 
             ylim = plt_env()
             plt.gca().set_aspect('equal')
-            pos_means = np.array([np.mean(b) for b in pos_bins if len(b) > 0])
+            pos_means = np.array([yinversion*np.mean(b) for b in pos_bins if len(b) > 0])
             pos_std = np.array([np.std(b) for b in pos_bins if len(b) > 0])
             plt.plot(xs[[len(b) > 0 for b in vel_bins]],
                      pos_means,
@@ -326,8 +340,6 @@ if __name__ == '__main__':
             ylim = plt_env()
             plt.gca().set_aspect('equal')
 
-            alpha = 1
-
 
             def get_dist_traveled(traj):
                 return traj[-1]['pose']['position'][0]
@@ -337,8 +349,10 @@ if __name__ == '__main__':
             trajs.sort(key=get_dist_traveled)
 
             plot_stuff = []
-            prop_succ = 0
             cnt = 0
+            cnt_succ = 0
+            cnt_crashed = 0
+            cnt_timeout = 0
             for trag_idx, traj in enumerate(trajs):
                 if args.take is not None and trag_idx >= args.take:
                     continue
@@ -347,23 +361,27 @@ if __name__ == '__main__':
                 last_info = traj[-1]['info']
                 collided = last_info['collided']
                 succ = last_info.get('succ', not collided)
-                prop_succ += int(succ)
                 rewards = np.array([dic['reward'] for dic in traj])
-                kwargs['color'] = 'red'
-                kwargs['zorder'] = 1
-                if not collided:
-                    kwargs['color'] = 'yellow'
-                    kwargs['zorder'] = 2
+                kwargs['alpha'] = args.alpha_traj
                 if succ:
                     kwargs['color'] = 'green'
                     kwargs['zorder'] = 3
+                    cnt_succ += 1
+                elif not collided:
+                    kwargs['color'] = 'yellow'
+                    kwargs['zorder'] = 2
+                    cnt_timeout += 1
+                else:
+                    kwargs['color'] = 'red'
+                    kwargs['zorder'] = 4
+                    cnt_crashed += 1
                 plot_stuff.append((traj, kwargs))
 
             rwds = np.array([sum(t['reward'] for t in traj) for traj in trajs])
 
             dists = np.array([get_dist_traveled(traj) for traj in trajs])
             epochs.append(epoch)
-            prop_successful.append(prop_succ/cnt)
+            prop_successful.append(cnt_succ/cnt)
             medians.append(np.median(dists))
             maxes.append(np.max(dists))
             means.append(np.mean(dists))
@@ -376,10 +394,15 @@ if __name__ == '__main__':
                 positions = np.stack([traj[0]['old_pose']['position']] +
                                      [dic['pose']['position'] for dic in traj],
                                      axis=0)
-                plt.plot(positions[:, 0], positions[:, 1], alpha=alpha, **kwargs)
-            plt.plot([], [], color='green', label='successful')
-            plt.plot([], [], color='yellow', label='timed out')
-            plt.plot([], [], color='red', label='crashed')
+                plt.plot(positions[:, 0], yinversion*positions[:, 1], **kwargs)
+            if args.necessary_leg:
+                if cnt_succ: plt.plot([], [], color='green', label='successful')
+                if cnt_timeout: plt.plot([], [], color='yellow', label='timed out')
+                if cnt_crashed: plt.plot([], [], color='red', label='crashed')
+            else:
+                plt.plot([], [], color='green', label='successful')
+                plt.plot([], [], color='yellow', label='timed out')
+                plt.plot([], [], color='red', label='crashed')
 
             plt.ylim(ylim)
 
@@ -392,7 +415,7 @@ if __name__ == '__main__':
                                  'epoch_' + str(epoch) + '_trajectories' + (
                                      '_no_leg' if args.no_legend else '') + '.png'
                                  )
-            plt.savefig(fname, bbox_inches='tight')
+            plt.savefig(fname, bbox_inches='tight', dpi=args.dpi)
             plt.close()
             fnames.append(fname)
         fname = os.path.join(plot_dir,
@@ -406,12 +429,14 @@ if __name__ == '__main__':
         plt.plot(epochs, prop_successful, color='purple')
 
         plt.xlabel('epochs')
-        plt.ylabel('Successful proportion of testing trajectories')
+        plt.ylabel('Successful proportion')
         plt.ylim((0, 1.05))
-        plt.title("Proportion of test success throughout training")
-
+        plt.title("Successful test trajectories throughout training")
+        fig = plt.gcf()
+        width, height = fig.get_size_inches()
+        fig.set_size_inches(width, height*.420)
         plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_success.png'),
-                    bbox_inches='tight')
+                    bbox_inches='tight', dpi=args.dpi)
         plt.close()
 
         plt.plot(epochs, means, color='blue', label='means')
@@ -424,7 +449,7 @@ if __name__ == '__main__':
 
         if not args.no_legend: plt.legend()
         plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_distance_summary.png'),
-                    bbox_inches='tight')
+                    bbox_inches='tight', dpi=args.dpi)
         plt.close()
 
         plt.plot(epochs, rwd_means, color='blue', label='means')
@@ -436,7 +461,7 @@ if __name__ == '__main__':
         plt.title("Rewards throughout training")
         if not args.no_legend: plt.legend()
         plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_rwd_summary.png'),
-                    bbox_inches='tight')
+                    bbox_inches='tight', dpi=args.dpi)
         plt.close()
     if not args.keep_individuals:
         shutil.rmtree(individual_traj_dir)
