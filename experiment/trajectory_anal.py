@@ -284,6 +284,9 @@ if __name__ == '__main__':
             if not trajs:
                 # no data
                 continue
+
+            if args.take is not None and len(trajs) > args.take:
+                trajs = trajs[:args.take]
             for traj in trajs:
                 for thingy in traj:
                     x, y = thingy['old_pose']['position'][:2]
@@ -353,9 +356,7 @@ if __name__ == '__main__':
             cnt_succ = 0
             cnt_crashed = 0
             cnt_timeout = 0
-            for trag_idx, traj in enumerate(trajs):
-                if args.take is not None and trag_idx >= args.take:
-                    continue
+            for traj_idx, traj in enumerate(trajs):
                 cnt += 1
                 kwargs = dict()
                 last_info = traj[-1]['info']

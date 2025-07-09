@@ -47,7 +47,7 @@ if __name__ == '__main__':
     game_interface = not args.without_game_interface
 
     if game_interface:
-        from airsim_interface.interface import step, connect_client, disconnect_client, get_depth_img, of_geo
+        from airsim_interface.interface import step, connect_client, disconnect_client, get_depth_img, of_geo_from_client
 
     discrete = list('1234567890')[:args.thrust_n]
 
@@ -151,12 +151,12 @@ if __name__ == '__main__':
         if img and game_interface:
             from matplotlib import pyplot as plt
 
-            of = of_geo(client=client,
-                        camera_name='front',
-                        vehicle_name='',
-                        FOVx=None,
-                        ignore_angular_velocity=True,
-                        )
+            of = of_geo_from_client(client=client,
+                                    camera_name='front',
+                                    vehicle_name='',
+                                    FOVx_degrees=None,
+                                    ignore_angular_velocity=True,
+                                    )
             response = client.simGetImages([airsim.ImageRequest('front', airsim.ImageType.Scene, False, False)])
             img_data = response[0].image_data_uint8
             if img_data:

@@ -11,7 +11,7 @@ from scipy.spatial.transform import Rotation
 from beehavior.networks.dic_converter import deconcater
 
 from airsim import Vector3r, Pose
-from airsim_interface.interface import connect_client, disconnect_client, step, of_geo, get_of_geo_shape, get_depth_img
+from airsim_interface.interface import connect_client, disconnect_client, step, of_geo_from_client, get_of_geo_shape, get_depth_img
 
 
 class BeeseClass(gym.Env):
@@ -345,16 +345,17 @@ class BeeseClass(gym.Env):
             self.client.simSetVehiclePose(pose, ignore_collision=True, vehicle_name=self.vehicle_name)
 
             # have a non-zero initial velocity to prevent weird teleportation errors
-            for _ in range(2):
-                step(self.client,
-                     seconds=None,
-                     cmd=lambda: self.client.moveByVelocityAsync(np.random.rand() - .5,
-                                                                 np.random.rand() - .5,
-                                                                 np.random.rand() - .5,
-                                                                 duration=self.dt,
-                                                                 ).join(),
-                     pause_after=not self.real_time,
-                     )
+            if options.get('wiggle', True):
+                for _ in range(2):
+                    step(self.client,
+                         seconds=None,
+                         cmd=lambda: self.client.moveByVelocityAsync(np.random.rand() - .5,
+                                                                     np.random.rand() - .5,
+                                                                     np.random.rand() - .5,
+                                                                     duration=self.dt,
+                                                                     ).join(),
+                         pause_after=not self.real_time,
+                         )
             step(self.client,
                  seconds=None,
                  cmd=lambda: self.client.moveToPositionAsync(x, y, z, 1, ).join(),
@@ -557,7 +558,7 @@ class OFBeeseClass(BeeseClass):
     def __init__(self,
                  of_cameras=('front', 'bottom'),
                  default_camera_shape=(2, 240, 320),
-                 img_history_steps=2,
+                 img_history_steps=1,
                  input_img_space=(INPUT_LOG_OF, INPUT_OF_ORIENTATION,),
                  of_ignore_angular_velocity=True,
                  concatenate_observations=False,
@@ -707,11 +708,11 @@ class OFBeeseClass(BeeseClass):
     def get_obs(self):
         obs = dict()
         for camera_name in self.of_cameras:
-            of = of_geo(client=self.client,
-                        camera_name=camera_name,
-                        vehicle_name=self.vehicle_name,
-                        ignore_angular_velocity=self.of_ignore_angular_velocity,
-                        )
+            of = of_geo_from_client(client=self.client,
+                                    camera_name=camera_name,
+                                    vehicle_name=self.vehicle_name,
+                                    ignore_angular_velocity=self.of_ignore_angular_velocity,
+                                    )
             of_magnitude = np.linalg.norm(of, axis=0)  # magnitude of x and y components of projected optic flow
             obs[camera_name] = None
             # H, W = of.shape

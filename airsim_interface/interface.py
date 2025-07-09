@@ -219,78 +219,56 @@ CAMERA_NAME_TO_BASIS = {
 }
 
 
-def of_geo(client: airsim.MultirotorClient,
+def of_geo(depth_map,
+           linear_velocity,
+           angular_velocity,
+           FOVx_degrees,
            camera_name='front',
-           vehicle_name='',
-           ignore_angular_velocity=True,
-           FOVx=None,
            ):
     """
-    PROJECTED optic flow array caluclated from geometric data
-        imagines projection (shadow) of every point on a sphere around observer
-            each point has a projected relative velocity on this sphere
-            consider a FOV rectangle cut out of the sphere, and take the x and y relative velocity of each point
-            use these relative velocities to calculate optic flow of each point
-    assumes STATIC obstacles, can redo this with dynamic obstacles, but it would be much more annoying
-    uses drone's velocity and depth image captured to obtain distance/relative velocity of every point in FOV
-        from this, can calculate optic flow
-    Args:
-        client: client
-        camera_name: name of camera, if tuple, returns a tuple of of data
-        vehicle_name: guess
-        ignore_angular_velocity: whether to ignore angular velocity in calculation
-            if True, calculated as if camera is on chicken head
-        FOVx: in DEGREES set to a specific value because client.simGetFieldOfView is wrong
-            if None, obtains value in /Documents/Airsim/settings.json, or wherever this file is (set in airsim_interface/settings.txt)
-    Returns:
-        optic flow array, shaped (2,H,W) for better use in CNNs
-        x component, y component
-    """
-    if type(camera_name) == tuple:
-        return tuple(of_geo(client=client,
-                            camera_name=t,
-                            vehicle_name=vehicle_name,
-                            ignore_angular_velocity=ignore_angular_velocity,
-                            FOVx=FOVx,
-                            )
-                     for t in camera_name)
+        PROJECTED optic flow array caluclated from geometric data
+            imagines projection (shadow) of every point on a sphere around observer
+                each point has a projected relative velocity on this sphere
+                consider a FOV rectangle cut out of the sphere, and take the x and y relative velocity of each point
+                use these relative velocities to calculate optic flow of each point
+        assumes STATIC obstacles, can redo this with dynamic obstacles, but it would be much more annoying
+        uses drone's velocity and depth image captured to obtain distance/relative velocity of every point in FOV
+            from this, can calculate optic flow
+        Args:
+            depth_map H,W depth of each pixel
+            linear_velocity: x,y,z velocity array
+            angular_velocity (roll, pitch, yaw) velocity array i.e. velocities about (x,y,z) axis
+            FOVx_degrees: in DEGREES set to a specific value because client.simGetFieldOfView is wrong
+                if None, obtains value in /Documents/Airsim/settings.json, or wherever this file is (set in airsim_interface/settings.txt)
+        Returns:
+            optic flow array, shaped (2,H,W) for better use in CNNs
+            x component, y component
+        """
 
-    if FOVx is None:
-        FOVx = get_fov(camera_settings=CAMERA_SETTINGS,
-                       camera_name=camera_name,
-                       image_type=airsim.ImageType.DepthPerspective,
-                       )
-
-    kinematics = client.simGetGroundTruthKinematics(vehicle_name=vehicle_name)
-
-    FOVx = math.radians(FOVx)  # in radians now
+    FOVx_radians = math.radians(FOVx_degrees)  # in radians now
     # FOVy = 2*math.atan((image_height/image_width)*math.tan(FOVx/2))
 
-    T = np.array([-kinematics.linear_velocity.y_val,
-                  -kinematics.linear_velocity.z_val,
-                  kinematics.linear_velocity.x_val
+    T = np.array([-linear_velocity[1],
+                  -linear_velocity[2],
+                  linear_velocity[0]
                   ])
     if camera_name in CAMERA_NAME_TO_BASIS:
         T = T@CAMERA_NAME_TO_BASIS[camera_name]
 
     # Rotational velocity (angular velocity)
-    omega = np.array([-kinematics.angular_velocity.y_val,
-                      -kinematics.angular_velocity.z_val,
-                      kinematics.angular_velocity.x_val
+    omega = np.array([-angular_velocity[1],
+                      -angular_velocity[2],
+                      angular_velocity[0]
                       ])
 
     # Convert depth data to a numpy array and reshape it to the image dimensions
-    depth_map = get_depth_img(client=client, camera_name=camera_name, numpee=True)
     image_height, image_width = depth_map.shape
 
     # Assuming these are already defined in your code
-    Fx = image_width/(2*math.tan(FOVx/2))  # focal length in pixels (Horizontal = Vertical)
+    Fx = image_width/(2*math.tan(FOVx_radians/2))  # focal length in pixels (Horizontal = Vertical)
     # Fy = image_height/(2*math.tan(FOVy/2))
     Fy = Fx  # Fx and Fx are the same value
 
-    if ignore_angular_velocity:
-        # ignore angular motion of drone
-        omega = np.zeros_like(omega)
     # Combine velocities and rotations into a single state vector
     # state_vector = np.array([X_dot, Y_dot, Z_dot, p, q, r])
     state_vector = np.concatenate((T, omega))
@@ -336,6 +314,69 @@ def of_geo(client: airsim.MultirotorClient,
     return geometric_flow
 
 
+def of_geo_from_client(client: airsim.MultirotorClient,
+                       camera_name='front',
+                       vehicle_name='',
+                       ignore_angular_velocity=True,
+                       FOVx_degrees=None,
+                       ):
+    """
+    PROJECTED optic flow array caluclated from geometric data
+        imagines projection (shadow) of every point on a sphere around observer
+            each point has a projected relative velocity on this sphere
+            consider a FOV rectangle cut out of the sphere, and take the x and y relative velocity of each point
+            use these relative velocities to calculate optic flow of each point
+    assumes STATIC obstacles, can redo this with dynamic obstacles, but it would be much more annoying
+    uses drone's velocity and depth image captured to obtain distance/relative velocity of every point in FOV
+        from this, can calculate optic flow
+    Args:
+        client: client
+        camera_name: name of camera, if tuple, returns a tuple of of data
+        vehicle_name: guess
+        ignore_angular_velocity: whether to ignore angular velocity in calculation
+            if True, calculated as if camera is on chicken head
+        FOVx_degrees: in DEGREES set to a specific value because client.simGetFieldOfView is wrong
+            if None, obtains value in /Documents/Airsim/settings.json, or wherever this file is (set in airsim_interface/settings.txt)
+    Returns:
+        optic flow array, shaped (2,H,W) for better use in CNNs
+        x component, y component
+    """
+    if type(camera_name) == tuple:
+        return tuple(of_geo_from_client(client=client,
+                                        camera_name=t,
+                                        vehicle_name=vehicle_name,
+                                        ignore_angular_velocity=ignore_angular_velocity,
+                                        FOVx_degrees=FOVx_degrees,
+                                        )
+                     for t in camera_name)
+
+    if FOVx_degrees is None:
+        FOVx_degrees = get_fov(camera_settings=CAMERA_SETTINGS,
+                               camera_name=camera_name,
+                               image_type=airsim.ImageType.DepthPerspective,
+                               )
+
+    kinematics = client.simGetGroundTruthKinematics(vehicle_name=vehicle_name)
+    linear_velocity = np.array([kinematics.linear_velocity.x_val,
+                                kinematics.linear_velocity.y_val,
+                                kinematics.linear_velocity.z_val
+                                ])
+    angular_velocity = np.array([kinematics.angular_velocity.x_val,
+                                 kinematics.angular_velocity.y_val,
+                                 kinematics.angular_velocity.z_val
+                                 ])
+    if ignore_angular_velocity:
+        # ignore angular motion of drone
+        angular_velocity = np.zeros_like(angular_velocity)
+    depth_map = get_depth_img(client=client, camera_name=camera_name, numpee=True)
+    return of_geo(depth_map=depth_map,
+                  linear_velocity=linear_velocity,
+                  angular_velocity=angular_velocity,
+                  FOVx_degrees=FOVx_degrees,
+                  camera_name=camera_name,
+                  )
+
+
 if __name__ == '__main__':
     client = connect_client(vehicle_name='')
     # client.moveByRollPitchYawrateThrottleAsync(roll=0, pitch=0, throttle=.6, yaw_rate=0, duration=1, ).join()
@@ -356,7 +397,7 @@ if __name__ == '__main__':
          cmd=lambda: client.moveByRollPitchYawrateThrottleAsync(roll=0, pitch=0, throttle=.6, yaw_rate=0,
                                                                 duration=.1, ).join(),
          )
-    print(of_geo(client=client,
-                 camera_name='front'))
-    print(of_geo(client=client,
-                 camera_name='bottom'))
+    print(of_geo_from_client(client=client,
+                             camera_name='front'))
+    print(of_geo_from_client(client=client,
+                             camera_name='bottom'))

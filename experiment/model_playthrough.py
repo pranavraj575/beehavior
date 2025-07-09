@@ -181,14 +181,14 @@ if __name__ == '__main__':
             return model
 
 
-    def model_prediction(model, obs, is_ctrl_law):
+    def model_prediction(model, obs, is_ctrl_law, clip_bounds=None):
         if is_ctrl_law:
             action = model.forward(obs)
-            return action.cpu().detach().flatten().numpy()
         else:
             action, _ = model.predict(observation=obs, deterministic=True)
-            return action
-
+        if clip_bounds is not None:
+            action = action.clip(*clip_bounds)
+        return action
 
     def model_convert_to_tensor(model, obs, is_ctrl_law):
         if is_ctrl_law:
@@ -215,7 +215,8 @@ if __name__ == '__main__':
             old_pose = env.unwrapped.get_pose()
             done = False
             while not done:
-                action = model_prediction(model=model, obs=obs, is_ctrl_law=default_is_ctrl_law)
+                action = model_prediction(model=model, obs=obs, is_ctrl_law=default_is_ctrl_law,
+                                          clip_bounds=(env.action_space.low, env.action_space.high))
 
                 obs, rwd, done, term, info = env.step(action)
                 pose = env.unwrapped.get_pose()
@@ -755,7 +756,7 @@ if __name__ == '__main__':
             {
                 'subplot_dim': (len(of_camera_names), len(expln_keys)),
                 'ident': 'comp',
-                'xlabels': ['Average attention'] + ['Model ' + str(i) for i in (range(len(expln_keys) - 1))],
+                'xlabels': ['Average attention'] + ['Agent ' + str(i) for i in (range(len(expln_keys) - 1))],
                 'ylabels': of_camera_names if len(of_camera_names) > 1 else None,
                 'xlabel_kwargs': {'fontsize': 30},
                 'ylabel_kwargs': {'fontsize': 30},

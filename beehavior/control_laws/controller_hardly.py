@@ -35,11 +35,19 @@ class BaseController(nn.Module):
         else:
             # type(x) is tensor or np.array
             if len(x.shape) == 2:
-                return torch.stack([self.forward(xp) for xp in x], dim=0)
+                if type(x[0]) == np.ndarray:
+                    return np.stack([self.forward(xp) for xp in x], axis=0)
+                else:
+                    return torch.stack([self.forward(xp) for xp in x], dim=0)
             x = deconcater(x, self.ksp)
+        back_to_numpee = False
         if type(x[0]) == np.ndarray:
+            back_to_numpee = True
             x = tuple(torch.tensor(arr, dtype=torch.float) for arr in x)
-        return self.forward_tuple(x)
+        output = self.forward_tuple(x)
+        if back_to_numpee:
+            output = output.detach().cpu().numpy()
+        return output
 
     def forward_tuple(self, x):
         """
@@ -58,10 +66,10 @@ class ProprotionalControl(BaseController):
 
     def __init__(self,
                  c,
-                 output_shape=(1, 2,),
-                 forward_idx=(0, 0),
-                 sideways_idx=(0, 1),
-                 proportions=(.1, .1),
+                 output_shape=(2,),
+                 forward_idx=0,
+                 sideways_idx=1,
+                 proportions=(1/100, 2/100),
                  ksp=None,
                  divergence_kernel_size=3,
                  **kwargs
@@ -106,29 +114,30 @@ class ProprotionalControl(BaseController):
 
     def forward_tuple(self, x):
         OF = x[self.keys_to_idx['front']]
-        OF_x = OF[0]*OF[1]
-        OF_y = OF[0]*OF[2]
+        OF_mag = OF[0]
+        OF_x = OF_mag*OF[1]
+        OF_y = OF_mag*OF[2]
         OF_vector_field = torch.stack((OF_x, OF_y), dim=0)  # (2, H, W)
         total_divergence = torch.sum(
             nn.functional.conv2d(input=OF_vector_field.unsqueeze(dim=0),
                                  weight=self.divergence_kernel)
         )
-        mean_OF = torch.mean(OF[0])
+        mean_OF = torch.mean(OF_mag)
         lateral_mean = torch.mean(OF_x)
 
         _, H, W = OF.shape
-        lateral_magnitude_diff = torch.mean(OF[0, :, int(np.ceil(W/2)):]) - torch.mean(OF[0, :, :int(np.floor(W/2))])
+        lateral_magnitude_diff = torch.mean(OF_mag[:, int(np.ceil(W/2)):]) - torch.mean(OF_mag[:, :int(np.floor(W/2))])
 
         output_vector = torch.zeros(self.output_shape)
         output_vector[self.fwd_idx] = self.k1*(self.c - mean_OF)
-        output_vector[self.side_idx] = self.k2*(lateral_mean)
+        output_vector[self.side_idx] = self.k2*(-lateral_magnitude_diff)
         return output_vector
 
 
 if __name__ == '__main__':
     import os
 
-    thingy = ProprotionalControl(c=20, divergence_kernel_size=3)
+    thingy = ProprotionalControl(c=33, divergence_kernel_size=3)
     print(thingy.divergence_kernel)
     print(thingy.divergence_kernel.shape)
     print(torch.sum(torch.linalg.norm(thingy.divergence_kernel, dim=1)))
