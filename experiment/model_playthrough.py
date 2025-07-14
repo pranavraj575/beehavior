@@ -190,6 +190,7 @@ if __name__ == '__main__':
             action = action.clip(*clip_bounds)
         return action
 
+
     def model_convert_to_tensor(model, obs, is_ctrl_law):
         if is_ctrl_law:
             return torch.tensor(obs, dtype=torch.float).unsqueeze(0)
@@ -505,11 +506,19 @@ if __name__ == '__main__':
             OF[input_k] = im[len(im) + stack_bottom:len(im) + stack_bottom + stack_size]
             if stack_size == 1:
                 OF[input_k] = OF[input_k][0]
-
-        OF_magnitude = (OF[GoalBee.INPUT_RAW_OF] if GoalBee.INPUT_RAW_OF in OF
-                        else np.exp(OF[GoalBee.INPUT_LOG_OF]))
-        OF_log_magnitude = (OF[GoalBee.INPUT_LOG_OF] if GoalBee.INPUT_LOG_OF in OF
-                            else np.log(np.clip(OF[GoalBee.INPUT_RAW_OF], 10e-3, np.inf)))
+        if GoalBee.INPUT_OF_VECTOR in OF:
+            OF_vector = OF[GoalBee.INPUT_OF_VECTOR]
+            OF_magnitude = np.linalg.norm(OF[GoalBee.INPUT_OF_VECTOR], axis=0)
+            OF_log_magnitude = np.log(np.clip(OF_magnitude, 10e-3, np.inf))
+        else:
+            OF_magnitude = (OF[GoalBee.INPUT_RAW_OF] if GoalBee.INPUT_RAW_OF in OF
+                            else np.exp(OF[GoalBee.INPUT_LOG_OF]))
+            OF_log_magnitude = (OF[GoalBee.INPUT_LOG_OF] if GoalBee.INPUT_LOG_OF in OF
+                                else np.log(np.clip(OF[GoalBee.INPUT_RAW_OF], 10e-3, np.inf)))
+            if GoalBee.INPUT_OF_ORIENTATION in OF:
+                OF_vector = OF[GoalBee.INPUT_OF_ORIENTATION]*np.expand_dims(OF_magnitude, 0)
+            else:
+                OF_vector = None
 
         if plot_OF:
             # make an OF image
@@ -571,10 +580,7 @@ if __name__ == '__main__':
             # quiver of OF
             ss = args.subsample_quiver
             h, w = np.meshgrid(np.arange(OF_log_magnitude.shape[0]), np.arange(OF_log_magnitude.shape[1]))
-            OF_orientation = OF[GoalBee.INPUT_OF_ORIENTATION]
-            OF_magnitude = np.exp(OF_log_magnitude)
-            of_disp = np.transpose(OF_orientation*np.expand_dims(OF_magnitude, 0),
-                                   axes=(0, 2, 1))
+            of_disp = np.transpose(OF_vector, axes=(0, 2, 1))
             # inverted from image (height is top down) to np plot (y dim  bottom up)
 
             plotter.quiver(w[::ss, ::ss], h[::ss, ::ss],

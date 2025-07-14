@@ -37,25 +37,24 @@ fwd_v = fwd_v/np.linalg.norm(fwd_v)
 right_v = np.array([1., 1., 0.])
 right_v = right_v/np.linalg.norm(right_v)
 
-forward_OF = of_geo(depth_map=depth_map,
-                    linear_velocity=fwd_v,
-                    angular_velocity=np.zeros(3),
-                    FOVx_degrees=get_fov(camera_settings=CAMERA_SETTINGS,
-                                         camera_name='front',
-                                         image_type=airsim.ImageType.DepthPerspective,
-                                         )
-                    )
-rightwards_OF = of_geo(depth_map=depth_map,
-                       linear_velocity=right_v,
-                       angular_velocity=np.zeros(3),
-                       FOVx_degrees=get_fov(camera_settings=CAMERA_SETTINGS,
-                                            camera_name='front',
-                                            image_type=airsim.ImageType.DepthPerspective,
-                                            )
-                       )
-min_val = min([np.min(np.linalg.norm(OF, axis=0)) for OF in (forward_OF, rightwards_OF)])
+left_v = np.array([1., -1., 0.])
+left_v = left_v/np.linalg.norm(left_v)
+
+forward_OF, rightwards_OF, leftwards_OF = [
+    of_geo(depth_map=depth_map,
+           linear_velocity=vel,
+           angular_velocity=np.zeros(3),
+           FOVx_degrees=get_fov(camera_settings=CAMERA_SETTINGS,
+                                camera_name='front',
+                                image_type=airsim.ImageType.DepthPerspective,
+                                )
+           )
+    for vel in (fwd_v, right_v, left_v)
+]
+all_OF = forward_OF, rightwards_OF, leftwards_OF
+min_val = min([np.min(np.linalg.norm(OF, axis=0)) for OF in all_OF])
 min_val = 0
-max_val = max([np.max(np.linalg.norm(OF, axis=0)) for OF in (forward_OF, rightwards_OF)])
+max_val = max([np.max(np.linalg.norm(OF, axis=0)) for OF in all_OF])
 
 
 def plt_OF(OF, title=None, save=None):
@@ -108,6 +107,11 @@ plt_OF(rightwards_OF,
            round(np.max(np.linalg.norm(rightwards_OF, axis=0)))),
        save=os.path.join(output_dir, 'fwd_right_of.png'),
        )
+plt_OF(leftwards_OF,
+       title='velocity ' + str(left_v*np.sqrt(2)) + '/$\\sqrt{2}$, max |OF| is ' + str(
+           round(np.max(np.linalg.norm(leftwards_OF, axis=0)))),
+       save=os.path.join(output_dir, 'fwd_left_of.png'),
+       )
 
 
 def equatorial_OF(OF):
@@ -119,25 +123,36 @@ def equatorial_OF(OF):
 plt.plot(np.linspace(-60, 60, forward_OF.shape[-1]),
          equatorial_OF(forward_OF),
          label='drone with velocity ' + str(fwd_v),
-         color='blue')
-plt.xlabel('angle in degrees')
-plt.ylabel('equatorial OF magnitude')
+         color='purple')
 plt.plot(np.linspace(-60, 60, rightwards_OF.shape[-1]),
          equatorial_OF(rightwards_OF),
          label='drone with velocity ' + str(right_v*np.sqrt(2)) + '/$\\sqrt{2}$',
-         color='orange',
+         color='red',
          )
+plt.plot(np.linspace(-60, 60, leftwards_OF.shape[-1]),
+         equatorial_OF(leftwards_OF),
+         label='drone with velocity ' + str(left_v*np.sqrt(2)) + '/$\\sqrt{2}$',
+         color='blue',
+         )
+plt.xlabel('angle in degrees')
+plt.ylabel('equatorial OF magnitude')
 ylim = plt.ylim()
 
 mindex_fwd = np.argmin(np.linalg.norm(forward_OF, axis=0))
 mindex_fwd = np.unravel_index(mindex_fwd, forward_OF.shape[1:])
+
 mindex_rgt = np.argmin(np.linalg.norm(rightwards_OF, axis=0))
 mindex_rgt = np.unravel_index(mindex_rgt, rightwards_OF.shape[1:])
 
+mindex_lft = np.argmin(np.linalg.norm(leftwards_OF, axis=0))
+mindex_lft = np.unravel_index(mindex_lft, leftwards_OF.shape[1:])
+
 angle_fwd = np.linspace(-60, 60, forward_OF.shape[-1])[mindex_fwd[1]]
 angle_rgt = np.linspace(-60, 60, rightwards_OF.shape[-1])[mindex_rgt[1]]
-plt.plot([angle_fwd, angle_fwd], ylim, label='focus of expansion', color='blue', alpha=.5, linestyle='--')
-plt.plot([angle_rgt, angle_rgt], ylim, label='focus of expansion', color='orange', alpha=.5, linestyle='--')
+angle_lft = np.linspace(-60, 60, leftwards_OF.shape[-1])[mindex_lft[1]]
+plt.plot([angle_fwd, angle_fwd], ylim, label='focus of expansion', color='purple', alpha=.5, linestyle='--')
+plt.plot([angle_rgt, angle_rgt], ylim, label='focus of expansion', color='red', alpha=.5, linestyle='--')
+plt.plot([angle_lft, angle_lft], ylim, label='focus of expansion', color='blue', alpha=.5, linestyle='--')
 
 plt.ylim(ylim)
 plt.xlabel('angle in degrees')

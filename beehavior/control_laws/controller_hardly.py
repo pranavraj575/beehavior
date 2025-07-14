@@ -131,6 +131,10 @@ class ProprotionalControl(BaseController):
         output_vector = torch.zeros(self.output_shape)
         output_vector[self.fwd_idx] = self.k1*(self.c - mean_OF)
         output_vector[self.side_idx] = self.k2*(-lateral_magnitude_diff)
+        torch.tanh(output_vector)
+        print()
+        print(output_vector)
+        print(torch.tanh(output_vector))
         return output_vector
 
 

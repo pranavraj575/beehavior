@@ -59,6 +59,8 @@ if __name__ == '__main__':
                         help="include log OF in input")
     PARSER.add_argument("--include-of-orientation", action='store_true', required=False,
                         help="include OF orientation in input")
+    PARSER.add_argument("--include-of-vector", action='store_true', required=False,
+                        help="include OF vector in input")
     PARSER.add_argument("--include-depth", action='store_true', required=False,
                         help="include depth in input")
     PARSER.add_argument("--include-vel-with-noise", type=float, required=False, default=None,
@@ -101,6 +103,8 @@ if __name__ == '__main__':
         img_input_space.append(ForwardBee.INPUT_OF_ORIENTATION)
     if args.include_raw_of:
         img_input_space.append(ForwardBee.INPUT_RAW_OF)
+    if args.include_of_vector:
+        img_input_space.append(ForwardBee.INPUT_OF_VECTOR)
     if args.include_depth:
         img_input_space.append(ForwardBee.INPUT_INV_DEPTH_IMG)
     if not img_input_space:
@@ -113,12 +117,14 @@ if __name__ == '__main__':
     for key in (ForwardBee.INPUT_RAW_OF,
                 ForwardBee.INPUT_LOG_OF,
                 ForwardBee.INPUT_OF_ORIENTATION,
-                ForwardBee.INPUT_INV_DEPTH_IMG,
+                ForwardBee.INPUT_OF_VECTOR,
                 ):
         if key in img_input_space:
             ident += 'y'
         else:
             ident += 'n'
+    if ForwardBee.INPUT_INV_DEPTH_IMG in img_input_space:
+        ident += 'd'
     if args.include_vel_with_noise is not None:
         ident += '_vel_noise_' + str(args.include_vel_with_noise).replace('.', '_')
     ident += '_act_' + args.action_type

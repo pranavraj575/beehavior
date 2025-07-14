@@ -11,7 +11,8 @@ from scipy.spatial.transform import Rotation
 from beehavior.networks.dic_converter import deconcater
 
 from airsim import Vector3r, Pose
-from airsim_interface.interface import connect_client, disconnect_client, step, of_geo_from_client, get_of_geo_shape, get_depth_img
+from airsim_interface.interface import connect_client, disconnect_client, step, of_geo_from_client, get_of_geo_shape, \
+    get_depth_img
 
 
 class BeeseClass(gym.Env):
@@ -345,7 +346,7 @@ class BeeseClass(gym.Env):
             self.client.simSetVehiclePose(pose, ignore_collision=True, vehicle_name=self.vehicle_name)
 
             # have a non-zero initial velocity to prevent weird teleportation errors
-            if options.get('wiggle', True):
+            if options is None or options.get('wiggle', True):
                 for _ in range(2):
                     step(self.client,
                          seconds=None,
@@ -551,6 +552,8 @@ class OFBeeseClass(BeeseClass):
     INPUT_OF_ORIENTATION = 'INPUT_OF_ORIENTATION'
     #  whether bee can see the orientation of OF
     INPUT_INV_DEPTH_IMG = 'INPUT_INV_DEPTH_IMG'
+    #  whether bee can see the orientation of OF
+    INPUT_OF_VECTOR = 'INPUT_OF_VECTOR'
 
     # give agent 1/depth image
     #   used to confirm whether a learning task is possible with depth information
@@ -602,6 +605,7 @@ class OFBeeseClass(BeeseClass):
         self.imgs_per_step = (int(self.INPUT_RAW_OF in self.input_img_space) +
                               int(self.INPUT_LOG_OF in self.input_img_space) +
                               2*int(self.INPUT_OF_ORIENTATION in self.input_img_space) +
+                              2*int(self.INPUT_OF_VECTOR in self.input_img_space) +
                               int(self.INPUT_INV_DEPTH_IMG in self.input_img_space)
                               )
         self.img_stack_size = img_history_steps*self.imgs_per_step
@@ -645,6 +649,15 @@ class OFBeeseClass(BeeseClass):
                 low[i:C:self.imgs_per_step, :, :] = 0
                 high[i:C:self.imgs_per_step, :, :] = np.inf
                 i += 1
+
+            if self.INPUT_OF_VECTOR in self.input_img_space:
+                # sees (..., x component, y component,...) at each timestep
+                # components are -inf to inf
+                for dim in range(2):
+                    # this is true by default, dont need to set them
+                    # low[i:C:self.imgs_per_step, :, :] = -np.inf
+                    # high[i:C:self.imgs_per_step, :, :] = np.inf
+                    i += 1
             low[C:, :, :] = -np.inf
             high[C:, :, :] = np.inf
             obs_space_dic[k] = gym.spaces.Box(low=low, high=high, shape=sh, dtype=np.float64)
@@ -739,6 +752,11 @@ class OFBeeseClass(BeeseClass):
 
                 # clip depth to avoid 1/0 error, this means minimum visible depth is .001m which is resonable
                 self.img_stack[camera_name].append(1/np.clip(depth, 10e-3, np.inf))
+
+            if self.INPUT_OF_VECTOR in self.input_img_space:
+                # 2x (H,W) for x and y components of optic flow orientation
+                self.img_stack[camera_name].append(of[0])
+                self.img_stack[camera_name].append(of[1])
 
             while len(self.img_stack[camera_name]) < self.img_stack_size:
                 # copy the first however many elements
