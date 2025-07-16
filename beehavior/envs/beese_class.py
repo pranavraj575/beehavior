@@ -551,9 +551,9 @@ class OFBeeseClass(BeeseClass):
     # geometric optic flow, scaled by log
     INPUT_OF_ORIENTATION = 'INPUT_OF_ORIENTATION'
     #  whether bee can see the orientation of OF
-    INPUT_INV_DEPTH_IMG = 'INPUT_INV_DEPTH_IMG'
-    #  whether bee can see the orientation of OF
     INPUT_OF_VECTOR = 'INPUT_OF_VECTOR'
+    #  whether bee can see the orientation of OF
+    INPUT_INV_DEPTH_IMG = 'INPUT_INV_DEPTH_IMG'
 
     # give agent 1/depth image
     #   used to confirm whether a learning task is possible with depth information
@@ -598,6 +598,7 @@ class OFBeeseClass(BeeseClass):
         self.ordered_input_img_space = tuple([input_key for input_key in (self.INPUT_RAW_OF,
                                                                           self.INPUT_LOG_OF,
                                                                           self.INPUT_OF_ORIENTATION,
+                                                                          self.INPUT_OF_VECTOR,
                                                                           self.INPUT_INV_DEPTH_IMG,
                                                                           )
                                               if input_key in self.input_img_space])
@@ -643,13 +644,6 @@ class OFBeeseClass(BeeseClass):
                     low[i:C:self.imgs_per_step, :, :] = -1
                     high[i:C:self.imgs_per_step, :, :] = 1
                     i += 1
-            if self.INPUT_INV_DEPTH_IMG in self.input_img_space:
-                # sees (...,depth_img,...) at each timestep
-                # depth image and inv depth img is [0,inf)
-                low[i:C:self.imgs_per_step, :, :] = 0
-                high[i:C:self.imgs_per_step, :, :] = np.inf
-                i += 1
-
             if self.INPUT_OF_VECTOR in self.input_img_space:
                 # sees (..., x component, y component,...) at each timestep
                 # components are -inf to inf
@@ -658,6 +652,12 @@ class OFBeeseClass(BeeseClass):
                     # low[i:C:self.imgs_per_step, :, :] = -np.inf
                     # high[i:C:self.imgs_per_step, :, :] = np.inf
                     i += 1
+            if self.INPUT_INV_DEPTH_IMG in self.input_img_space:
+                # sees (...,depth_img,...) at each timestep
+                # depth image and inv depth img is [0,inf)
+                low[i:C:self.imgs_per_step, :, :] = 0
+                high[i:C:self.imgs_per_step, :, :] = np.inf
+                i += 1
             low[C:, :, :] = -np.inf
             high[C:, :, :] = np.inf
             obs_space_dic[k] = gym.spaces.Box(low=low, high=high, shape=sh, dtype=np.float64)
@@ -742,6 +742,10 @@ class OFBeeseClass(BeeseClass):
                 clipped_mag = np.clip(of_magnitude, 10e-4, np.inf)  # avoid division by zero
                 self.img_stack[camera_name].append(of[0]/clipped_mag)
                 self.img_stack[camera_name].append(of[1]/clipped_mag)
+            if self.INPUT_OF_VECTOR in self.input_img_space:
+                # 2x (H,W) for x and y components of optic flow orientation
+                self.img_stack[camera_name].append(of[0])
+                self.img_stack[camera_name].append(of[1])
             if self.INPUT_INV_DEPTH_IMG in self.input_img_space:
                 # sees (...,inv_depth_img,...) at each timestep
                 # depth image and inv depth img are on (0,inf)
@@ -752,11 +756,6 @@ class OFBeeseClass(BeeseClass):
 
                 # clip depth to avoid 1/0 error, this means minimum visible depth is .001m which is resonable
                 self.img_stack[camera_name].append(1/np.clip(depth, 10e-3, np.inf))
-
-            if self.INPUT_OF_VECTOR in self.input_img_space:
-                # 2x (H,W) for x and y components of optic flow orientation
-                self.img_stack[camera_name].append(of[0])
-                self.img_stack[camera_name].append(of[1])
 
             while len(self.img_stack[camera_name]) < self.img_stack_size:
                 # copy the first however many elements
