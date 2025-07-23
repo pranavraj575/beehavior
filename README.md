@@ -1,4 +1,5 @@
 # beehavior
+Tested with python3.8 
 
 ## installation
 
