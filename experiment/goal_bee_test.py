@@ -30,7 +30,7 @@ if __name__ == '__main__':
                         help="test identification")
     PARSER.add_argument("--timesteps-per-epoch", type=int, required=False, default=1024,
                         help="number of timesteps to train for each epoch")
-    PARSER.add_argument("--epochs", type=int, required=False, default=100,
+    PARSER.add_argument("--epochs", type=int, required=False, default=50,
                         help="number of epochs")
     PARSER.add_argument("--ckpt-freq", type=int, required=False, default=1,
                         help="frequency to save model")
@@ -42,7 +42,7 @@ if __name__ == '__main__':
                         help="number of trajectories to collect each epoch")
     PARSER.add_argument("--dt", type=float, required=False, default=.05,
                         help="simulation timestep")
-    PARSER.add_argument("--history-steps", type=int, required=False, default=2,
+    PARSER.add_argument("--history-steps", type=int, required=False, default=1,
                         help="steps to see in history")
 
     PARSER.add_argument('--action-type', action='store', required=False, default=GoalBee.ACTION_ACCELERATION_XY,
@@ -60,6 +60,8 @@ if __name__ == '__main__':
                         help="include log OF in input")
     PARSER.add_argument("--include-of-orientation", action='store_true', required=False,
                         help="include OF orientation in input")
+    PARSER.add_argument("--include-of-vector", action='store_true', required=False,
+                        help="include OF vector in input")
     PARSER.add_argument("--include-depth", action='store_true', required=False,
                         help="include depth in input")
 
@@ -114,6 +116,8 @@ if __name__ == '__main__':
         img_input_space.append(GoalBee.INPUT_OF_ORIENTATION)
     if args.include_raw_of:
         img_input_space.append(GoalBee.INPUT_RAW_OF)
+    if args.include_of_vector:
+        img_input_space.append(GoalBee.INPUT_OF_VECTOR)
     if args.include_depth:
         img_input_space.append(GoalBee.INPUT_INV_DEPTH_IMG)
     if not img_input_space:
@@ -126,12 +130,14 @@ if __name__ == '__main__':
     for key in (GoalBee.INPUT_RAW_OF,
                 GoalBee.INPUT_LOG_OF,
                 GoalBee.INPUT_OF_ORIENTATION,
-                GoalBee.INPUT_INV_DEPTH_IMG,
+                GoalBee.INPUT_OF_VECTOR,
                 ):
         if key in img_input_space:
             ident += 'y'
         else:
             ident += 'n'
+    if GoalBee.INPUT_INV_DEPTH_IMG in img_input_space:
+        ident += 'd'
     if set(of_cameras) != {'bottom', 'front'}:
         ident += '_cams_' + '_'.join(of_cameras)
     ident+='_gls_'+'_'.join(init_goals)

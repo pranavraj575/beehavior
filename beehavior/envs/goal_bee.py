@@ -375,17 +375,24 @@ class GoalBee(OFBeeseClass):
 
         if (self.GOAL_LAND_ON in self.active_goals) and (not term) and collided:
             # somtimes ignore collisisons, if drone is about to land
-            if self.within_landing_area(
-                    position=np.array([pose.position.x_val,
-                                       pose.position.y_val,
-                                       pose.position.z_val,
-                                       ])):
+            position = np.array([pose.position.x_val,
+                                 pose.position.y_val,
+                                 pose.position.z_val,
+                                 ])
+            if self.within_landing_area(position=position):
+                if self.drone_landed(collided=collided, position=position):
+                    term = True
+            else:
+                # if not within landing area, this is a collision
                 term = term or collided
         else:
             # otherwise, if collided, terminate
             term = term or collided
 
         return term, trunc
+
+    def drone_landed(self, collided, position=None):
+        return self.within_landing_area(position=position) and collided
 
     def get_rwd(self, collided, obs):
         """
@@ -450,22 +457,24 @@ class GoalBee(OFBeeseClass):
             # TODO THIS
             # https://github.com/openai/gym/blob/master/gym/envs/box2d/lunar_lander.py
 
-            # reward shaping
             landing_rwd_shape = 0.
 
             # amount to weight station keeping part of reward
             lnd_station_keeping_c = .2
             # amount to weight keeping speed low
-            lnd_speed_c = .1
+            lnd_speed_c = 1
             # amount to weight distance
-            lnd_dist_c = .1
+            lnd_dist_c = 1
             # amount to weight angle flatness
-            lnd_angle_c = .1
+            lnd_angle_c = 1
             # amount to weight leg touching down
             lnd_contact_c = .1
 
+            # success bonus
+            lnd_success_c = 1.
+
             # amnt to penalize staying in air
-            air_penalty = -.1
+            air_penalty = -.05
 
             position = np.array([pose.position.x_val,
                                  pose.position.y_val,
@@ -477,28 +486,36 @@ class GoalBee(OFBeeseClass):
                                  kinematics.linear_velocity.z_val,
                                  ])
 
-            robot_angle = 0
-            leg_ground_contact = 0
+            roll, pitch, yaw = self.get_orientation_eulerian(pose=pose)
+            robot_angle = abs(roll) + abs(pitch)  # dont care about yaw
+            leg_ground_contact = collided  # this is true if drone has collided with something and drone is within landing region
 
             landing, distxy = self.closest_landing(position=position,
                                                    ignore_z=True,
                                                    )
             dist_xyz = np.linalg.norm(landing[:3] - position)
 
-            # penalize distance from landing
-            landing_rwd_shape += -lnd_dist_c*dist_xyz
+            f = np.array([
+                dist_xyz,  # penalize distance from landing
+                np.linalg.norm(velocity),  # penalize moving quickly
+                robot_angle,  # penalize angle
+                leg_ground_contact,  # reward leg touching ground
+            ])
+            w = np.array([-lnd_dist_c,
+                          -lnd_speed_c,
+                          -lnd_angle_c,
+                          lnd_contact_c,
+                          ])
+            landing_rwd_shape += np.dot(f, w)
 
-            # penalize moving quickly
-            landing_rwd_shape += -lnd_speed_c*np.linalg.norm(velocity)
-
-            # penalize angle
-            landing_rwd_shape += -lnd_angle_c*robot_angle
-
-            # reward leg touching ground
-            landing_rwd_shape += -lnd_contact_c*leg_ground_contact
-
+            self.rwds[self.GOAL_LAND_ON] = (air_penalty +
+                                            (landing_rwd_shape - self.past_goal_shape.get(self.GOAL_LAND_ON,
+                                                                                          landing_rwd_shape)) +
+                                            (lnd_success_c if self.drone_landed(
+                                                collided=collided,
+                                                position=position,
+                                            ) else 0))
             self.past_goal_shape[self.GOAL_LAND_ON] = landing_rwd_shape
-            self.rwds[self.GOAL_LAND_ON] = air_penalty + (landing_rwd_shape - self.rwds[self.GOAL_LAND_ON])
         # weighted sum
         rwd = sum(self.rwds[goal]*self.active_goals.get(goal, 0)
                   for goal in self.rwds)
@@ -522,13 +539,7 @@ class GoalBee(OFBeeseClass):
                                self.GOAL_LAND_ON,
                                )
                      }
-        self.past_goal_shape = {k: 0.
-                                for k in (self.GOAL_FORWARD,
-                                          self.GOAL_HOVER,
-                                          self.GOAL_STATION_KEEP,
-                                          self.GOAL_LAND_ON,
-                                          )
-                                }
+        self.past_goal_shape = dict()
         self.active_goals = self.initial_goals.copy()
         return stuff
 
@@ -587,13 +598,35 @@ class StationBee(GoalBee):
         )
 
 
+class LandingBee(GoalBee):
+    """
+    Only landing subgoal
+    """
+
+    def __init__(self,
+                 initial_position='OVER_FLOWER',
+                 timeout=15,
+                 **kwargs,
+                 ):
+        """
+        Args:
+            **kwargs: keyword arguments for GoalBee, OFBeeseClass and BeeseClass
+        """
+        super().__init__(
+            initial_position=initial_position,
+            timeout=timeout,
+            initial_goals=(GoalBee.GOAL_LAND_ON,),
+            **kwargs,
+        )
+
+
 if __name__ == '__main__':
     import time
 
-    env = StationBee(dt=.1, action_type=GoalBee.ACTION_VELOCITY_XY)
+    env = LandingBee(dt=.1, action_type=GoalBee.ACTION_VELOCITY)
     env.reset(options={'initial_pos': env.landing_positions_by_tunnel[1][0][:3] + (-2, 0, -.6)})
-    for i in range(0, int(10/env.dt), 1):
-        action = np.array([.3, 0])
+    for i in range(0, int(15/env.dt), 1):
+        action = np.array([.25, 0, .025])
         obs, rwd, term, _, _ = env.step(action=action)
         print(rwd)
         print('within landing', env.within_landing_area())

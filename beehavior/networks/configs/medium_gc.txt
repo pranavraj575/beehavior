@@ -1,0 +1,89 @@
+{
+    'front': {
+        'input_shape': None,
+        'layers':
+            [
+                {
+                    'type': 'maxpool',
+                    'kernel': (4, 4),
+                    'stride': (4, 4),
+                },
+                {
+                    'type': 'CNN',
+                    'channels': 16,
+                    'kernel': (5, 5),
+                    'stride': (3, 3),
+                    'padding': (0, 0),
+                },
+                {
+                    'type': 'ReLU',
+                },
+                {
+                    'type': 'CNN',
+                    'channels': 12,
+                    'kernel': (3, 3),
+                    'stride': (1, 1),
+                    'padding': (0, 0),
+                },
+                {
+                    'type': 'ReLU',
+                },
+                {
+                    'type': 'maxpool',
+                    'kernel': (2, 2),
+                    'stride': (2, 2),
+                },
+                {
+                    'type': 'flatten',
+                },
+            ],
+    },
+    'bottom': {
+        'input_shape': None,
+        'layers':
+            [
+                {
+                    'type': 'maxpool',
+                    'kernel': (4, 4),
+                    'stride': (4, 4),
+                },
+                {
+                    'type': 'CNN',
+                    'channels': 16,
+                    'kernel': (5, 5),
+                    'stride': (3, 3),
+                    'padding': (0, 0),
+                },
+                {
+                    'type': 'ReLU',
+                },
+                {
+                    'type': 'CNN',
+                    'channels': 12,
+                    'kernel': (3, 3),
+                    'stride': (1, 1),
+                    'padding': (0, 0),
+                },
+                {
+                    'type': 'ReLU',
+                },
+                {
+                    'type': 'maxpool',
+                    'kernel': (2, 2),
+                    'stride': (2, 2),
+                },
+                {
+                    'type': 'flatten',
+                },
+            ],
+    },
+    'vec': {
+        'input_shape': None,
+        'layers':
+            [
+                {
+                    'type': 'identity',
+                },
+            ],
+    },
+}

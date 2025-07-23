@@ -42,7 +42,7 @@ if __name__ == '__main__':
                         help="number of trajectories to collect each epoch")
     PARSER.add_argument("--dt", type=float, required=False, default=.05,
                         help="simulation timestep")
-    PARSER.add_argument("--history-steps", type=int, required=False, default=2,
+    PARSER.add_argument("--history-steps", type=int, required=False, default=1,
                         help="steps to see in history")
 
     PARSER.add_argument('--action-type', action='store', required=False, default=ForwardBee.ACTION_ACCELERATION_XY,
@@ -63,8 +63,6 @@ if __name__ == '__main__':
                         help="include OF vector in input")
     PARSER.add_argument("--include-depth", action='store_true', required=False,
                         help="include depth in input")
-    PARSER.add_argument("--include-vel-with-noise", type=float, required=False, default=None,
-                        help="include noisy velocity in input (specify stdev of noise)")
 
     PARSER.add_argument("--network", action='store', required=False,
                         default=os.path.join(DIR, 'beehavior', 'networks', 'configs', 'simple.txt'),
@@ -125,8 +123,6 @@ if __name__ == '__main__':
             ident += 'n'
     if ForwardBee.INPUT_INV_DEPTH_IMG in img_input_space:
         ident += 'd'
-    if args.include_vel_with_noise is not None:
-        ident += '_vel_noise_' + str(args.include_vel_with_noise).replace('.', '_')
     ident += '_act_' + args.action_type
     ident += '_k_' + str(args.history_steps)
     ident += '_dt_' + str(args.dt).replace('.', '_')
@@ -147,7 +143,6 @@ if __name__ == '__main__':
                       input_img_space=img_input_space,
                       action_type=args.action_type,
                       img_history_steps=args.history_steps,
-                      input_velocity_with_noise=args.include_vel_with_noise,
                       concatenate_observations=concat_obs,
                   )}
     f = open(os.path.join(output_dir, 'env_config.txt'), 'w')

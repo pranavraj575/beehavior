@@ -69,7 +69,7 @@ class ProprotionalControl(BaseController):
                  output_shape=(2,),
                  forward_idx=0,
                  sideways_idx=1,
-                 proportions=(1/100, 2/100),
+                 proportions=(1/100, 4/100),
                  ksp=None,
                  divergence_kernel_size=3,
                  **kwargs
@@ -91,6 +91,7 @@ class ProprotionalControl(BaseController):
                    (default_shape,),
                    (0, np.prod(default_shape)),
                    )
+
         super().__init__(ksp=ksp, **kwargs)
         self.c = c
         self.k1, self.k2 = proportions
@@ -111,6 +112,20 @@ class ProprotionalControl(BaseController):
         # the sum of all magnitudes should be 1
         self.divergence_kernel = self.divergence_kernel/torch.sum(torch.linalg.norm(self.divergence_kernel, dim=0))
         self.divergence_kernel = self.divergence_kernel.unsqueeze(dim=0)
+        self.mean_kernel = torch.ones_like(self.divergence_kernel)
+        default_shape = (3, 240, 320)
+
+        wth_mask = torch.abs(torch.arange(default_shape[2]) - default_shape[2]/2)
+        wth_mask = wth_mask/torch.max(wth_mask)  # now goes 1,.99,...,0,.01,...,.99,1
+        wth_mask = (wth_mask <= 2/3)*1.  # a 1 only in the central part of the image
+
+        ht_mask = torch.abs(torch.arange(default_shape[1]) - default_shape[1]/2)
+        ht_mask = ht_mask/torch.max(ht_mask)
+        ht_mask = (ht_mask <= 2/3)*1.
+
+        self.weight = torch.ones(default_shape[1:])*wth_mask.reshape(1, -1)*ht_mask.reshape(-1, 1)
+        self.weight = torch.ones(default_shape[1:])
+        self.weight = self.weight/torch.mean(self.weight)
 
     def forward_tuple(self, x):
         OF = x[self.keys_to_idx['front']]
@@ -118,30 +133,37 @@ class ProprotionalControl(BaseController):
         OF_x = OF_mag*OF[1]
         OF_y = OF_mag*OF[2]
         OF_vector_field = torch.stack((OF_x, OF_y), dim=0)  # (2, H, W)
-        total_divergence = torch.sum(
-            nn.functional.conv2d(input=OF_vector_field.unsqueeze(dim=0),
-                                 weight=self.divergence_kernel)
-        )
-        mean_OF = torch.mean(OF_mag)
+
+        divergence = nn.functional.conv2d(input=OF_vector_field.unsqueeze(dim=0),
+                                          weight=self.divergence_kernel)
+        mean_mag = nn.functional.conv2d(input=OF_vector_field.unsqueeze(dim=0),
+                                        weight=self.mean_kernel)
+        divergence = divergence/mean_mag
+        divergence = divergence.squeeze(0)
+        divergence = divergence.squeeze(0)
+        divergence = torch.abs(divergence)
+        import matplotlib.pyplot as plt
+
+        OF_line = torch.mean(OF_mag*self.weight, dim=0)
+        # (W,) vector
+        mean_OF = torch.mean(OF_mag*self.weight)
         lateral_mean = torch.mean(OF_x)
 
         _, H, W = OF.shape
-        lateral_magnitude_diff = torch.mean(OF_mag[:, int(np.ceil(W/2)):]) - torch.mean(OF_mag[:, :int(np.floor(W/2))])
+        lateral_magnitude_diff = torch.mean(OF_line[int(np.ceil(W/2)):]) - torch.mean(OF_line[:int(np.floor(W/2))])
 
         output_vector = torch.zeros(self.output_shape)
         output_vector[self.fwd_idx] = self.k1*(self.c - mean_OF)
         output_vector[self.side_idx] = self.k2*(-lateral_magnitude_diff)
-        torch.tanh(output_vector)
-        print()
-        print(output_vector)
-        print(torch.tanh(output_vector))
+        output_vector = torch.tanh(output_vector)
+
         return output_vector
 
 
 if __name__ == '__main__':
     import os
 
-    thingy = ProprotionalControl(c=33, divergence_kernel_size=3)
+    thingy = ProprotionalControl(c=100, divergence_kernel_size=3)
     print(thingy.divergence_kernel)
     print(thingy.divergence_kernel.shape)
     print(torch.sum(torch.linalg.norm(thingy.divergence_kernel, dim=1)))
