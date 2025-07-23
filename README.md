@@ -16,6 +16,8 @@ If installed simultaneously to either of these packages, it throws an error.
 
 ### installing/starting unreal engine
 
+note: if you have access to the unreal project zip files, skip this until 'download zip and extract'
+
 * create epic games account+github, link the two
 * when linked, you will get an invite to the private epicgames developers
   repository (https://github.com/orgs/EpicGames/teams/developers)
@@ -28,6 +30,7 @@ If installed simultaneously to either of these packages, it throws an error.
   `$ bash GenerateProjectFiles.sh`
 * then do make:
   `$ make`
+
 
 ### installing airsim
 
