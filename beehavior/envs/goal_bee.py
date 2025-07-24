@@ -471,7 +471,7 @@ class GoalBee(OFBeeseClass):
             lnd_contact_c = .1
 
             # success bonus
-            lnd_success_c = 1.
+            lnd_success_c = 3.
 
             # amnt to penalize staying in air
             air_penalty = -.05
@@ -490,13 +490,14 @@ class GoalBee(OFBeeseClass):
             robot_angle = abs(roll) + abs(pitch)  # dont care about yaw
             leg_ground_contact = collided  # this is true if drone has collided with something and drone is within landing region
 
-            landing, distxy = self.closest_landing(position=position,
-                                                   ignore_z=True,
-                                                   )
+            landing, dist_xy = self.closest_landing(position=position,
+                                                    ignore_z=True,
+                                                    )
+            rad = landing[-1]
             dist_xyz = np.linalg.norm(landing[:3] - position)
 
             f = np.array([
-                dist_xyz,  # penalize distance from landing
+                dist_xyz/rad,  # penalize distance from landing
                 np.linalg.norm(velocity),  # penalize moving quickly
                 robot_angle,  # penalize angle
                 leg_ground_contact,  # reward leg touching ground
@@ -508,13 +509,14 @@ class GoalBee(OFBeeseClass):
                           ])
             landing_rwd_shape += np.dot(f, w)
 
+            land_bonus = 0
+
+            if self.drone_landed(collided=collided, position=position):
+                land_bonus = lnd_success_c*np.exp(-(dist_xy/rad)**2)
             self.rwds[self.GOAL_LAND_ON] = (air_penalty +
                                             (landing_rwd_shape - self.past_goal_shape.get(self.GOAL_LAND_ON,
                                                                                           landing_rwd_shape)) +
-                                            (lnd_success_c if self.drone_landed(
-                                                collided=collided,
-                                                position=position,
-                                            ) else 0))
+                                            land_bonus)
             self.past_goal_shape[self.GOAL_LAND_ON] = landing_rwd_shape
         # weighted sum
         rwd = sum(self.rwds[goal]*self.active_goals.get(goal, 0)
