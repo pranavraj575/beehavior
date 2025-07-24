@@ -451,7 +451,7 @@ if __name__ == '__main__':
         print(param.shape)
     print('second should be bigger:', len(list(pp.parameters())), len(list(pp2.parameters())))
 
-    f = open(os.path.join(network_dir, 'configs', 'medium_gc.txt'), 'r')
+    f = open(os.path.join(network_dir, 'configs', 'shrimple_gc.txt'), 'r')
     gc_struct = ast.literal_eval(f.read())
     f.close()
 

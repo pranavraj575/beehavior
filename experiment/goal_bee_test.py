@@ -66,7 +66,7 @@ if __name__ == '__main__':
                         help="include depth in input")
 
     PARSER.add_argument("--network", action='store', required=False,
-                        default=os.path.join(DIR, 'beehavior', 'networks', 'configs', 'simple_gc.txt'),
+                        default=os.path.join(DIR, 'beehavior', 'networks', 'configs', 'shrimple_gc.txt'),
                         help="network config file to use (look at beehavior/networks/nn_from_config.py)")
     PARSER.add_argument("--pol-val-net", type=int, nargs='*', required=False, default=[64, ],
                         help="hidden layer list of policy and value nets")
