@@ -1,5 +1,8 @@
 # beehavior
-Tested with python3.8 
+Tested with python3.8 with Ubuntu 20.04
+
+According to the [airsim installation instructions](https://microsoft.github.io/AirSim/build_linux/), this should also work on 18.04.
+DOES NOT WORK with ubuntu 22.04, as "vulkan-utils" is not a supported 
 
 ## installation
 
