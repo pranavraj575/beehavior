@@ -507,7 +507,6 @@ class GoalBee(OFBeeseClass):
                           -lnd_angle_c,
                           lnd_contact_c,
                           ])
-            print(f*w)
             landing_rwd_shape += np.dot(f, w)
 
             land_bonus = 0
