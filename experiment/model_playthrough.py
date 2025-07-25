@@ -100,6 +100,13 @@ if __name__ == '__main__':
                         help="dont plot video")
     PARSER.add_argument('--wspace', type=float, required=False, default=0.,
                         help='space between imgs width')
+
+    PARSER.add_argument("--fontsize", type=int, required=False, default=13,
+                        help="fontsize for plots")
+    PARSER.add_argument("--fontsize-axes-labels", type=int, required=False, default=15,
+                        help="fontsize for axis labels")
+    PARSER.add_argument("--fontsize-image-labels", type=int, required=False, default=20,
+                        help="fontsize for image labels")
     args = PARSER.parse_args()
 
     import numpy as np
@@ -484,14 +491,14 @@ if __name__ == '__main__':
 
     import matplotlib.pyplot as plt
 
-    plt.rc('font', size=13)
+    plt.rc('font', size=args.fontsize)
 
 
     def OF_plt(plotter, OF_magnitude, OF_vector=None, quiver_plot=True):
         im = plotter.imshow(OF_magnitude, interpolation='nearest', cmap='coolwarm')
         if args.of_colorbar:
             cbar = plotter.figure.colorbar(im, ax=plotter, shrink=.9)
-            cbar.ax.set_ylabel('Optic flow (degrees/s)', rotation=-90, va="bottom", fontsize=15)
+            cbar.ax.set_ylabel('Optic flow (degrees/s)', rotation=-90, va="bottom", fontsize=args.fontsize_axis_labels)
         if quiver_plot:
             # quiver of OF
             ss = args.subsample_quiver
@@ -517,7 +524,7 @@ if __name__ == '__main__':
         if args.attention_colorbar:
             cbar = plotter.figure.colorbar(im, ax=plotter, shrink=.9)
             if args.label_attention_colorbar:
-                cbar.ax.set_ylabel('Absolute SHAP values', rotation=-90, va="bottom", fontsize=15)
+                cbar.ax.set_ylabel('Absolute SHAP values', rotation=-90, va="bottom", fontsize=args.fontsize_axis_labels)
 
 
     def make_plot(t,
@@ -642,8 +649,8 @@ if __name__ == '__main__':
                          'optic flow',
                          'attention'
                          ],
-             'xlabel_kwargs': {'fontsize': 20},
-             'ylabel_kwargs': {'fontsize': 20},
+             'xlabel_kwargs': {'fontsize': args.fontsize_image_labels},
+             'ylabel_kwargs': {'fontsize': args.fontsize_image_labels},
              'flip_axes': args.flip_axes,
          },
         )
@@ -666,7 +673,7 @@ if __name__ == '__main__':
                     'ident': single_plt.replace(' ', '_'),
                     'subplot_dim': (1, len(of_camera_names)),
                     'xlabels': of_camera_names if len(of_camera_names) > 1 else None,
-                    'xlabel_kwargs': {'fontsize': 20},
+                    'xlabel_kwargs': {'fontsize': args.fontsize_image_labels},
                     'flip_axes': args.flip_axes,
                     'vid': False,
                 },
@@ -738,8 +745,8 @@ if __name__ == '__main__':
                      'ident': 'comp_vis_' + cam_name,
                      'xlabels': ['average'] + ['model ' + str(i) for i in (range(len(expln_keys) - 1))],
                      'ylabels': ['visual', 'optic flow', 'attention'],
-                     'xlabel_kwargs': {'fontsize': 20},
-                     'ylabel_kwargs': {'fontsize': 20},
+                     'xlabel_kwargs': {'fontsize': args.fontsize_image_labels},
+                     'ylabel_kwargs': {'fontsize': args.fontsize_image_labels},
                      'flip_axes': args.flip_axes,
                  }
                 )
@@ -768,8 +775,8 @@ if __name__ == '__main__':
                 'ident': 'comp',
                 'xlabels': ['Average attention'] + ['Agent ' + str(i) for i in (range(len(expln_keys) - 1))],
                 'ylabels': of_camera_names if len(of_camera_names) > 1 else None,
-                'xlabel_kwargs': {'fontsize': 30},
-                'ylabel_kwargs': {'fontsize': 30},
+                'xlabel_kwargs': {'fontsize': args.fontsize_image_labels},
+                'ylabel_kwargs': {'fontsize': args.fontsize_image_labels},
                 'flip_axes': args.flip_axes,
                 'vid': False,
             }
@@ -796,8 +803,8 @@ if __name__ == '__main__':
                     'subplot_dim': (len(of_camera_names), 1),
                     'ident': 'comp_' + name.replace(' ', '_'),
                     'ylabels': of_camera_names if len(of_camera_names) > 1 else None,
-                    'xlabel_kwargs': {'fontsize': 20},
-                    'ylabel_kwargs': {'fontsize': 20},
+                    'xlabel_kwargs': {'fontsize': args.fontsize_image_labels},
+                    'ylabel_kwargs': {'fontsize': args.fontsize_image_labels},
                     'flip_axes': args.flip_axes,
                     'vid': False,
                 }
@@ -825,8 +832,8 @@ if __name__ == '__main__':
             'subplot_dim': (len(output_keys), len(of_camera_names)),
             'xlabels': of_camera_names if len(of_camera_names) > 1 else None,
             'ylabels': output_keys,
-            'xlabel_kwargs': {'fontsize': 20},
-            'ylabel_kwargs': {'fontsize': 20},
+            'xlabel_kwargs': {'fontsize': args.fontsize_image_labels},
+            'ylabel_kwargs': {'fontsize': args.fontsize_image_labels},
             'flip_axes': args.flip_axes,
         },
     )
@@ -872,8 +879,8 @@ if __name__ == '__main__':
                  'ident': 'obs_layer_comp_' + cam_name,
                  'xlabels': list(filter(lambda x: x != 'sum', obs_type_keys)),
                  'ylabels': ['visual', 'optic flow', 'attention'],
-                 'xlabel_kwargs': {'fontsize': 20},
-                 'ylabel_kwargs': {'fontsize': 20},
+                 'xlabel_kwargs': {'fontsize': args.fontsize_image_labels},
+                 'ylabel_kwargs': {'fontsize': args.fontsize_image_labels},
                  'flip_axes': args.flip_axes,
                  'vid': True,
              }
@@ -906,8 +913,8 @@ if __name__ == '__main__':
                  'ident': 'key_to_output_' + cam_name,
                  'xlabels': list(filter(lambda x: x != 'sum', obs_type_keys)),
                  'ylabels': list(filter(lambda x: x != 'sum', output_keys)),
-                 'xlabel_kwargs': {'fontsize': 20},
-                 'ylabel_kwargs': {'fontsize': 20},
+                 'xlabel_kwargs': {'fontsize': args.fontsize_image_labels},
+                 'ylabel_kwargs': {'fontsize': args.fontsize_image_labels},
                  'flip_axes': args.flip_axes,
                  'vid': False,
              }

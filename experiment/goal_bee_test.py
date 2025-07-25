@@ -107,7 +107,7 @@ if __name__ == '__main__':
 
     testing_tunnels = sorted(set(args.testing_tunnel))
     of_cameras = tuple(sorted(set(args.cameras)))
-    init_goals=sorted(set(args.goals))
+    init_goals = {(g,): 1/len(set(args.goals)) for g in set(args.goals)}
 
     img_input_space = []
     if args.include_log_of:
@@ -140,7 +140,7 @@ if __name__ == '__main__':
         ident += 'd'
     if set(of_cameras) != {'bottom', 'front'}:
         ident += '_cams_' + '_'.join(of_cameras)
-    ident+='_gls_'+'_'.join(init_goals)
+    ident += '_gls_' + '_'.join(sorted(set(args.goals)))
     ident += '_act_' + args.action_type
     ident += '_k_' + str(args.history_steps)
     ident += '_dt_' + str(args.dt).replace('.', '_')
@@ -217,7 +217,6 @@ if __name__ == '__main__':
                 }
 
 
-
     initial_positions = [
         ((-4., -3.), (-4.8, -5.8), (-2., -6.9)),  # converging/diverging tunnel
         ((-4., -3.), (-.5, .5), (-2., -6.9)),  # normal tunnel
@@ -228,6 +227,8 @@ if __name__ == '__main__':
         ((-4., -3.), (30, 33), (-2., -6.9)),
         ((-4., -3.), (38.5, 39.5), (-2., -6.9))  # empty tunnel
     ]
+
+
     def collect_testjectory(model, env, tunnel_idx):
         steps = []
         obs, info = env.reset(options={

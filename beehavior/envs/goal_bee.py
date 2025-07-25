@@ -198,8 +198,8 @@ class GoalBee(OFBeeseClass):
         if type(initial_goals) == dict:
             self.initial_goals = initial_goals.copy()
         else:
-            self.initial_goals = {g: 1 for g in initial_goals}
-        self.active_goals = self.initial_goals.copy()
+            self.initial_goals = {initial_goals: 1}
+        self.active_goals = dict()
         self.rwds = dict()
 
     def set_forward_goal(self, weight=1):
@@ -507,12 +507,16 @@ class GoalBee(OFBeeseClass):
                           -lnd_angle_c,
                           lnd_contact_c,
                           ])
+            print(f*w)
             landing_rwd_shape += np.dot(f, w)
 
             land_bonus = 0
-
             if self.drone_landed(collided=collided, position=position):
                 land_bonus = lnd_success_c*np.exp(-(dist_xy/rad)**2)
+                info_dic["landed"] = True
+                info_dic["dist_from_center"] = dist_xy.item()
+                info_dic["scaled_dist_from_center"] = (dist_xy/rad).item()
+
             self.rwds[self.GOAL_LAND_ON] = (air_penalty +
                                             (landing_rwd_shape - self.past_goal_shape.get(self.GOAL_LAND_ON,
                                                                                           landing_rwd_shape)) +
@@ -529,6 +533,15 @@ class GoalBee(OFBeeseClass):
             seed: Optional[int] = None,
             options: Optional[dict] = None,
     ) -> Tuple[ObsType, dict]:
+        self.active_goals = None
+        arr = np.random.rand()
+        for active_goals in self.initial_goals:
+
+            arr -= self.initial_goals[active_goals]
+            if arr < 0:
+                self.active_goals = {g:1 for g in active_goals}
+                # weight each goal equally for now
+                break
         stuff = super().reset(seed=seed,
                               options=options,
                               )
@@ -542,7 +555,6 @@ class GoalBee(OFBeeseClass):
                                )
                      }
         self.past_goal_shape = dict()
-        self.active_goals = self.initial_goals.copy()
         return stuff
 
 
@@ -625,6 +637,15 @@ class LandingBee(GoalBee):
 if __name__ == '__main__':
     import time
 
+    initial_goals = {
+        (g,): 1/5 for g in
+        (GoalBee.GOAL_FORWARD, GoalBee.GOAL_HOVER, GoalBee.GOAL_LAND_ON, GoalBee.GOAL_STATION_KEEP)
+    }
+    initial_goals[(GoalBee.GOAL_FORWARD, GoalBee.GOAL_HOVER, GoalBee.GOAL_LAND_ON, GoalBee.GOAL_STATION_KEEP)] = 1/5
+    env = GoalBee(initial_goals=initial_goals, )
+    for _ in range(10):
+        env.reset()
+        print(env.active_goals)
     env = LandingBee(dt=.1, action_type=GoalBee.ACTION_VELOCITY)
     env.reset(options={'initial_pos': env.landing_positions_by_tunnel[1][0][:3] + (-2, 0, -.6)})
     for i in range(0, int(15/env.dt), 1):
