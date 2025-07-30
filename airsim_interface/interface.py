@@ -1,6 +1,6 @@
 """
 handles interface with unreal airsim thing
-running this file will run airsim
+
 """
 
 import time
@@ -31,6 +31,9 @@ def engine_started():
 def start_game_engine(project=None, open_gui=True, start_paused=True, join=False):
     """
     starts unreal enging
+        PROBABLY DO NOT USE THIS METHOD
+        starting it this way often fails, and it is difficult to tell when environment has been initialized
+        start Unreal in another terminal (see README.md) and interface with a connected client (connect_client method)
     Args:
         project: what project to open, defaults to Keychain.Defaultproj
         open_gui: whether to open the gui for the project
@@ -114,7 +117,8 @@ def disconnect_client(client, vehicle_name=''):
 
 def step(client, seconds=.5, cmd=lambda: None, pause_after=True):
     """
-    steps a simulation
+    steps a simulation with a particular command
+        command should probably be asyncronous (i.e. call client.<somthing>Async)
     Args:
         seconds: number of seconds to continue for
             if None, runs cmd and pauses after
@@ -138,6 +142,7 @@ def step(client, seconds=.5, cmd=lambda: None, pause_after=True):
 
 def move_along_pth(client: airsim.MultirotorClient, pth, v=1., vehicle_name=''):
     """
+    Repeatedly calls client.moveToPositionAsync to move drone to points along the specified path
     Args:
         client: client
         pth: path, sequence of (x,y,z)
@@ -321,14 +326,8 @@ def of_geo_from_client(client: airsim.MultirotorClient,
                        FOVx_degrees=None,
                        ):
     """
-    PROJECTED optic flow array caluclated from geometric data
-        imagines projection (shadow) of every point on a sphere around observer
-            each point has a projected relative velocity on this sphere
-            consider a FOV rectangle cut out of the sphere, and take the x and y relative velocity of each point
-            use these relative velocities to calculate optic flow of each point
-    assumes STATIC obstacles, can redo this with dynamic obstacles, but it would be much more annoying
-    uses drone's velocity and depth image captured to obtain distance/relative velocity of every point in FOV
-        from this, can calculate optic flow
+    optic flow of a drone from client
+      obtains camera image and drone velocity, then calls of_geo
     Args:
         client: client
         camera_name: name of camera, if tuple, returns a tuple of of data
