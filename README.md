@@ -1,8 +1,15 @@
-# beehavior
-Tested with python3.8 with Ubuntu 20.04
+# Understanding visual attention beehind bee-inspired UAV navigation
+
+Training a quadrotor drone through RL with a bio-inspired observation space (optic flow).
+The trained model is then analyzed with [SHAP](https://dl.acm.org/doi/10.5555/3295222.3295230) to obtain its attention patterns throughout an episode.
+
+Preprint: [Understanding visual attention beehind bee-inspired UAV navigation](https://arxiv.org/abs/2507.11992)
+
+
+Tested with Python 3.8 in Ubuntu 20.04
 
 According to the [airsim installation instructions](https://microsoft.github.io/AirSim/build_linux/), this should also work on 18.04.
-DOES NOT WORK with ubuntu 22.04, as "vulkan-utils" is not a supported 
+**DOES NOT WORK with Ubuntu 22.04**, as "vulkan-utils" is not a supported package in this distro. 
 
 ## installation
 
@@ -45,6 +52,13 @@ cd AirSim
 ./setup.sh
 ./build.sh
 ```
+
+### installing our environment
+
+Unfortunately our environment (the files for the tunnel and obstacles) are too large to store in this repository.
+Obtain a copy of Blocks_4.27.tar.gz (contact me or email [a.veda@unsw.edu.au](mailto:a.veda@unsw.edu.au)), unzip, and place in the Airsim/Unreal/Enviornments folder.
+
+_TODO_: Large file storage/linking?
 
 ## installation tests
 
