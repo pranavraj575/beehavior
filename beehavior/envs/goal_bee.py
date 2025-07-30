@@ -129,6 +129,7 @@ class GoalBee(OFBeeseClass):
     """
     GOAL_FORWARD = 'fwd'
     GOAL_HOVER = 'hvr'
+    GOAL_KEEP_HEIGHT = 'hgt'
     GOAL_STATION_KEEP = 'stn'
     GOAL_LAND_ON = 'lnd'
 
@@ -223,6 +224,16 @@ class GoalBee(OFBeeseClass):
             self.old_pose = self.get_pose()
         self.activate_goal(goal=self.GOAL_HOVER, weight=weight)
 
+    def set_height_goal(self, weight=1):
+        """
+        set hover goal
+        Args:
+            weight: weight of hover goal, 0 if deactivate
+        """
+        if weight:
+            self.old_height = self.get_pose().position.z_val
+        self.activate_goal(goal=self.GOAL_KEEP_HEIGHT, weight=weight)
+
     def set_station_keep_goal(self, weight=1):
         """
         set station keeping goal
@@ -282,12 +293,13 @@ class GoalBee(OFBeeseClass):
         raise NotImplementedError
 
     def get_goal_part_dim(self):
-        return 1 + 1 + 1 + 1
+        return 1 + 1 + 1 + 1 + 1
 
     def get_goal_vector_part(self):
         return np.array([self.active_goals.get(g, 0.)
                          for g in (self.GOAL_FORWARD,
                                    self.GOAL_HOVER,
+                                   self.GOAL_KEEP_HEIGHT,
                                    self.GOAL_STATION_KEEP,
                                    self.GOAL_LAND_ON,
                                    )
@@ -297,6 +309,7 @@ class GoalBee(OFBeeseClass):
         return np.array([g in self.active_goals
                          for g in (self.GOAL_FORWARD,
                                    self.GOAL_HOVER,
+                                   self.GOAL_KEEP_HEIGHT,
                                    self.GOAL_STATION_KEEP,
                                    self.GOAL_LAND_ON,
                                    )
@@ -400,7 +413,7 @@ class GoalBee(OFBeeseClass):
 
         should be conditioned on self.get_goal_vector_part
         """
-        info_dic = dict()
+        info_dic = {"goals": self.active_goals}
 
         if (self.GOAL_LAND_ON not in self.active_goals) and collided:
             # for every other goal, collsion is bad
@@ -428,6 +441,12 @@ class GoalBee(OFBeeseClass):
 
             self.rwds[self.GOAL_HOVER] = hover_rwd
             self.old_pose = pose
+        if self.GOAL_KEEP_HEIGHT in self.active_goals:
+            dh = pose.position.z_val - self.old_height
+            height_rwd = -np.abs(dh)
+
+            self.rwds[self.GOAL_KEEP_HEIGHT] = height_rwd
+            self.old_height = pose.position.z_val
 
         if self.GOAL_STATION_KEEP in self.active_goals:
             landing, dist = self.closest_landing(position=np.array([pose.position.x_val,
@@ -535,24 +554,18 @@ class GoalBee(OFBeeseClass):
         self.active_goals = None
         arr = np.random.rand()
         for active_goals in self.initial_goals:
-
             arr -= self.initial_goals[active_goals]
             if arr < 0:
-                self.active_goals = {g:1 for g in active_goals}
+                self.active_goals = {g: 1 for g in active_goals}
                 # weight each goal equally for now
                 break
         stuff = super().reset(seed=seed,
                               options=options,
                               )
         self.old_pose = self.get_pose()
+        self.old_height = self.old_pose.position.z_val
         self.farthest_reached = self.get_pose().position.x_val
-        self.rwds = {k: 0.
-                     for k in (self.GOAL_FORWARD,
-                               self.GOAL_HOVER,
-                               self.GOAL_STATION_KEEP,
-                               self.GOAL_LAND_ON,
-                               )
-                     }
+        self.rwds = dict()
         self.past_goal_shape = dict()
         return stuff
 

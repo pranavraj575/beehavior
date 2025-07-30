@@ -83,10 +83,12 @@ if __name__ == '__main__':
     PARSER.add_argument("--cameras", nargs='+', type=str, required=False, default=['front', 'bottom'],
                         help='cameras to use (if not all)', choices=('front', 'bottom'))
 
-    PARSER.add_argument("--goals", nargs='+', type=str, required=False, default=[GoalBee.GOAL_FORWARD],
+    PARSER.add_argument("--goals", nargs='+', type=str, required=True, default=[],
                         help='cameras to use (if not all)',
+                        action='append',
                         choices=(GoalBee.GOAL_FORWARD,
                                  GoalBee.GOAL_HOVER,
+                                 GoalBee.GOAL_KEEP_HEIGHT,
                                  GoalBee.GOAL_STATION_KEEP,
                                  GoalBee.GOAL_LAND_ON,
                                  )
@@ -107,7 +109,7 @@ if __name__ == '__main__':
 
     testing_tunnels = sorted(set(args.testing_tunnel))
     of_cameras = tuple(sorted(set(args.cameras)))
-    init_goals = {(g,): 1/len(set(args.goals)) for g in set(args.goals)}
+    init_goals = {tuple(g): 1/len(args.goals) for g in args.goals}
 
     img_input_space = []
     if args.include_log_of:
@@ -140,7 +142,7 @@ if __name__ == '__main__':
         ident += 'd'
     if set(of_cameras) != {'bottom', 'front'}:
         ident += '_cams_' + '_'.join(of_cameras)
-    ident += '_gls_' + '_'.join(sorted(set(args.goals)))
+    ident += '_gls_' + '__'.join(sorted(['_'.join(sorted(init_goals)) for init_goals in args.goals]))
     ident += '_act_' + args.action_type
     ident += '_k_' + str(args.history_steps)
     ident += '_dt_' + str(args.dt).replace('.', '_')

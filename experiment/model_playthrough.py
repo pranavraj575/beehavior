@@ -778,7 +778,7 @@ if __name__ == '__main__':
                 'xlabel_kwargs': {'fontsize': args.fontsize_image_labels},
                 'ylabel_kwargs': {'fontsize': args.fontsize_image_labels},
                 'flip_axes': args.flip_axes,
-                'vid': False,
+                'vid': True,
             }
         )
         )
