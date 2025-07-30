@@ -1,3 +1,12 @@
+"""
+implements class for goal conditioned rl
+    one goal is moving forward while avoiding obstacles (same as ForwardBee)
+    one goal is landing on a flower
+    one goal is hovering
+    one goal is keeping height
+    one goal is station keeping (over flowers)
+these goals can be flipped on and off like switches, some configurations dont make sense (i.e. keeping height and landing)
+"""
 from typing import Optional, Tuple
 
 import numpy as np
@@ -6,6 +15,7 @@ from sympy.physics.units import speed_of_light
 
 from beehavior.envs.beese_class import OFBeeseClass
 
+# locations of flowers in environment
 FLOWER_LOCS_SIM = (
     (
         dict(X=-9220.000000, Y=-22680.000000, Z=50.000000),
@@ -122,6 +132,8 @@ class GoalBee(OFBeeseClass):
         hover:
             reward is (c-|movement|) at each step.
                 c = self.velocity_bounds*self.dt, theoretic max distance traveled if agent moves at velocity_bounds
+        keep_height:
+            reward is -(|distance moved in z direction|)
         station_keeping:
             reward modeled after RL balloon station keeping task
         landing:
@@ -183,9 +195,9 @@ class GoalBee(OFBeeseClass):
         super().__init__(
             initial_position=initial_position,
             timeout=timeout,
+            bounds=bounds,
             **kwargs,
         )
-        self.bounds = bounds
         self.goal_x = goal_x
         if landing_positions_by_tunnel is None:
             landing_positions_by_tunnel = FLOWER_LOCS
@@ -293,9 +305,17 @@ class GoalBee(OFBeeseClass):
         raise NotImplementedError
 
     def get_goal_part_dim(self):
+        """
+        number of goals to turn on/off
+
+        """
         return 1 + 1 + 1 + 1 + 1
 
     def get_goal_vector_part(self):
+        """
+        vector of whether each goal is turned on or off
+            if goals are weighted, returns the weights
+        """
         return np.array([self.active_goals.get(g, 0.)
                          for g in (self.GOAL_FORWARD,
                                    self.GOAL_HOVER,
@@ -319,8 +339,7 @@ class GoalBee(OFBeeseClass):
 
     def get_obs_vector(self):
         """
-        get obs vector, including roll, pitch, yaw (yaw is encoded as its sine and cosine components,
-            to remove the discontinuity at +-pi). this is not an issue for roll,pitch since they will never get this large
+        get obs vector
         """
         vcs = []
         if self.get_observation_part_dim() > 0:
@@ -330,29 +349,21 @@ class GoalBee(OFBeeseClass):
         return np.concatenate(vcs, )
 
     def get_observation_part_dim(self):
+        """
+        no vector observations yet
+        """
         return 0
 
     def get_obs_vector_dim(self):
         return self.get_observation_part_dim() + self.get_goal_part_dim()
 
-    def out_of_bounds(self, pose):
-        for val, t in zip(
-                (pose.position.x_val, pose.position.y_val, pose.position.z_val),
-                self.bounds,
-        ):
-            if t is None:
-                continue
-            low, high = t
-            if val < low or val > high:
-                return True
-        return False
 
     def within_landing_area(self, position=None):
         """
         checks if drone is within a specified landing area
             currently if drone is within a cylinder of radius rad, height 2*rad above the target
         Args:
-            position:
+            position: [x,y,z] array. if unspecified, uses self.get_pose()
         Returns:
         """
         if position is None:
@@ -376,7 +387,6 @@ class GoalBee(OFBeeseClass):
         """
         terminate if out of bounds or in goal region
         """
-
         term = self.env_time > self.timeout
         trunc = False
         if term:  # do not need to get pose if it already timed out
@@ -405,13 +415,22 @@ class GoalBee(OFBeeseClass):
         return term, trunc
 
     def drone_landed(self, collided, position=None):
+        """
+        return if the drone successfully landed
+            true if drone collided (with ground), and is within the landing area
+            can update to make this more elaborate
+        Args:
+            collided: whether or not drone collided
+            position: [x,y,z] array. uses self.get_pose() if unspecified
+
+        """
         return self.within_landing_area(position=position) and collided
 
     def get_rwd(self, collided, obs):
         """
-        -1 for colliding
-
-        should be conditioned on self.get_goal_vector_part
+        conditioned on self.active_goals
+        adds each active goal to an overall reward
+            keeps track in self.rwds of the individual goal rewards
         """
         info_dic = {"goals": self.active_goals}
 
@@ -551,6 +570,11 @@ class GoalBee(OFBeeseClass):
             seed: Optional[int] = None,
             options: Optional[dict] = None,
     ) -> Tuple[ObsType, dict]:
+        """
+        reset method
+        resets active goals based on initial goals
+        resets trackers (old_pose, old_height, etc.)
+        """
         self.active_goals = None
         arr = np.random.rand()
         for active_goals in self.initial_goals:

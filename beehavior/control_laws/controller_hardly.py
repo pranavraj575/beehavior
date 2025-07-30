@@ -1,3 +1,7 @@
+"""
+Explicit control law implemented as a torch module
+if all steps are differentiable, these can be used in SHAP DeepExplainer attention calculations
+"""
 import torch
 from torch import nn
 import numpy as np

@@ -1,3 +1,9 @@
+"""
+Base classes for Beeinforcement Learning environment
+BeeseClass has only actions implemented
+    (choice of velocity, acceleration, etc)
+OFBeeseClass implements using optic flow input
+"""
 from typing import Tuple, Optional
 
 import airsim
@@ -19,8 +25,8 @@ class BeeseClass(gym.Env):
     """
     Base class for controlling the quadrotor in unreal
     state is the current unreal engine state
-    observation is a 2 vector of zeros right now
-    Actions are roll [-1,1], pitch [-1,1], and thrust [0,1]
+    observation is a 2 vector of zeros
+    Default actions are acceleration in x,y,z
     reward is just -1 for collisions
     terminates upon collision
     """
@@ -46,6 +52,7 @@ class BeeseClass(gym.Env):
                  fix_z_to=None,
                  timeout=300,
                  global_actions=False,
+                 bounds=(None, None, None),
                  ):
         """
         Args:
@@ -74,6 +81,7 @@ class BeeseClass(gym.Env):
                 NOTE: z vector is ALWAYS in global frame, x and y can be in global or local frame
                     i.e. command vector of (0,0,1) will always correspond to straight up, regardless of agent orientation
                         (1,0,0) is either positive x (global) or direction agent is facing (local)
+            bounds: terminate episode if out of bounds
         """
         super().__init__()
 
@@ -97,6 +105,7 @@ class BeeseClass(gym.Env):
         self.fix_z_to = fix_z_to
         self.velocity_bounds = velocity_bounds
         self.global_actions = global_actions
+        self.bounds = bounds
 
         # in euclidean cases, we make the output on a [-1,1] box, then scale it to a radius action_bounds ball later
         # in roll, pitch, yaw, we do not scale as it doesnt really make (non euclidean)
@@ -307,6 +316,10 @@ class BeeseClass(gym.Env):
         Args:
             seed: random seed
             options: option dictionary
+                initial_pos: if specified, uses this for initial reset position instead of self.initial_pos
+                    specified just like initial_position in __init__
+                wiggle: whether or not to wiggle the drone after teleporting it to initial position
+                    reccommended to do this
         Returns:
             (observation, info dict)
         """
@@ -402,7 +415,7 @@ class BeeseClass(gym.Env):
         Returns:
             terminate episode, truncate episode
         """
-        termination = collided or self.env_time > self.timeout
+        termination = collided or self.env_time > self.timeout or self.out_of_bounds()
         return termination, False
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -413,7 +426,7 @@ class BeeseClass(gym.Env):
         """
         gets observation vector from last completed step()
         """
-        return np.arange(2)*1.0
+        return np.zeros(2)
 
     def get_obs_vector_dim(self):
         """
@@ -440,7 +453,7 @@ class BeeseClass(gym.Env):
         """
         # REDEFINE THIS, currently assumes self.get_obs_vector() is between 0 and inf
         shape = self.get_obs_shape()
-        return gym.spaces.Box(low=0, high=np.inf, shape=shape, dtype=np.float64)
+        return gym.spaces.Box(low=-np.inf, high=np.inf, shape=shape, dtype=np.float64)
 
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # RWD STUFF
@@ -538,11 +551,30 @@ class BeeseClass(gym.Env):
         vector[idxs] = vector[idxs]*scale*radius
         return vector
 
+    def out_of_bounds(self, pose=None):
+        """
+        whether not pose is out of bounds (of self.bounds)
+        """
+        if pose is None:
+            pose=self.get_pose()
+        for val, t in zip(
+                (pose.position.x_val, pose.position.y_val, pose.position.z_val),
+                self.bounds,
+        ):
+            if t is None:
+                continue
+            low, high = t
+            if val < low or val > high:
+                return True
+        return False
 
 class OFBeeseClass(BeeseClass):
     """
-    dict observation, optic flow cameras ('front', 'bottom', etc) and 'vec' to vector
+    optic flow observations implemented
+    dictionary observation, optic flow cameras ('front', 'bottom', etc) and 'vec' to vector
         OF observation is specifically magnitude of optic flow of points projected onto sphere around observer
+    can also have vector observation, which concatenates this dictionary into one vector
+        dictionary can be recovered with information in self.get_ksp
     """
     # these are used to specify what the agent can sense as an image
     INPUT_RAW_OF = 'INPUT_RAW_OF'
@@ -569,19 +601,12 @@ class OFBeeseClass(BeeseClass):
                  ):
         """
         Args:
-            client:
-            dt:
-            action_bounds:
-            vehicle_name:
-            real_time:
             of_cameras: camera to take OF information from, if tuple, input space is a dict of images
                 this will be acted on independently by the cnns, then the output vectors will be joined
             default_camera_shape: default shape for cameras, used when client is not defined
             img_history_steps: number of images to show at each time step
-            of_mapping: mapping to apply to optic flow
             input_img_space: list of keys that determines what the agent can visually see, keys are
                 RAW_OF, LOG_OF, OF_ORIENTATION, INV_DEPTH_IMG
-            see_of_orientation: whether bee can see the orientation of OF
             of_ignore_angular_velocity: whether to ignore angular velocity in OF calc
                 if true, pretends camera is on chicken head
             concatenate_observations: instead of dict observation space, concatenates everything into a long row vector
@@ -692,9 +717,32 @@ class OFBeeseClass(BeeseClass):
             return gym.spaces.Dict(obs_space_dic)
 
     def get_ksp(self):
+        """
+        For recovering a dicationary after concatenating into a vector
+        returns
+            keys: an ordered list of keys (usually strings)
+            shapes: ordered list of shapes for each key
+            partition: list of n+1 indices
+        such that if dic_obs is the original dic, and cat_obs is the concatenated version,
+            dic_obs[keys[i]]=cat_obs[partition[i]:partition[i+1]].reshape(shapes[i])
+        self.obs_to_dict recovers dict from the concatenated observation
+            uses method in beehavior/networks/dic_converter.py
+        """
         return self.ordered_keys, self.shapes, self.partition
 
     def obs_to_dict(self, obs, ksp=None):
+        """
+        recovers dictionary from concatenated version (given a dict of (string -> tensor), flatten all tensors and concatenate)
+        given the keys, shapes, and partition, this recovers the dictionary
+        Args:
+            ksp:
+                defaults to self.get_ksp()
+                    keys: an ordered list of keys (usually strings)
+                    shapes: ordered list of shapes for each key
+                    partition: list of n+1 indices
+                such that if dic_obs is the original dic, and cat_obs is the concatenated version,
+                    dic_obs[keys[i]]=cat_obs[partition[i]:partition[i+1]].reshape(shapes[i])
+        """
         if ksp is None:
             ksp = self.get_ksp()
         keys, _, _ = ksp
@@ -702,6 +750,10 @@ class OFBeeseClass(BeeseClass):
                 for k, o in zip(keys, deconcater(arr=obs, ksp=ksp))}
 
     def get_rgb_imgs(self):
+        """
+        gets rgb images from all of self.of_cameras
+        returns dict (camera name -> np array of an image)
+        """
         imgs = dict()
         for camera_name in self.of_cameras:
             img_data = None
@@ -719,6 +771,13 @@ class OFBeeseClass(BeeseClass):
         return imgs
 
     def get_obs(self):
+        """
+        gets observations
+        dictionary of   {
+                            'vec'-> observation vector,
+                            <camera name> -> optic flow information from specified camera
+                        }
+        """
         obs = dict()
         for camera_name in self.of_cameras:
             of = of_geo_from_client(client=self.client,
@@ -772,6 +831,10 @@ class OFBeeseClass(BeeseClass):
             return obs
 
     def get_obs_shape(self):
+        """
+        shape of observation
+        dictionary of (key -> shape)
+        """
         if self.obs_shape is None:
             self.obs_shape = dict()
             of_shape = self.get_of_data_shape()
@@ -788,6 +851,9 @@ class OFBeeseClass(BeeseClass):
             seed: Optional[int] = None,
             options: Optional[dict] = None,
     ) -> Tuple[ObsType, dict]:
+        """
+        reset method, resets image stack if we are keeping optic flow history
+        """
         self.img_stack = {k: deque(maxlen=self.img_stack_size) for k in self.of_cameras}
         stuf = super().reset(seed=seed, options=options)
         return stuf

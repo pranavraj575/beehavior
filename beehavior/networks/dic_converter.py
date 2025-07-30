@@ -1,4 +1,6 @@
-
+"""
+method for recovering a dictionary after concatenating all elements into a vector
+"""
 def deconcater(arr, ksp):
     """
     unconcatenates a concatenated dictionary into a tuple, works with both np arrays and torch tensors,
