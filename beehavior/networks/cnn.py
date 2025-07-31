@@ -1,3 +1,7 @@
+"""
+CNN feature extractor
+This is outdated, replaced by nn_from_config.py
+"""
 import torch
 from torch import nn
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor

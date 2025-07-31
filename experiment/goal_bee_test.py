@@ -1,3 +1,7 @@
+"""
+Experiment for goal conditioned RL, can choose which goals to use
+run with -h for info
+"""
 import ast
 
 import gymnasium as gym

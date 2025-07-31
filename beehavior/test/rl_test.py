@@ -1,3 +1,6 @@
+"""
+testing putting a custom cnn in a stable baselines env
+"""
 import gymnasium as gym
 
 from beehavior.networks.cnn import CNN

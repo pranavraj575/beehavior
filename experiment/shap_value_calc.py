@@ -1,3 +1,7 @@
+"""
+code for calculating shap values
+some shenanigans are needed when we need to convert to/from dictionary observations
+"""
 import pandas as pd
 import torch
 import shap

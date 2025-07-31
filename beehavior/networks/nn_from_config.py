@@ -1,3 +1,8 @@
+"""
+build a neural network from config files
+for examples of config files, look in beehavior/networks/configs
+supported FFN layers, CNN layers, and dictionary netowrks (for when input space is a dictionary of multiple images/vectors)
+"""
 import numpy as np
 import torch
 from torch import nn
@@ -17,6 +22,7 @@ def layer_from_config_dict(dic, input_shape=None, only_shape=False, device=None)
         dic: layer config dict
         {
             'type':type of layer (REQUIRED)
+            'other parameters': other values
         }
         examples:
             {
@@ -136,6 +142,7 @@ def layers_from_config_list(dic_list, input_shape, only_shape=False, device=None
     """
     returns list of layers from a list of config dicts
         calculates each successive input shape automatically
+    repeatedly calls layer_from_config_dict
     Args:
         dic_list: list of layer config dicts
         input_shape: BATCHED shape of input to dict,

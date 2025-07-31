@@ -1,3 +1,7 @@
+"""
+Experiment for forward movement with obstacle avoidance
+run with -h for info
+"""
 import ast
 
 import gymnasium as gym

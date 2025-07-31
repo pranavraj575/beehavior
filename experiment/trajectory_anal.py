@@ -1,3 +1,8 @@
+"""
+analysis
+during/after training in forward_bee_test.py, test trajectories are collected and saved
+this plots these trajectories and analyzes them (success rate, rewards, etc.)
+"""
 import os, shutil
 import pickle as pkl
 import matplotlib.pyplot as plt

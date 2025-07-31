@@ -1,3 +1,7 @@
+"""
+for debugging/figuring out what optic flow should look like
+plot equatorial optic flow from a specific point
+"""
 import os.path
 
 import airsim

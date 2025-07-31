@@ -1,3 +1,9 @@
+"""
+analysis
+takes a saved model, sample a trajectory, and calculate/plot the SHAP values
+can take multiple trajectories with --append
+run with -h for more info
+"""
 import ast
 import itertools
 import shutil
