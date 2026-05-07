@@ -29,7 +29,7 @@ If installed simultaneously to either of these packages, it throws an error.
 
 note: if you have access to the unreal project zip files, skip this until 'download zip and extract'
 
-* create epic games account+github, link the two
+* create epic games account+github, link the two (instructions from Epic Games are [here](https://github.com/EpicGames))
 * when linked, you will get an invite to the private epicgames developers
   repository (https://github.com/orgs/EpicGames/teams/developers)
 * download the desired version **(USE 4.27!!)** of unreal engine from this private
