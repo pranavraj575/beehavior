@@ -58,7 +58,7 @@ cd AirSim
 ### installing our environment
 
 Unfortunately our environment (the files for the tunnel and obstacles) are too large to store in this repository.
-Obtain a copy of Blocks_4.27.tar.gz (contact me or email [a.veda@unsw.edu.au](mailto:a.veda@unsw.edu.au)), unzip, and place in the Airsim/Unreal/Enviornments folder.
+Obtain a copy of Blocks_4.27.tar.gz (contact me or email [a.veda@unsw.edu.au](mailto:a.veda@unsw.edu.au)), unzip, and place in the `Airsim/Unreal/Enviornments` folder.
 
 _TODO_: Large file storage/linking?
 
