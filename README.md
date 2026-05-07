@@ -46,6 +46,7 @@ note: if you have access to the unreal project zip files, skip this until 'downl
 
 follow the [directions from Microsoft](https://microsoft.github.io/AirSim/build_linux/):
 
+(we installed AirSim in home dir)
 ```
 git clone https://github.com/Microsoft/AirSim.git
 cd AirSim
