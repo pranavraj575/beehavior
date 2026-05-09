@@ -19,7 +19,6 @@ According to the [airsim installation instructions](https://microsoft.github.io/
 git clone https://github.com/pranavraj575/beehavior --recurse-submodules
 cd beehavior
 pip3 install -e .
-pip3 install -e dependencies/*
 pip3 install airsim
 ```
 
