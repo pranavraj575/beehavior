@@ -50,7 +50,7 @@ note: if you have access to the unreal project zip files, skip this until 'downl
 follow the [directions from Microsoft](https://microsoft.github.io/AirSim/build_linux/):
 
 (we installed AirSim in home dir)
-```
+```shell
 git clone https://github.com/Microsoft/AirSim.git
 cd AirSim
 ./setup.sh
@@ -61,6 +61,15 @@ cd AirSim
 
 Unfortunately our environment (the files for the tunnel and obstacles) are too large to store in this repository.
 Obtain a copy of Blocks_4.27.tar.gz (contact me or email [a.veda@unsw.edu.au](mailto:a.veda@unsw.edu.au)), unzip, and place in the `Airsim/Unreal/Enviornments` folder.
+
+after doing this, run setup and build again for good luck
+
+```shell
+cd AirSim
+./setup.sh
+./build.sh
+```
+
 
 _TODO_: Large file storage/linking?
 
