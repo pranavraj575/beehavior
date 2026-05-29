@@ -35,7 +35,9 @@ note: if you have access to the unreal project zip files, skip this until 'downl
 * download the desired version **(USE 4.27!!)** of unreal engine from this private
   repo https://github.com/EpicGames/UnrealEngine
   
-  `git clone https://github.com/EpicGames/UnrealEngine -b 4.27`
+  ```shell
+  git clone https://github.com/EpicGames/UnrealEngine -b 4.27
+  ```
 
   We ran this in /home, if you put it somwhere else, you may have to mess with setting directory locations
 * then run UnrealEngine/Setup.sh `$ cd UnrealEngine; bash Setup.sh`
