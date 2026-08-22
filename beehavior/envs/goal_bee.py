@@ -460,6 +460,7 @@ class GoalBee(OFBeeseClass):
 
             self.rwds[self.GOAL_HOVER] = hover_rwd
             self.old_pose = pose
+
         if self.GOAL_KEEP_HEIGHT in self.active_goals:
             dh = pose.position.z_val - self.old_height
             height_rwd = -np.abs(dh)
@@ -675,8 +676,7 @@ if __name__ == '__main__':
 
     initial_goals = {
         (g,): 1/5 for g in
-        (GoalBee.GOAL_FORWARD, GoalBee.GOAL_HOVER, GoalBee.GOAL_LAND_ON, GoalBee.GOAL_STATION_KEEP)
-    }
+        (GoalBee.GOAL_FORWARD, GoalBee.GOAL_HOVER, GoalBee.GOAL_LAND_ON, GoalBee.GOAL_STATION_KEEP)}
     initial_goals[(GoalBee.GOAL_FORWARD, GoalBee.GOAL_HOVER, GoalBee.GOAL_LAND_ON, GoalBee.GOAL_STATION_KEEP)] = 1/5
     env = GoalBee(initial_goals=initial_goals, )
     for _ in range(10):

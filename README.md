@@ -90,6 +90,9 @@ _TODO_: Large file storage/linking?
     * i to view images
     * Q (shift + q) to stop python script
 
+NOTE:
+By default, simulation is paused, and space advances by one time step 
+  (use the --real-time argument to control the drone in real time)  
 ### test gym enviornment
 
 * start a quadcopter project in game+windowed mode

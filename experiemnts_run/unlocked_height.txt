@@ -1,0 +1,4 @@
+python3 experiment/forward_bee_test.py --ident vec_acc_xyz --history-steps 1 --epochs 100 --dt .05 --timesteps-per-epoch 1024 --nsteps 1024 --action acc --save-model -1 --include-raw --include-of-vector --testing-tunnel 0 1 2 --network beehavior/networks/configs/simple.txt --pol-val-net 64  --testj 10 --test-freq 5 --recollect
+
+python3 experiment/trajectory_anal.py --load-dir output/vec_acc_xyz_cat_obs_in_ynny_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_simple_pol_val_64/
+

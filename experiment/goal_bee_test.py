@@ -103,6 +103,7 @@ if __name__ == '__main__':
 
     PARSER.add_argument("--reset", action='store_true', required=False,
                         help="reset training")
+
     PARSER.add_argument("--display", type=int, required=False, default=None,
                         help="skip training and run specified saved model (-1 for most recent) on all <--testing-tunnel>s")
     args = PARSER.parse_args()
