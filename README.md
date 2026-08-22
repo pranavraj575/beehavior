@@ -15,9 +15,10 @@ According to the [airsim installation instructions](https://microsoft.github.io/
 
 ### installing this project
 
-```
-git clone https://github.com/pranavraj575/beehavior
-pip3 install -e beehavior/.
+```shell
+git clone https://github.com/pranavraj575/beehavior --recurse-submodules
+cd beehavior
+pip3 install -e .
 pip3 install airsim
 ```
 
@@ -28,13 +29,17 @@ If installed simultaneously to either of these packages, it throws an error.
 
 note: if you have access to the unreal project zip files, skip this until 'download zip and extract'
 
-* create epic games account+github, link the two
+* create epic games account+github, link the two (instructions from Epic Games are [here](https://github.com/EpicGames))
 * when linked, you will get an invite to the private epicgames developers
   repository (https://github.com/orgs/EpicGames/teams/developers)
 * download the desired version **(USE 4.27!!)** of unreal engine from this private
   repo https://github.com/EpicGames/UnrealEngine
-    * we used 4.27: https://github.com/EpicGames/UnrealEngine/tree/4.27
-    * git clone did not work for me, can go to the branch, click <> code, then download zip and extract, (we put in /home, if you put it somwhere else, you may have to mess with setting directory locations)
+  
+  ```shell
+  git clone https://github.com/EpicGames/UnrealEngine -b 4.27
+  ```
+
+  We ran this in /home, if you put it somwhere else, you may have to mess with setting directory locations
 * then run UnrealEngine/Setup.sh `$ cd UnrealEngine; bash Setup.sh`
 * Generate project files:
   `$ bash GenerateProjectFiles.sh`
@@ -46,7 +51,8 @@ note: if you have access to the unreal project zip files, skip this until 'downl
 
 follow the [directions from Microsoft](https://microsoft.github.io/AirSim/build_linux/):
 
-```
+(we installed AirSim in home dir)
+```shell
 git clone https://github.com/Microsoft/AirSim.git
 cd AirSim
 ./setup.sh
@@ -56,7 +62,16 @@ cd AirSim
 ### installing our environment
 
 Unfortunately our environment (the files for the tunnel and obstacles) are too large to store in this repository.
-Obtain a copy of Blocks_4.27.tar.gz (contact me or email [a.veda@unsw.edu.au](mailto:a.veda@unsw.edu.au)), unzip, and place in the Airsim/Unreal/Enviornments folder.
+Obtain a copy of Blocks_4.27.tar.gz (contact me or email [a.veda@unsw.edu.au](mailto:a.veda@unsw.edu.au)), unzip, and place in the `Airsim/Unreal/Enviornments` folder.
+
+after doing this, run setup and build again for good luck
+
+```shell
+cd AirSim
+./setup.sh
+./build.sh
+```
+
 
 _TODO_: Large file storage/linking?
 
