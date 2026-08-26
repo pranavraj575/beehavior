@@ -456,7 +456,10 @@ class GoalBee(OFBeeseClass):
                 pose.position.y_val - self.old_pose.position.y_val,
                 pose.position.z_val - self.old_pose.position.z_val,
             ])
-            hover_rwd = (self.velocity_bounds*self.dt - np.linalg.norm(dp))
+            displacement=np.linalg.norm(dp)
+            #k=self.velocity_bounds*self.dt/10 # maximum displacement in a single timestep without incurring penalty
+            #displacement=max(displacement-k,0)
+            hover_rwd = (self.velocity_bounds*self.dt - displacement)
 
             self.rwds[self.GOAL_HOVER] = hover_rwd
             self.old_pose = pose
