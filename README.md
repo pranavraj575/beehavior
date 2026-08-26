@@ -112,5 +112,24 @@ By default, simulation is paused, and space advances by one time step
 
 * start a quadcopter project in game+windowed mode
   `<...>/Engine/Binaries/Linux/UE4Editor <...>/AirSim/Unreal/Environments/Blocks_4.27/Blocks.uproject -game -windowed`
-* in another terminal, run `python3 beehavior/test/finger_gym.py`
+* in another terminal, run `python3 beehavior/test/finger_gym.py` (make sure you first activate environmnet with `conda activate <env name>` if using conda)
 * control the drone! (same controls as `airsim_interface/keyboard_test.py`)
+
+### run RL experiemnts:
+
+* start a quadcopter project in game+windowed mode
+  `<...>/Engine/Binaries/Linux/UE4Editor <...>/AirSim/Unreal/Environments/Blocks_4.27/Blocks.uproject -game -windowed`
+* in another terminal, run `python3 beehavior/experiment/forward_bee_test.py` 
+  * (make sure you first activate environmnet with `conda activate <env name>` if using conda)
+  * To see env/RL options and descriptions, run with the `--help` argument
+
+### Evaluate results:
+
+Plot trajectories collected during training, success rate for each tunnel, distance traveled, etc.
+* `python3 experiment/trajectory_anal.py --load-dir <path to save dir (should have trajectories as a subdirectory)>`
+
+Do test runs, compute Shap attention values: 
+* `python experiment/model_playthrough.py --models <path to model pkl file> --env-config <path to env_config.txt file>`
+* run with `--display-only` to do test runs, without recording anything/computing shap values
+* run with `--help` to see all options
+
