@@ -171,7 +171,11 @@ class GoalBee(OFBeeseClass):
             landing_positions_by_tunnel: list of (lists of (x,y,z,radius) for landing positions)
                 one list per tunnel
                 collisions ignored if within radius of landing position
-            initial_goals: goals to initialize enviornment with, either iterable, or dict (goal -> weight)
+            initial_goals: goals to initialize enviornment with,
+                either tuple of goals (if environment always chooses same goal),
+                    (ex. initial_goals=(GOAL_FORWARD,))
+                or dict (goal tuple -> probability of choice)
+                    (ex. initial_goals={(GOAL_FORWARD,):0.5, (GOAL_HOVER,):0.5})
             goal_x: if GOAL_FORWARD, stops episode when this x value is reached
             station_tau: for GOAL_STATION_KEEPING, tau from https://www.nature.com/articles/s41586-020-2939-8
             station_c: for GOAL_STATION_KEEPING, c_cliff from https://www.nature.com/articles/s41586-020-2939-8
