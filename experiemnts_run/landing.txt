@@ -1,0 +1,1 @@
+python3 experiment/goal_bee_test.py --ident updated_lnd --epochs 100 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals lnd --testj 0

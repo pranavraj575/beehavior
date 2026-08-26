@@ -2,3 +2,6 @@ python3 experiment/forward_bee_test.py --ident vec_acc_xyz --history-steps 1 --e
 
 python3 experiment/trajectory_anal.py --load-dir output/vec_acc_xyz_cat_obs_in_ynny_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_simple_pol_val_64/
 
+python experiment/model_playthrough.py --display-only --models output/vec_acc_xyz_cat_obs_in_ynny_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_simple_pol_val_64/past_models/model_epoch_9.pkl --env-config output/vec_acc_xyz_cat_obs_in_ynny_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_simple_pol_val_64/env_config.txt
+
+
