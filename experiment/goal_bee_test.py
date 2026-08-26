@@ -88,7 +88,8 @@ if __name__ == '__main__':
                         help='cameras to use (if not all)', choices=('front', 'bottom'))
 
     PARSER.add_argument("--goals", nargs='+', type=str, required=True, default=[],
-                        help='cameras to use (if not all)',
+                        help='goals to run in env (to choose uniformly between goal list A and B, use --goals A --goals B)'\
+                        " for example: '--goals fwd --goals fwd lnd' will uniformly choose between fwd goal and fwd+land goals",
                         action='append',
                         choices=(GoalBee.GOAL_FORWARD,
                                  GoalBee.GOAL_HOVER,
@@ -115,6 +116,7 @@ if __name__ == '__main__':
     testing_tunnels = sorted(set(args.testing_tunnel))
     of_cameras = tuple(sorted(set(args.cameras)))
     init_goals = {tuple(g): 1/len(args.goals) for g in args.goals}
+    print("running with goals:",init_goals)
 
     img_input_space = []
     if args.include_log_of:
