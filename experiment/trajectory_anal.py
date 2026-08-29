@@ -281,6 +281,7 @@ if __name__ == '__main__':
 
 
         fnames = []
+        z_fnames = []
         for epoch, trajs in enumerate(relevant_epoch_infos):
             xs = np.arange(test_tunnel_info['xlim'][0], test_tunnel_info['xlim'][1], dx)[:-1]  # ignore the last bound
             vel_bins = [[] for _ in range(len(xs))]
@@ -341,94 +342,113 @@ if __name__ == '__main__':
             # plt.savefig(fname, bbox_inches='tight')
             plt.close()
 
-            # fig, ax = plt.subplots()
-            plt.xlabel('x axis')
-            plt.ylabel('y axis')
-
-            ylim = plt_env()
-            plt.gca().set_aspect('equal')
-
-
-            def get_dist_traveled(traj):
-                return traj[-1]['pose']['position'][0]
-                return traj[-1]['pose']['position'][0] - traj[0]['pose']['position'][0]
-
-
-            trajs.sort(key=get_dist_traveled)
-
-            plot_stuff = []
-            cnt = 0
-            cnt_succ = 0
-            cnt_crashed = 0
-            cnt_timeout = 0
-            for traj_idx, traj in enumerate(trajs):
-                cnt += 1
-                kwargs = dict()
-                last_info = traj[-1]['info']
-                collided = last_info['collided']
-                succ = last_info.get('succ', not collided)
-                rewards = np.array([dic['reward'] for dic in traj])
-                kwargs['alpha'] = args.alpha_traj
-                if succ:
-                    kwargs['color'] = 'green'
-                    kwargs['zorder'] = 3
-                    cnt_succ += 1
-                elif not collided:
-                    kwargs['color'] = 'yellow'
-                    kwargs['zorder'] = 2
-                    cnt_timeout += 1
+            for plotting_ht in (True,False):
+                # fig, ax = plt.subplots()
+                plt.xlabel('x axis')
+                if plotting_ht:
+                    plt.ylabel('z axis')
                 else:
-                    kwargs['color'] = 'red'
-                    kwargs['zorder'] = 4
-                    cnt_crashed += 1
-                plot_stuff.append((traj, kwargs))
+                    plt.ylabel('y axis')
+                    ylim = plt_env()
 
-            rwds = np.array([sum(t['reward'] for t in traj) for traj in trajs])
+                plt.gca().set_aspect('equal')
 
-            dists = np.array([get_dist_traveled(traj) for traj in trajs])
-            epochs.append(epoch)
-            prop_successful.append(cnt_succ/cnt)
-            medians.append(np.median(dists))
-            maxes.append(np.max(dists))
-            means.append(np.mean(dists))
-            mins.append(np.min(dists))
-            rwd_medians.append(np.median(rwds))
-            rwd_maxes.append(np.max(rwds))
-            rwd_means.append(np.mean(rwds))
-            rwd_mins.append(np.min(rwds))
-            for traj, kwargs in plot_stuff:
-                positions = np.stack([traj[0]['old_pose']['position']] +
-                                     [dic['pose']['position'] for dic in traj],
-                                     axis=0)
-                plt.plot(positions[:, 0], yinversion*positions[:, 1], **kwargs)
-            if args.necessary_leg:
-                if cnt_succ: plt.plot([], [], color='green', label='successful')
-                if cnt_timeout: plt.plot([], [], color='yellow', label='timed out')
-                if cnt_crashed: plt.plot([], [], color='red', label='crashed')
-            else:
-                plt.plot([], [], color='green', label='successful')
-                plt.plot([], [], color='yellow', label='timed out')
-                plt.plot([], [], color='red', label='crashed')
 
-            plt.ylim(ylim)
+                def get_dist_traveled(traj):
+                    return traj[-1]['pose']['position'][0]
+                    return traj[-1]['pose']['position'][0] - traj[0]['pose']['position'][0]
 
-            if not args.no_legend: plt.legend(loc='center left', bbox_to_anchor=(1., .5))
-            plt.title('epoch ' + str(epoch))
-            plt.xlim(xlim)
 
-            fname = os.path.join(individual_traj_dir,
-                                 'tunnel_' + str(tunnel_idx) + '_' +
-                                 'epoch_' + str(epoch) + '_trajectories' + (
-                                     '_no_leg' if args.no_legend else '') + '.png'
-                                 )
-            plt.savefig(fname, bbox_inches='tight', dpi=args.dpi)
-            plt.close()
-            fnames.append(fname)
+                trajs.sort(key=get_dist_traveled)
+
+                plot_stuff = []
+                cnt = 0
+                cnt_succ = 0
+                cnt_crashed = 0
+                cnt_timeout = 0
+                for traj_idx, traj in enumerate(trajs):
+                    cnt += 1
+                    kwargs = dict()
+                    last_info = traj[-1]['info']
+                    collided = last_info['collided']
+                    succ = last_info.get('succ', not collided)
+                    rewards = np.array([dic['reward'] for dic in traj])
+                    kwargs['alpha'] = args.alpha_traj
+                    if succ:
+                        kwargs['color'] = 'green'
+                        kwargs['zorder'] = 3
+                        cnt_succ += 1
+                    elif not collided:
+                        kwargs['color'] = 'yellow'
+                        kwargs['zorder'] = 2
+                        cnt_timeout += 1
+                    else:
+                        kwargs['color'] = 'red'
+                        kwargs['zorder'] = 4
+                        cnt_crashed += 1
+                    plot_stuff.append((traj, kwargs))
+
+                rwds = np.array([sum(t['reward'] for t in traj) for traj in trajs])
+                dists = np.array([get_dist_traveled(traj) for traj in trajs])
+                if not plotting_ht:
+                    epochs.append(epoch)
+                    prop_successful.append(cnt_succ/cnt)
+                    medians.append(np.median(dists))
+                    maxes.append(np.max(dists))
+                    means.append(np.mean(dists))
+                    mins.append(np.min(dists))
+                    rwd_medians.append(np.median(rwds))
+                    rwd_maxes.append(np.max(rwds))
+                    rwd_means.append(np.mean(rwds))
+                    rwd_mins.append(np.min(rwds))
+
+                for traj, kwargs in plot_stuff:
+                    positions = np.stack([traj[0]['old_pose']['position']] +
+                                         [dic['pose']['position'] for dic in traj],
+                                         axis=0)
+                    if plotting_ht:
+                        plt.plot(positions[:, 0], positions[:, 2], **kwargs)
+                    else:
+                        plt.plot(positions[:, 0], yinversion*positions[:, 1], **kwargs)
+                if args.necessary_leg:
+                    if cnt_succ: plt.plot([], [], color='green', label='successful')
+                    if cnt_timeout: plt.plot([], [], color='yellow', label='timed out')
+                    if cnt_crashed: plt.plot([], [], color='red', label='crashed')
+                else:
+                    plt.plot([], [], color='green', label='successful')
+                    plt.plot([], [], color='yellow', label='timed out')
+                    plt.plot([], [], color='red', label='crashed')
+
+                plt.ylim(ylim)
+
+                if not args.no_legend: plt.legend(loc='center left', bbox_to_anchor=(1., .5))
+                plt.title('epoch ' + str(epoch))
+                plt.xlim(xlim)
+
+                fname = os.path.join(individual_traj_dir,
+                                     ('ht_' if plotting_ht else '')+'tunnel_' + str(tunnel_idx) + '_' +
+                                     'epoch_' + str(epoch) + '_trajectories' + (
+                                         '_no_leg' if args.no_legend else '') + '.png'
+                                     )
+                plt.savefig(fname, bbox_inches='tight', dpi=args.dpi)
+                plt.close()
+                if plotting_ht:
+                    z_fnames.append(fname)
+                else:
+                    fnames.append(fname)
         fname = os.path.join(plot_dir,
                              'tunnel_' + str(tunnel_idx) + '_' +
                              'trajectories_gifed.gif')
         create_gif(image_paths=fnames,
                    output_gif_path=fname,
+                   duration=200,
+                   )
+
+        z_fname = os.path.join(plot_dir,
+                             'ht_tunnel_' + str(tunnel_idx) + '_' +
+                             'trajectories_gifed.gif')
+        create_gif(image_paths=z_fnames,
+                   output_gif_path=z_fname,
                    duration=200,
                    )
 
