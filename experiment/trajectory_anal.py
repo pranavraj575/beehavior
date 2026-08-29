@@ -420,7 +420,9 @@ if __name__ == '__main__':
                     plt.plot([], [], color='yellow', label='timed out')
                     plt.plot([], [], color='red', label='crashed')
 
-                if not plotting_ht:
+                if plotting_ht:
+                    plt.ylim((0,10))
+                else:
                     plt.ylim(ylim)
 
                 if not args.no_legend: plt.legend(loc='center left', bbox_to_anchor=(1., .5))
