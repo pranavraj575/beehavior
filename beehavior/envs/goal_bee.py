@@ -510,6 +510,8 @@ class GoalBee(OFBeeseClass):
             # amount to weight keeping speed low
             lnd_speed_c = 1
             # amount to weight distance
+            lnd_dist_xy_c = 1
+            # amount to weight distance
             lnd_dist_c = 1
             # amount to weight angle flatness
             lnd_angle_c = 1
@@ -539,7 +541,10 @@ class GoalBee(OFBeeseClass):
             landing, dist_xy = self.closest_landing(position=position,
                                                     ignore_z=True,
                                                     )
+
+
             rad = landing[-1]
+            is_over_target =  dist_xy < rad
             dist_xyz = np.linalg.norm(landing[:3] - position)
 
             f = np.array([
