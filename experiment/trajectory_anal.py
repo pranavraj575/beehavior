@@ -407,7 +407,8 @@ if __name__ == '__main__':
                                          [dic['pose']['position'] for dic in traj],
                                          axis=0)
                     if plotting_ht:
-                        plt.plot(positions[:, 0], positions[:, 2], **kwargs)
+                        # z index is inverted for some reason
+                        plt.plot(positions[:, 0], -positions[:, 2], **kwargs)
                     else:
                         plt.plot(positions[:, 0], yinversion*positions[:, 1], **kwargs)
                 if args.necessary_leg:
@@ -419,7 +420,8 @@ if __name__ == '__main__':
                     plt.plot([], [], color='yellow', label='timed out')
                     plt.plot([], [], color='red', label='crashed')
 
-                plt.ylim(ylim)
+                if not plotting_ht:
+                    plt.ylim(ylim)
 
                 if not args.no_legend: plt.legend(loc='center left', bbox_to_anchor=(1., .5))
                 plt.title('epoch ' + str(epoch))
