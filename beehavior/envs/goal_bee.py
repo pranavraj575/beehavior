@@ -484,11 +484,10 @@ class GoalBee(OFBeeseClass):
                                                  )
 
             if dist < landing[-1]:
-                station_rwd_shape = 1
+                station_rwd = 1
             else:
-                station_rwd_shape = self.station_c*np.exp2(-(dist - landing[-1])/self.station_tau)
+                station_rwd = self.station_c*np.exp2(-(dist - landing[-1])/self.station_tau)
 
-            station_rwd = station_rwd_shape
             self.rwds[self.GOAL_STATION_KEEP] = station_rwd
 
         if self.GOAL_LAND_ON in self.active_goals:
@@ -503,16 +502,14 @@ class GoalBee(OFBeeseClass):
             # TODO THIS
             # https://github.com/openai/gym/blob/master/gym/envs/box2d/lunar_lander.py
 
-            landing_rwd_shape = 0.
-
             # amount to weight station keeping part of reward
-            lnd_station_keeping_c = .2
-            # amount to weight keeping speed low
-            lnd_speed_c = 1
+            # lnd_station_keeping_c = .2
+            # amount to penalize speed
+            lnd_speed_c = .2
             # amount to weight distance
             lnd_dist_xy_c = 1
-            # amount to weight distance
-            lnd_dist_c = 1
+            # amount to weight xyz distance when over flower
+            lnd_dist_c = 2
             # amount to weight angle flatness
             lnd_angle_c = 1
             # amount to weight leg touching down
@@ -547,18 +544,21 @@ class GoalBee(OFBeeseClass):
             is_over_target =  dist_xy < rad
             dist_xyz = np.linalg.norm(landing[:3] - position)
 
-            f = np.array([
-                dist_xyz/rad,  # penalize distance from landing
-                np.linalg.norm(velocity),  # penalize moving quickly
-                robot_angle,  # penalize angle
-                leg_ground_contact,  # reward leg touching ground
-            ])
-            w = np.array([-lnd_dist_c,
-                          -lnd_speed_c,
-                          -lnd_angle_c,
-                          lnd_contact_c,
-                          ])
-            landing_rwd_shape += np.dot(f, w)
+            # reward shaping. agent gets reward of the difference in landing_rwd_shape across time steps
+            landing_rwd_shape = 0.
+
+            landing_rwd_shape -= lnd_dist_xy_c*dist_xy/rad  # penalize distance from landing
+            landing_rwd_shape -= lnd_angle_c*robot_angle  # penalize angle
+            landing_rwd_shape += lnd_contact_c*leg_ground_contact  # reward leg touching ground
+
+            if is_over_target:
+                # bonus when descending only when over target
+                # if agent begins hovering over flower then leaves, it incurrs a penalty
+                landing_rwd_shape+=lnd_dist_c*np.exp2(-dist_xyz/rad)
+
+            penalties=air_penalty
+            penalties-=lnd_speed_c*np.linalg.norm(velocity)/self.velocity_bounds  # penalize moving quickly
+
 
             land_bonus = 0
             if self.drone_landed(collided=collided, position=position):
@@ -567,7 +567,7 @@ class GoalBee(OFBeeseClass):
                 info_dic["dist_from_center"] = dist_xy.item()
                 info_dic["scaled_dist_from_center"] = (dist_xy/rad).item()
 
-            self.rwds[self.GOAL_LAND_ON] = (air_penalty +
+            self.rwds[self.GOAL_LAND_ON] = (penalties +
                                             (landing_rwd_shape - self.past_goal_shape.get(self.GOAL_LAND_ON,
                                                                                           landing_rwd_shape)) +
                                             land_bonus)
