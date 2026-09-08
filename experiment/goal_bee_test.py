@@ -48,6 +48,10 @@ if __name__ == '__main__':
                         help="simulation timestep")
     PARSER.add_argument("--history-steps", type=int, required=False, default=1,
                         help="steps to see in history")
+    PARSER.add_argument("--of_gaussian_noise", type=float, required=False, default=0.,
+                        help="adds noise of this standard deviation to each pixel of input vector")
+    PARSER.add_argument("--of_subsample", type=int, nargs="+", required=False, default=None,
+                        help="subsample input image at this rate (can put in an integer, or 2 ints for control of each axis)")
 
     PARSER.add_argument('--action-type', action='store', required=False, default=GoalBee.ACTION_ACCELERATION_XY,
                         choices=(GoalBee.ACTION_VELOCITY,
@@ -157,6 +161,15 @@ if __name__ == '__main__':
     ident += '_nstep_' + str(args.nsteps)
     ident += '_net_' + os.path.basename(network_file)[:os.path.basename(network_file).find('.')]
     ident += '_pol_val_' + '_'.join([str(h) for h in args.pol_val_net])
+    if args.of_gaussian_noise>0:
+        ident += '_of_noise_' + str(args.of_gaussian_noise).replace('.', '_')
+    if args.of_subsample is not None:
+        of_subsample=args.of_subsample[:2]
+        ident += '_of_ss_' + '_'.join([of_subsample])
+        if len(of_subsample)==1:
+            of_subsample=of_subsample[0]
+    else:
+        of_subsample=None
 
     output_dir: str = os.path.join(DIR, 'output', ident)
     traj_dir = os.path.join(output_dir, 'trajectories')
@@ -173,6 +186,8 @@ if __name__ == '__main__':
                       concatenate_observations=concat_obs,
                       of_cameras=of_cameras,
                       initial_goals=init_goals,
+                     of_gaussian_noise=args.of_gaussian_noise,
+                     of_subsample=of_subsample,
                   )}
     f = open(os.path.join(output_dir, 'env_config.txt'), 'w')
     f.write(str(env_config))
