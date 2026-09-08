@@ -857,7 +857,7 @@ class OFBeeseClass(BeeseClass):
                 # self.obs_shape = (of_shape[0] + self.get_obs_vector_dim(), *of_shape[1:])
                 # we are only using translational optic flow (1,H,W), and stacking self.img_stack_size of them
                 if self.of_subsample is not None:
-                    self.obs_shape[k]=(self.img_stack_size, *[mm//ss for mm,ss in zip(of_sh[1:],self.of_subsample)])
+                    self.obs_shape[k]=(self.img_stack_size, *[1+(mm-1)//ss for mm,ss in zip(of_sh[1:],self.of_subsample)])
                 else:
                     self.obs_shape[k] = (self.img_stack_size, *of_sh[1:])
             self.obs_shape['vec'] = (self.get_obs_vector_dim(),)
