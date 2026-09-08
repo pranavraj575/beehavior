@@ -596,6 +596,8 @@ class OFBeeseClass(BeeseClass):
                  img_history_steps=1,
                  input_img_space=(INPUT_LOG_OF, INPUT_OF_ORIENTATION,),
                  of_ignore_angular_velocity=True,
+                 of_gaussian_noise=0.,
+                 of_subsample=None,
                  concatenate_observations=False,
                  **kwargs,
                  ):
@@ -609,6 +611,9 @@ class OFBeeseClass(BeeseClass):
                 RAW_OF, LOG_OF, OF_ORIENTATION, INV_DEPTH_IMG
             of_ignore_angular_velocity: whether to ignore angular velocity in OF calc
                 if true, pretends camera is on chicken head
+            of_gaussian_noise: adds gaussian noise scaled by this amount (0 for no gaussian noise)
+            of_subsample: whether to subsample image (None is no subsampling, [2,2] is every other pixel, etc.)
+                can be int or tuple of 2 ints
             concatenate_observations: instead of dict observation space, concatenates everything into a long row vector
                 used to prevent issues with SHAP package
         """
@@ -635,6 +640,10 @@ class OFBeeseClass(BeeseClass):
                               int(self.INPUT_INV_DEPTH_IMG in self.input_img_space)
                               )
         self.img_stack_size = img_history_steps*self.imgs_per_step
+        self.of_gaussian_noise=of_gaussian_noise
+        self.of_subsample=of_subsample
+        if type(self.of_subsample) is int:
+            self.of_subsample=(self.of_subsample,self.of_subsample)
         super().__init__(
             **kwargs,
         )
@@ -785,6 +794,10 @@ class OFBeeseClass(BeeseClass):
                                     vehicle_name=self.vehicle_name,
                                     ignore_angular_velocity=self.of_ignore_angular_velocity,
                                     )
+            if self.of_subsample is not None:
+                of=of[...,::self.of_subsample[0],::self.of_subsample[1]]
+            if self.of_gaussian_noise>0:
+                of=of+np.random.normal(0,self.of_gaussian_noise,of.shape)
             of_magnitude = np.linalg.norm(of, axis=0)  # magnitude of x and y components of projected optic flow
             obs[camera_name] = None
             # H, W = of.shape
@@ -812,7 +825,9 @@ class OFBeeseClass(BeeseClass):
                                       camera_name=camera_name,
                                       numpee=True,
                                       )
-
+                if self.of_subsample is not None:
+                    # this must also be subsampled
+                    depth = depth[..., ::self.of_subsample[0], ::self.of_subsample[1]]
                 # clip depth to avoid 1/0 error, this means minimum visible depth is .001m which is resonable
                 self.img_stack[camera_name].append(1/np.clip(depth, 10e-3, np.inf))
 
@@ -841,7 +856,10 @@ class OFBeeseClass(BeeseClass):
             for k, of_sh in zip(self.of_cameras, of_shape):
                 # self.obs_shape = (of_shape[0] + self.get_obs_vector_dim(), *of_shape[1:])
                 # we are only using translational optic flow (1,H,W), and stacking self.img_stack_size of them
-                self.obs_shape[k] = (self.img_stack_size, *of_sh[1:])
+                if self.of_subsample is not None:
+                    self.obs_shape[k]=(self.img_stack_size, *[mm//ss for mm,ss in zip(of_sh[1:],self.of_subsample)])
+                else:
+                    self.obs_shape[k] = (self.img_stack_size, *of_sh[1:])
             self.obs_shape['vec'] = (self.get_obs_vector_dim(),)
         return self.obs_shape
 
