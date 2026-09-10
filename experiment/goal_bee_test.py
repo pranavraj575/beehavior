@@ -165,7 +165,7 @@ if __name__ == '__main__':
         ident += '_of_noise_' + str(args.of_gaussian_noise).replace('.', '_')
     if args.of_subsample is not None:
         of_subsample=args.of_subsample[:2]
-        ident += '_of_ss_' + '_'.join([of_subsample])
+        ident += '_of_ss_' + '_'.join(of_subsample)
         if len(of_subsample)==1:
             of_subsample=of_subsample[0]
     else:
