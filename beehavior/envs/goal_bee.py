@@ -485,8 +485,10 @@ class GoalBee(OFBeeseClass):
 
             if dist < landing[-1]:
                 station_rwd = 1
+                info_dic['in_station']=True
             else:
                 station_rwd = self.station_c*np.exp2(-(dist - landing[-1])/self.station_tau)
+                info_dic['in_station'] = False
 
             self.rwds[self.GOAL_STATION_KEEP] = station_rwd
 
@@ -596,15 +598,16 @@ class GoalBee(OFBeeseClass):
                 self.active_goals = {g: 1 for g in active_goals}
                 # weight each goal equally for now
                 break
-        stuff = super().reset(seed=seed,
+        obs,info= super().reset(seed=seed,
                               options=options,
                               )
+        info['active_goals']=self.active_goals.copy()
         self.old_pose = self.get_pose()
         self.old_height = self.old_pose.position.z_val
         self.farthest_reached = self.get_pose().position.x_val
         self.rwds = dict()
         self.past_goal_shape = dict()
-        return stuff
+        return obs,info
 
 
 class FwdGoalBee(GoalBee):

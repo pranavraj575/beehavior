@@ -13,7 +13,7 @@ from PIL import Image
 
 import cv2
 import skvideo.io
-
+from collections import defaultdict
 
 def create_mp4(image_paths, output_mp4_path, duration=200, debug=False):
     writer = skvideo.io.FFmpegWriter(output_mp4_path, outputdict={
@@ -212,6 +212,7 @@ if __name__ == '__main__':
         epochs = []
 
         prop_successful = []
+        goal_to_metrics=dict()
 
         medians = []
         means = []
@@ -293,6 +294,7 @@ if __name__ == '__main__':
 
             if args.take is not None and len(trajs) > args.take:
                 trajs = trajs[:args.take]
+
             for traj in trajs:
                 for thingy in traj:
                     x, y = thingy['old_pose']['position'][:2]
@@ -357,7 +359,17 @@ if __name__ == '__main__':
                 def get_dist_traveled(traj):
                     return traj[-1]['pose']['position'][0]
                     return traj[-1]['pose']['position'][0] - traj[0]['pose']['position'][0]
-
+                def get_metrics(traj):
+                    return {
+                                'fwd':traj[-1]['pose']['position'][0],
+                                     'lnd':sum(t['info'].get('landed',False) for t in traj),
+                                     'hvr': sum(np.sum(np.abs(np.array(traj[i+1]['pose']['position'])-
+                                                              np.array(traj[i]['pose']['position'])))
+                                                for i in range(len(traj)-1)),
+                                     'hgt': sum(abs(traj[i+1]['pose']['position'][2]-traj[i]['pose']['position'][2])
+                                                for i in range(len(traj)-1)),
+                                     'stn': sum(t['info'].get('in_station',False) for t in traj),
+                                     }
 
                 trajs.sort(key=get_dist_traveled)
 
@@ -401,6 +413,15 @@ if __name__ == '__main__':
                     rwd_maxes.append(np.max(rwds))
                     rwd_means.append(np.mean(rwds))
                     rwd_mins.append(np.min(rwds))
+                    for traj_idx, traj in enumerate(trajs):
+                        if 'goals' in traj[0]['info']:
+                            key=tuple(traj[0]['info']['goals'].items())
+                            if key not in goal_to_metrics:
+                                goal_to_metrics[key]=dict()
+                            if epoch not in goal_to_metrics[key]:
+                                goal_to_metrics[key][epoch]=list()
+
+                            goal_to_metrics[key][epoch].append(get_metrics(traj))
 
                 for traj, kwargs in plot_stuff:
                     positions = np.stack([traj[0]['old_pose']['position']] +
@@ -467,6 +488,29 @@ if __name__ == '__main__':
         fig.set_size_inches(width, height*.420)
         plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_success.png'),
                     bbox_inches='tight', dpi=args.dpi)
+        plt.close()
+        for key in goal_to_metrics:
+            things=[]
+            epchs=[]
+            plt_metrics=defaultdict(lambda: [])
+            for epoch in goal_to_metrics[key]:
+                tmp_metrics = defaultdict(lambda: [])
+                for metric in goal_to_metrics[key][epoch]:
+                    for k in metric:
+                        tmp_metrics[k].append(metric[k])
+                for k in tmp_metrics:
+                    plt_metrics[k].append(sum(tmp_metrics[k]))
+                epchs.append(epoch)
+            for k in plt_metrics:
+                plt.plot(epchs,plt_metrics[k])
+                plt.savefig(f'TEST_{key}_{k}.png')
+
+                plt.close()
+
+
+
+        goal_to_metrics[key][epoch].append(get_metrics(traj))
+
         plt.close()
 
         plt.plot(epochs, means, color='blue', label='means')
