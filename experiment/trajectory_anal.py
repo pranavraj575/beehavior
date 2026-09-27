@@ -498,7 +498,7 @@ if __name__ == '__main__':
                     for k in metric:
                         tmp_metrics[k].append(metric[k])
                 for k in tmp_metrics:
-                    plt_metrics[k].append(sum(tmp_metrics[k]))
+                    plt_metrics[k].append(np.mean(tmp_metrics[k]))
                 epchs.append(epoch)
             for k in plt_metrics:
                 if k in [g for g,w in key]:
