@@ -1,0 +1,4 @@
+python3 experiment/goal_bee_test.py --ident updated_height --epochs 100 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 5 --testing-tunnel 0 1 2 --recollect
+
+
+python3 experiment/trajectory_anal.py --load-dir output/updated_height_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64/

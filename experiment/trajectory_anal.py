@@ -108,7 +108,7 @@ if __name__ == '__main__':
     i = 0
     last_seen = 0
     while True:
-        fn = os.path.join(traj_dir, 'traj_' + str(i) + '.pkl')
+        fn = os.path.join(traj_dir, f'traj_{i}.pkl')
         if i - last_seen > args.traj_freq*10 and (not os.path.exists(fn)):
             break
         if os.path.exists(fn):
@@ -312,8 +312,8 @@ if __name__ == '__main__':
             plt.xlim(xlim)
             fname = os.path.join(individual_traj_dir,
                                  'avg_vel_' +
-                                 'tunnel_' + str(tunnel_idx) + '_' +
-                                 'epoch_' + str(epoch) + '.png'
+                                 f'tunnel_{tunnel_idx}_' +
+                                 f'epoch_{epoch}.png'
                                  )
             # plt.savefig(fname, bbox_inches='tight')
             plt.close()
@@ -338,8 +338,8 @@ if __name__ == '__main__':
             plt.ylim(ylim)
             fname = os.path.join(individual_traj_dir,
                                  'avg_pos_' +
-                                 'tunnel_' + str(tunnel_idx) + '_' +
-                                 'epoch_' + str(epoch) + '.png'
+                                 f'tunnel_{tunnel_idx}_' +
+                                 f'epoch_{epoch}.png'
                                  )
             # plt.savefig(fname, bbox_inches='tight')
             plt.close()
@@ -363,10 +363,10 @@ if __name__ == '__main__':
                     return {
                                 'fwd':traj[-1]['pose']['position'][0],
                                      'lnd':sum(t['info'].get('landed',False) for t in traj),
-                                     'hvr': sum(np.sum(np.abs(np.array(traj[i+1]['pose']['position'])-
+                                     'hvr': -sum(np.sum(np.abs(np.array(traj[i+1]['pose']['position'])-
                                                               np.array(traj[i]['pose']['position'])))
                                                 for i in range(len(traj)-1)),
-                                     'hgt': sum(abs(traj[i+1]['pose']['position'][2]-traj[i]['pose']['position'][2])
+                                     'hgt': -sum(abs(traj[i+1]['pose']['position'][2]-traj[i]['pose']['position'][2])
                                                 for i in range(len(traj)-1)),
                                      'stn': sum(t['info'].get('in_station',False) for t in traj),
                                      }
@@ -448,11 +448,12 @@ if __name__ == '__main__':
 
                 if not args.no_legend: plt.legend(loc='center left', bbox_to_anchor=(1., .5))
                 plt.title('epoch ' + str(epoch))
-                plt.xlim(xlim)
+                #plt.xlim(xlim)
+                plt.xlim((min(xlim[0], plt.xlim()[0]), xlim[1]))
 
                 fname = os.path.join(individual_traj_dir,
-                                     ('ht_' if plotting_ht else '')+'tunnel_' + str(tunnel_idx) + '_' +
-                                     'epoch_' + str(epoch) + '_trajectories' + (
+                                     f'tunnel_{tunnel_idx}_' +('ht_' if plotting_ht else '')+
+                                     f'epoch_{epoch}_trajectories' + (
                                          '_no_leg' if args.no_legend else '') + '.png'
                                      )
                 plt.savefig(fname, bbox_inches='tight', dpi=args.dpi)
@@ -462,16 +463,14 @@ if __name__ == '__main__':
                 else:
                     fnames.append(fname)
         fname = os.path.join(plot_dir,
-                             'tunnel_' + str(tunnel_idx) + '_' +
-                             'trajectories_gifed.gif')
+                             f'tunnel_{tunnel_idx}_trajectories_gifed.gif')
         create_gif(image_paths=fnames,
                    output_gif_path=fname,
                    duration=200,
                    )
 
         z_fname = os.path.join(plot_dir,
-                             'ht_tunnel_' + str(tunnel_idx) + '_' +
-                             'trajectories_gifed.gif')
+                             f'tunnel_{tunnel_idx}_ht_trajectories_gifed.gif')
         create_gif(image_paths=z_fnames,
                    output_gif_path=z_fname,
                    duration=200,
@@ -486,7 +485,7 @@ if __name__ == '__main__':
         fig = plt.gcf()
         width, height = fig.get_size_inches()
         fig.set_size_inches(width, height*.420)
-        plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_success.png'),
+        plt.savefig(os.path.join(plot_dir, f'tunnel_{tunnel_idx}_success.png'),
                     bbox_inches='tight', dpi=args.dpi)
         plt.close()
         for key in goal_to_metrics:
@@ -502,10 +501,10 @@ if __name__ == '__main__':
                     plt_metrics[k].append(sum(tmp_metrics[k]))
                 epchs.append(epoch)
             for k in plt_metrics:
-                plt.plot(epchs,plt_metrics[k])
-                plt.savefig(f'TEST_{key}_{k}.png')
-
-                plt.close()
+                if k in [g for g,w in key]:
+                    plt.plot(epchs,plt_metrics[k])
+                    plt.savefig(os.path.join(plot_dir,f'tunnel_{tunnel_idx}_goal_{key}_metric_{k}.png'.replace(',','_')))
+                    plt.close()
 
 
 
@@ -522,7 +521,7 @@ if __name__ == '__main__':
         plt.title("Distance traveled throughout training")
 
         if not args.no_legend: plt.legend()
-        plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_distance_summary.png'),
+        plt.savefig(os.path.join(plot_dir, f'tunnel_{tunnel_idx}_distance_summary.png'),
                     bbox_inches='tight', dpi=args.dpi)
         plt.close()
 
@@ -534,7 +533,7 @@ if __name__ == '__main__':
         plt.ylabel('reward sum')
         plt.title("Rewards throughout training")
         if not args.no_legend: plt.legend()
-        plt.savefig(os.path.join(plot_dir, 'tunnel_' + str(tunnel_idx) + '_rwd_summary.png'),
+        plt.savefig(os.path.join(plot_dir, f'tunnel_{tunnel_idx}_rwd_summary.png'),
                     bbox_inches='tight', dpi=args.dpi)
         plt.close()
     if not args.keep_individuals:
