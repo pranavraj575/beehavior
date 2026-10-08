@@ -11,8 +11,17 @@ in another terminal, run `python3 airsim_interface/keyboard_test.py`
   * i to display images
   * Q (shift + q) to stop python script
 """
-import airsim
+import airsim,os
 
+def add_gaussiannoise(of, noise):
+    return of+np.random.normal(0,noise,of.shape)
+def apply_subsample(of,ss):
+    temp=of[...,::ss[0],::ss[1]]
+    for i in range(ss[0]):
+        for j in range(ss[1]):
+            of[...,i::ss[0],j::ss[1]]=temp
+
+    return of
 if __name__ == '__main__':
     from threading import Thread
     import numpy as np
@@ -37,6 +46,8 @@ if __name__ == '__main__':
                         help="radians that each arrow command changes roll/pitch")
     PARSER.add_argument("--max-ctrl", type=int, required=False, default=9,
                         help="number of times you can increment by radian-ctrl")
+    PARSER.add_argument("--imgs", type=str, required=False, default=None,
+                        help="dir to store images")
     PARSER.add_argument("--thrust-n", type=int, required=False, default=10, choices=list(range(2, 11)),
                         help="number of potential thrust values, between 2 and 10")
     PARSER.add_argument('--real-time', action='store_true', required=False,
@@ -149,6 +160,8 @@ if __name__ == '__main__':
             print(pose)
             pose_data = False
         if img and game_interface:
+            if args.imgs:
+                os.makedirs(args.imgs,exist_ok=True)
             from matplotlib import pyplot as plt
 
             of = of_geo_from_client(client=client,
@@ -163,13 +176,16 @@ if __name__ == '__main__':
                 image = np.frombuffer(img_data, dtype=np.uint8).reshape(response[0].height, response[0].width, 3)
                 # image = cv2.resize(image, (320, 240))  #(1080, 720) : Resize to 320x240 for performance
 
-                plt.imshow(image[:, :, ::-1], interpolation='nearest', )
-                plt.show()
-            plt.close()
+                plt.imshow(image[:, :, ::-1], interpolation='nearest', cmap="coolwarm")
+                if args.imgs:
+                    plt.savefig(os.path.join(args.imgs,'test.png'))
+                else:
+                    plt.show()
+                plt.close()
             of = np.transpose(of, axes=(1, 2, 0))
 
 
-            def disp(thingy, title=None):
+            def disp(thingy, title=None,save=None):
                 temp = np.zeros((*of.shape[:2], 3), dtype=np.uint8)
 
                 mx = np.max(thingy)
@@ -181,7 +197,7 @@ if __name__ == '__main__':
 
                 temp[:, :, :] = np.ndarray.astype(thingy, dtype=np.uint8)
 
-                plt.imshow(temp, interpolation='nearest', )
+                plt.imshow(temp, interpolation='nearest', cmap="coolwarm" )
 
                 def fmt(num):
                     if abs(num) >= 1 and abs(num) <= 1000:
@@ -190,30 +206,46 @@ if __name__ == '__main__':
                         return '{:.0f}'.format(num)
                     return '{:.2E}'.format(num)
 
-                plt.title('black: ' + fmt(mn) + '; white: ' + fmt(mx))
+                plt.title('low: ' + fmt(mn) + '; high: ' + fmt(mx))
+                plt.axis('off')
                 if title is not None:
                     plt.suptitle(title)
 
                 plt.tight_layout()
-                plt.show()
+                if save:
+                    plt.savefig(save)
+                else:
+                    plt.show()
+                plt.close()
 
 
             for dim in range(2):
-                disp(np.abs(of)[:, :, dim:dim + 1])
+                if args.imgs:
+                    save= os.path.join(args.imgs,f'dim_{dim}.png')
+                else:
+                    save=None
+                disp(np.abs(of)[:, :, dim:dim + 1],save=save)
 
-            for mapping, title in (
-                    (lambda x: x, 'Raw Optic Flow'),
-                    (lambda x: np.log(np.clip(x, 10e-10, np.inf)), 'Log Optic Flow'),
+            for value, title in (
+                    (np.linalg.norm(of, axis=-1, keepdims=True), 'Raw Optic Flow'),
+                    (apply_subsample(np.linalg.norm(of, axis=-1, keepdims=True),[2,2]), 'Subsampled Optic Flow (2)'),
+                    (apply_subsample(np.linalg.norm(of, axis=-1, keepdims=True),[4,4]), 'Subsampled Optic Flow (4)'),
+                    (add_gaussiannoise(np.linalg.norm(of, axis=-1, keepdims=True),10), 'Noisy Optic Flow'),
+                    (np.log(np.clip(np.linalg.norm(of, axis=-1, keepdims=True), 10e-10, np.inf)), 'Log Optic Flow'),
                     # (lambda x: np.clip(np.log(x),-1,np.inf), 'Clipped Log Optic Flow'),
-                    (np.sqrt, 'Sqrt Optic Flow'),
+                    (np.sqrt(np.linalg.norm(of, axis=-1, keepdims=True)), 'Sqrt Optic Flow'),
             ):
-                disp(mapping(np.linalg.norm(of, axis=-1, keepdims=True)), title=title)
+                if args.imgs:
+                    save=os.path.join(args.imgs,title.replace(' ','_')+'.png')
+                else:
+                    save=None
+                disp(value, title=title,save=save)
 
             if img_data:
                 image = np.frombuffer(img_data, dtype=np.uint8).reshape(response[0].height, response[0].width, 3)
                 # image = cv2.resize(image, (320, 240))  #(1080, 720) : Resize to 320x240 for performance
 
-                plt.imshow(image[:, :, ::-1], interpolation='nearest', )
+                plt.imshow(image[:, :, ::-1], interpolation='nearest', cmap='coolwarm')
                 h, w = np.meshgrid(np.arange(of.shape[0]), np.arange(of.shape[1]))
                 ss = 10
                 of_disp = np.transpose(of, axes=(1, 0, 2))
@@ -221,9 +253,13 @@ if __name__ == '__main__':
                 plt.quiver(w[::ss, ::ss], h[::ss, ::ss],
                            of_disp[::ss, ::ss, 0],
                            -of_disp[::ss, ::ss, 1],
-                           color='red',
+                           color='black',
                            )
-                plt.show()
+                if args.imgs:
+                    plt.savefig(os.path.join(args.imgs, f'quiver.png'))
+                else:
+                    plt.show()
+                plt.close()
             img = False
     if game_interface:
         disconnect_client(client=client)
