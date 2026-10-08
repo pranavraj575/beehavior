@@ -567,7 +567,10 @@ class BeeseClass(gym.Env):
             if val < low or val > high:
                 return True
         return False
-
+def add_gaussiannoise(of, noise):
+    return of+np.random.normal(0,noise,of.shape)
+def apply_subsample(of,ss):
+    return of[...,::ss[0],::ss[1]]
 class OFBeeseClass(BeeseClass):
     """
     optic flow observations implemented
@@ -795,9 +798,11 @@ class OFBeeseClass(BeeseClass):
                                     ignore_angular_velocity=self.of_ignore_angular_velocity,
                                     )
             if self.of_subsample is not None:
-                of=of[...,::self.of_subsample[0],::self.of_subsample[1]]
+                of=apply_subsample(of, self.of_subsample)
+
             if self.of_gaussian_noise>0:
-                of=of+np.random.normal(0,self.of_gaussian_noise,of.shape)
+                of=add_gaussiannoise(of, self.of_gaussian_noise)
+
             of_magnitude = np.linalg.norm(of, axis=0)  # magnitude of x and y components of projected optic flow
             obs[camera_name] = None
             # H, W = of.shape
