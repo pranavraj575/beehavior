@@ -25,6 +25,11 @@ python3 experiment/trajectory_anal.py --load-dir output/idpt_stn_cat_obs_in_ynny
 # with noise
 
 python3 experiment/goal_bee_test.py --ident idpt_fwd_noise --epochs 200 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 10 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_gaussian .5
+python3 experiment/goal_bee_test.py --ident idpt_fwd_noise_1 --epochs 75 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 5 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_gaussian .5
+python3 experiment/goal_bee_test.py --ident idpt_fwd_noise_2 --epochs 75 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 5 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_gaussian .5
+python3 experiment/goal_bee_test.py --ident idpt_fwd_noise_3 --epochs 75 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 5 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_gaussian .5
+python3 experiment/goal_bee_test.py --ident idpt_fwd_noise_4 --epochs 75 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 5 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_gaussian .5
+
 
 python3 experiment/goal_bee_test.py --ident idpt_hvr_noise --epochs 200 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals hvr --testj 10 --test-freq 10 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_gaussian .5
 
@@ -36,12 +41,26 @@ python3 experiment/goal_bee_test.py --ident idpt_stn_noise --epochs 200 --action
 
 
 python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_noise_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_noise_0_5
+python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_noise_1_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_noise_0_5
+python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_noise_2_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_noise_0_5
+python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_noise_3_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_noise_0_5
+python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_noise_4_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_noise_0_5
+
 
 python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_noise_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_noise_0_5
 
 # subsampling
 
 python3 experiment/goal_bee_test.py --ident idpt_fwd_ss --epochs 200 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 10 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_subsampl 2
+python3 experiment/goal_bee_test.py --ident idpt_fwd_ss2_e1 --epochs 75 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 5 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_subsampl 2
+python3 experiment/goal_bee_test.py --ident idpt_fwd_ss2_e2 --epochs 75 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 5 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_subsampl 2
+python3 experiment/goal_bee_test.py --ident idpt_fwd_ss2_e3 --epochs 75 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 5 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_subsampl 2
+python3 experiment/goal_bee_test.py --ident idpt_fwd_ss2_e4 --epochs 75 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 5 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_subsampl 2
+
+python3 experiment/goal_bee_test.py --ident idpt_fwd_ss4_e1 --epochs 75 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 5 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_subsampl 4
+python3 experiment/goal_bee_test.py --ident idpt_fwd_ss4_e2 --epochs 75 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 5 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_subsampl 4
+python3 experiment/goal_bee_test.py --ident idpt_fwd_ss4_e3 --epochs 75 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 5 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_subsampl 4
+python3 experiment/goal_bee_test.py --ident idpt_fwd_ss4_e4 --epochs 75 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 5 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_subsampl 4
 
 python3 experiment/goal_bee_test.py --ident idpt_hvr_ss --epochs 200 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals hvr --testj 10 --test-freq 10 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_subsampl 2
 
@@ -52,3 +71,8 @@ python3 experiment/goal_bee_test.py --ident idpt_lnd_ss --epochs 200 --action ac
 python3 experiment/goal_bee_test.py --ident idpt_stn_ss --epochs 200 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals stn --testj 10 --test-freq 10 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_subsampl 2
 
 
+
+python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_ss4_e1_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_ss_4
+python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_ss4_e2_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_ss_4
+python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_ss4_e3_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_ss_4
+python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_ss4_e4_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_ss_4
