@@ -105,21 +105,16 @@ if __name__ == '__main__':
         os.makedirs(plot_dir)
 
     epoch_infos = []
-    i = 0
-    last_seen = 0
-    while True:
-        fn = os.path.join(traj_dir, f'traj_{i}.pkl')
-        if i - last_seen > args.traj_freq*100 and (not os.path.exists(fn)):
-            break
-        if os.path.exists(fn):
-            f = open(fn, 'rb')
+    for fn in sorted(os.listdir(traj_dir),key=lambda s: int(''.join(c for c in s if c.isnumeric()))):
+        if fn.startswith('traj_') and fn.endswith('.pkl') and fn[5:-4].isnumeric():
+            i=int(fn[5:-4])
+            while len(epoch_infos)<i:
+                epoch_infos.append(dict())
+            f = open(os.path.join(traj_dir,fn), 'rb')
             epoch_infos.append(pkl.load(f))
             f.close()
-            last_seen = i
-            print(f'loaded from {fn}')
-        else:
-            epoch_infos.append(dict())
-        i += 1
+            print(f'loaded traj {i} from {fn}')
+
     if not epoch_infos:
         raise Exception('empty directory:', traj_dir)
 
