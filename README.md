@@ -133,3 +133,7 @@ Do test runs, compute Shap attention values:
 * run with `--display-only` to do test runs, without recording anything/computing shap values
 * run with `--help` to see all options
 
+
+### change camera FOV
+
+edit camera settings in Documents/AirSim/settings.json
