@@ -109,13 +109,14 @@ if __name__ == '__main__':
     last_seen = 0
     while True:
         fn = os.path.join(traj_dir, f'traj_{i}.pkl')
-        if i - last_seen > args.traj_freq*10 and (not os.path.exists(fn)):
+        if i - last_seen > args.traj_freq*100 and (not os.path.exists(fn)):
             break
         if os.path.exists(fn):
             f = open(fn, 'rb')
             epoch_infos.append(pkl.load(f))
             f.close()
             last_seen = i
+            print(f'loaded from {fn}')
         else:
             epoch_infos.append(dict())
         i += 1
