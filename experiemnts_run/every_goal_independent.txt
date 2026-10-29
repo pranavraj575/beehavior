@@ -72,7 +72,27 @@ python3 experiment/goal_bee_test.py --ident idpt_stn_ss --epochs 200 --action ac
 
 
 
+python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_ss2_e1_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_ss_4
+python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_ss2_e2_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_ss_4
+python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_ss2_e3_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_ss_4
+python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_ss2_e4_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_ss_4
+
+
 python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_ss4_e1_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_ss_4
 python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_ss4_e2_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_ss_4
 python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_ss4_e3_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_ss_4
 python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_ss4_e4_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_ss_4
+
+
+# with OF rotation (DOING THIS FROM NOW ON)
+
+python3 experiment/goal_bee_test.py --include-rotation-of --ident idpt_fwd_of_rot --epochs 420 --action acc --include-raw --include-of-vec --ckpt-freq 5 --goals fwd --testj 10 --test-freq 10 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt
+
+python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_of_rot_cat_obs_in_ynny_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_rot/
+
+
+# with only raw OF
+
+python3 experiment/goal_bee_test.py --include-rotation-of --ident TESTING_NOISE_RAW90 --epochs 300 --action acc --include-raw --ckpt-freq 5 --goals fwd --testj 10 --test-freq 15 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_gaussian .2
+
+python3 experiment/trajectory_anal.py --load-dir output/TESTING_NOISE_RAW90_cat_obs_in_ynnn_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_rot
