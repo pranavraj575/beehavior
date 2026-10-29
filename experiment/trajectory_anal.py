@@ -98,12 +98,6 @@ if __name__ == '__main__':
     plot_dir = os.path.join(load_dir, 'plots')
     print('plotting to', plot_dir)
 
-    individual_traj_dir = os.path.join(plot_dir, 'individual_trajectories_obtained_from_testing')
-    if not os.path.exists(individual_traj_dir):
-        os.makedirs(individual_traj_dir)
-    if not os.path.exists(plot_dir):
-        os.makedirs(plot_dir)
-
     epoch_infos = []
     for fn in sorted(os.listdir(traj_dir),key=lambda s: int(''.join(c for c in s if c.isnumeric()))):
         if fn.startswith('traj_') and fn.endswith('.pkl') and fn[5:-4].isnumeric():
@@ -118,6 +112,11 @@ if __name__ == '__main__':
     if not epoch_infos:
         raise Exception('empty directory:', traj_dir)
 
+    if not os.path.exists(plot_dir):
+        os.makedirs(plot_dir)
+    individual_traj_dir = os.path.join(plot_dir, 'individual_trajectories_obtained_from_testing')
+    if not os.path.exists(individual_traj_dir):
+        os.makedirs(individual_traj_dir)
     # set of tunnel infos, specifically walls and obstacles
     all_test_tunnel_infos = [
         # squished tunnel
