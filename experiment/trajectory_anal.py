@@ -342,13 +342,13 @@ if __name__ == '__main__':
                 plt.xlabel('x axis')
                 if plotting_val=='ht':
                     plt.ylabel('z axis')
+                    plt.gca().set_aspect('equal')
                 elif plotting_val=='y':
                     plt.ylabel('y axis')
                     ylim = plt_env()
+                    plt.gca().set_aspect('equal')
                 elif plotting_val=='yaw':
                     plt.ylabel('yaw')
-
-                plt.gca().set_aspect('equal')
 
                 def get_dist_traveled(traj):
                     return traj[-1]['pose']['position'][0]
@@ -430,8 +430,8 @@ if __name__ == '__main__':
                     elif plotting_val=='y':
                         plt.plot(positions[:, 0], yinversion*positions[:, 1], **kwargs)
                     elif plotting_val=='yaw':
-
-                        plt.plot(positions[:, 0],orientations[:,0] , **kwargs)
+                        rot = Rotation.from_quat(orientations,scalar_first=False) # order is xyzw
+                        plt.plot(positions[:, 0],rot.as_euler('xyz',degrees=False)[:,-1] , **kwargs)
                 if args.necessary_leg:
                     if cnt_succ: plt.plot([], [], color='green', label='successful')
                     if cnt_timeout: plt.plot([], [], color='yellow', label='timed out')
