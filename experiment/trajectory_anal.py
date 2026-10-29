@@ -10,7 +10,7 @@ from matplotlib.patches import Ellipse
 import numpy as np
 import argparse
 from PIL import Image
-
+from scipy.spatial.transform import Rotation
 import cv2
 import skvideo.io
 from collections import defaultdict
@@ -275,10 +275,8 @@ if __name__ == '__main__':
                 ax.set_yticklabels([])
                 ax.set_yticks([])
             return ylim
-
-
-        fnames = []
-        z_fnames = []
+        plotting_vals=('ht','y','yaw')
+        file_name_dict= {k:[] for k in plotting_vals}
         for epoch, trajs in enumerate(relevant_epoch_infos):
             xs = np.arange(test_tunnel_info['xlim'][0], test_tunnel_info['xlim'][1], dx)[:-1]  # ignore the last bound
             vel_bins = [[] for _ in range(len(xs))]
@@ -340,17 +338,18 @@ if __name__ == '__main__':
             # plt.savefig(fname, bbox_inches='tight')
             plt.close()
 
-            for plotting_ht in (True,False):
+            for plotting_val in plotting_vals:
                 # fig, ax = plt.subplots()
                 plt.xlabel('x axis')
-                if plotting_ht:
+                if plotting_val=='ht':
                     plt.ylabel('z axis')
-                else:
+                elif plotting_val=='y':
                     plt.ylabel('y axis')
                     ylim = plt_env()
+                elif plotting_val=='yaw':
+                    plt.ylabel('yaw')
 
                 plt.gca().set_aspect('equal')
-
 
                 def get_dist_traveled(traj):
                     return traj[-1]['pose']['position'][0]
@@ -398,7 +397,7 @@ if __name__ == '__main__':
 
                 rwds = np.array([sum(t['reward'] for t in traj) for traj in trajs])
                 dists = np.array([get_dist_traveled(traj) for traj in trajs])
-                if not plotting_ht:
+                if plotting_val=='y':
                     epochs.append(epoch)
                     prop_successful.append(cnt_succ/cnt)
                     medians.append(np.median(dists))
@@ -423,11 +422,17 @@ if __name__ == '__main__':
                     positions = np.stack([traj[0]['old_pose']['position']] +
                                          [dic['pose']['position'] for dic in traj],
                                          axis=0)
-                    if plotting_ht:
+                    orientations=np.stack([traj[0]['old_pose']['orientation']] +
+                                         [dic['pose']['orientation'] for dic in traj],
+                                         axis=0)
+                    if plotting_val=='ht':
                         # z index is inverted for some reason
                         plt.plot(positions[:, 0], -positions[:, 2], **kwargs)
-                    else:
+                    elif plotting_val=='y':
                         plt.plot(positions[:, 0], yinversion*positions[:, 1], **kwargs)
+                    elif plotting_val=='yaw':
+
+                        plt.plot(positions[:, 0],orientations[:,0] , **kwargs)
                 if args.necessary_leg:
                     if cnt_succ: plt.plot([], [], color='green', label='successful')
                     if cnt_timeout: plt.plot([], [], color='yellow', label='timed out')
@@ -437,10 +442,12 @@ if __name__ == '__main__':
                     plt.plot([], [], color='yellow', label='timed out')
                     plt.plot([], [], color='red', label='crashed')
 
-                if plotting_ht:
+                if plotting_val=='ht':
                     plt.ylim((0,10))
-                else:
+                elif plotting_val=='y':
                     plt.ylim(ylim)
+                elif plotting_val=='yaw':
+                    pass
 
                 if not args.no_legend: plt.legend(loc='center left', bbox_to_anchor=(1., .5))
                 plt.title('epoch ' + str(epoch))
@@ -448,29 +455,20 @@ if __name__ == '__main__':
                 plt.xlim((min(xlim[0], plt.xlim()[0]), xlim[1]))
 
                 fname = os.path.join(individual_traj_dir,
-                                     f'tunnel_{tunnel_idx}_' +('ht_' if plotting_ht else '')+
+                                     f'tunnel_{tunnel_idx}_{plotting_val}_' +
                                      f'epoch_{epoch}_trajectories' + (
                                          '_no_leg' if args.no_legend else '') + '.png'
                                      )
                 plt.savefig(fname, bbox_inches='tight', dpi=args.dpi)
                 plt.close()
-                if plotting_ht:
-                    z_fnames.append(fname)
-                else:
-                    fnames.append(fname)
-        fname = os.path.join(plot_dir,
-                             f'tunnel_{tunnel_idx}_trajectories_gifed.gif')
-        create_gif(image_paths=fnames,
-                   output_gif_path=fname,
-                   duration=200,
-                   )
-
-        z_fname = os.path.join(plot_dir,
-                             f'tunnel_{tunnel_idx}_ht_trajectories_gifed.gif')
-        create_gif(image_paths=z_fnames,
-                   output_gif_path=z_fname,
-                   duration=200,
-                   )
+                file_name_dict[plotting_val].append(fname)
+        for plotting_val in plotting_vals:
+            fname = os.path.join(plot_dir,
+                                 f'tunnel_{tunnel_idx}_{plotting_val}_trajectories_gifed.gif')
+            create_gif(image_paths=file_name_dict[plotting_val],
+                       output_gif_path=fname,
+                       duration=200,
+                       )
 
         plt.plot(epochs, prop_successful, color='purple')
 
