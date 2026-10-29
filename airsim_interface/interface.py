@@ -7,6 +7,7 @@ import time
 
 import numpy as np
 import airsim, subprocess, math, sys
+from airsim import Vector3r,Pose,Quaternionr
 
 from airsim_interface.load_settings import get_settings, Keychain, get_fov, get_camera_settings
 
@@ -157,6 +158,22 @@ def move_along_pth(client: airsim.MultirotorClient, pth, v=1., vehicle_name=''):
         else:
             x, y, z = t
         client.moveToPositionAsync(x=x, y=y, z=z, velocity=v, vehicle_name=vehicle_name).join()
+
+
+def spawn_pillar(client: airsim.MultirotorClient, xy_position:tuple,xy_scale:tuple,obj_name=None,tunnel_h=10):
+    th=np.pi/2
+    pose=Pose(Vector3r(xy_position[0],xy_position[1],-tunnel_h/2),Quaternionr(x_val=np.sin(th/2),w_val=np.cos(th/2)))
+    scale=Vector3r(xy_scale[0],4*tunnel_h,xy_scale[1])
+    return spawn_obj(client=client,asset_name='cylinder',scale=scale,pose=pose,obj_name=obj_name)
+def spawn_obj(client: airsim.MultirotorClient, pose:Pose,scale:Vector3r, asset_name,obj_name=None,):
+    if obj_name is None:
+        obj_name=asset_name
+    return client.simSpawnObject(object_name=obj_name,
+                                 asset_name=asset_name,
+                          pose=pose,
+                          scale=scale,
+                          physics_enabled=False,
+                          )
 
 
 def get_depth_img(client: airsim.MultirotorClient, camera_name='front', numpee=False):
