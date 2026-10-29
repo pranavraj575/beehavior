@@ -70,6 +70,8 @@ if __name__ == '__main__':
                         help="include OF orientation in input")
     PARSER.add_argument("--include-of-vector", action='store_true', required=False,
                         help="include OF vector in input")
+    PARSER.add_argument("--include-rotation-of", action='store_true', required=False,
+                        help="include OF rotational component")
     PARSER.add_argument("--include-depth", action='store_true', required=False,
                         help="include depth in input")
 
@@ -170,6 +172,8 @@ if __name__ == '__main__':
             of_subsample=of_subsample[0]
     else:
         of_subsample=None
+    if  args.include_rotation_of:
+        ident+='_of_rot'
 
     output_dir: str = os.path.join(DIR, 'output', ident)
     traj_dir = os.path.join(output_dir, 'trajectories')
@@ -188,6 +192,7 @@ if __name__ == '__main__':
                       initial_goals=init_goals,
                      of_gaussian_noise=args.of_gaussian_noise,
                      of_subsample=of_subsample,
+                      of_ignore_angular_velocity=not args.include_rotation_of,
                   )}
     f = open(os.path.join(output_dir, 'env_config.txt'), 'w')
     f.write(str(env_config))
