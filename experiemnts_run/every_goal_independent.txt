@@ -95,4 +95,4 @@ python3 experiment/trajectory_anal.py --load-dir output/idpt_fwd_of_rot_cat_obs_
 
 python3 experiment/goal_bee_test.py --include-rotation-of --ident TESTING_NOISE_RAW90 --epochs 300 --action acc --include-raw --ckpt-freq 5 --goals fwd --testj 10 --test-freq 15 --testing-tunnel 0 1 2 --recollect --network beehavior/networks/configs/shrimple_gc.txt --of_gaussian .2
 
-python3 experiment/trajectory_anal.py --load-dir output/TESTING_NOISE_RAW90_cat_obs_in_ynnn_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_rot
+python3 experiment/trajectory_anal.py --load-dir output/TESTING_NOISE_RAW90_cat_obs_in_ynnn_gls_fwd_act_acc_k_1_dt_0_05_epoch_stp_1024_nstep_1024_net_shrimple_gc_pol_val_64_of_noise_0_2_of_rot
