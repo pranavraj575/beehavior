@@ -110,7 +110,7 @@ if __name__ == '__main__':
             print(f'loaded traj {i} from {fn}')
 
     if not epoch_infos:
-        raise Exception('empty directory:', traj_dir)
+        raise Exception('empty/missing directory:', traj_dir)
 
     if not os.path.exists(plot_dir):
         os.makedirs(plot_dir)
