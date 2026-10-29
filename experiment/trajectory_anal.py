@@ -430,7 +430,7 @@ if __name__ == '__main__':
                     elif plotting_val=='y':
                         plt.plot(positions[:, 0], yinversion*positions[:, 1], **kwargs)
                     elif plotting_val=='yaw':
-                        rot = Rotation.from_quat(orientations,scalar_first=False) # order is xyzw
+                        rot = Rotation.from_quat(orientations,) # order is xyzw
                         plt.plot(positions[:, 0],rot.as_euler('xyz',degrees=False)[:,-1] , **kwargs)
                 if args.necessary_leg:
                     if cnt_succ: plt.plot([], [], color='green', label='successful')
