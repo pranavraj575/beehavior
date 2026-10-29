@@ -567,8 +567,15 @@ class BeeseClass(gym.Env):
             if val < low or val > high:
                 return True
         return False
-def add_gaussiannoise(of, noise):
-    return of+np.random.normal(0,noise,of.shape)
+def add_gaussiannoise(of, var):
+    return of+np.random.normal(0, var, of.shape)
+def add_dropoutnoise(of, p):
+    return of*np.random.binomial(1, p, of.shape)
+def add_gammanoise(of, var):
+    # shape*scale is mean
+    # shape * scale^2 is var
+    # thus, to have variance v, shape=1/v, scale=v
+    return of*np.random.gamma(shape=1/var, scale=var, size=of.shape)
 def apply_subsample(of,ss):
     return of[...,::ss[0],::ss[1]]
 class OFBeeseClass(BeeseClass):
@@ -600,6 +607,8 @@ class OFBeeseClass(BeeseClass):
                  input_img_space=(INPUT_LOG_OF, INPUT_OF_ORIENTATION,),
                  of_ignore_angular_velocity=True,
                  of_gaussian_noise=0.,
+                 of_gamma_noise=0.,
+                 of_dropout_noise=0.,
                  of_subsample=None,
                  concatenate_observations=False,
                  **kwargs,
@@ -615,6 +624,8 @@ class OFBeeseClass(BeeseClass):
             of_ignore_angular_velocity: whether to ignore angular velocity in OF calc
                 if true, pretends camera is on chicken head
             of_gaussian_noise: adds gaussian noise scaled by this amount (0 for no gaussian noise)
+            of_gamma_noise: adds multiplicative noise scaled by this amount (0 for no gamma noise)
+            of_dropout_noise: adds dropout noise with this proportion (0 for no dropout noise)
             of_subsample: whether to subsample image (None is no subsampling, [2,2] is every other pixel, etc.)
                 can be int or tuple of 2 ints
             concatenate_observations: instead of dict observation space, concatenates everything into a long row vector
@@ -644,6 +655,9 @@ class OFBeeseClass(BeeseClass):
                               )
         self.img_stack_size = img_history_steps*self.imgs_per_step
         self.of_gaussian_noise=of_gaussian_noise
+        self.of_dropout_noise=of_dropout_noise
+        self.of_gamma_noise=of_gamma_noise
+
         self.of_subsample=of_subsample
         if type(self.of_subsample) is int:
             self.of_subsample=(self.of_subsample,self.of_subsample)
@@ -799,9 +813,12 @@ class OFBeeseClass(BeeseClass):
                                     )
             if self.of_subsample is not None:
                 of=apply_subsample(of, self.of_subsample)
-
+            if self.of_gamma_noise>0:
+                of=add_gammanoise(of, self.of_gamma_noise)
             if self.of_gaussian_noise>0:
                 of=add_gaussiannoise(of, self.of_gaussian_noise)
+            if self.of_dropout_noise>0:
+                of=add_dropoutnoise(of, self.of_dropout_noise)
 
             of_magnitude = np.linalg.norm(of, axis=0)  # magnitude of x and y components of projected optic flow
             obs[camera_name] = None

@@ -50,6 +50,10 @@ if __name__ == '__main__':
                         help="steps to see in history")
     PARSER.add_argument("--of_gaussian_noise", type=float, required=False, default=0.,
                         help="adds noise of this standard deviation to each pixel of input vector")
+    PARSER.add_argument("--of_dropout_noise", type=float, required=False, default=0.,
+                        help="adds dropout noise with this proportion (drop each pixel with this probability)")
+    PARSER.add_argument("--of_gamma_noise", type=float, required=False, default=0.,
+                        help="adds multiplitave gamma noise with this variance to each pixel (has mean 1)")
     PARSER.add_argument("--of_subsample", type=int, nargs="+", required=False, default=None,
                         help="subsample input image at this rate (can put in an integer, or 2 ints for control of each axis)")
 
@@ -165,6 +169,10 @@ if __name__ == '__main__':
     ident += '_pol_val_' + '_'.join([str(h) for h in args.pol_val_net])
     if args.of_gaussian_noise>0:
         ident += '_of_noise_' + str(args.of_gaussian_noise).replace('.', '_')
+    if args.of_gamma_noise>0:
+        ident += '_of_gamma_' + str(args.of_gamma_noise).replace('.', '_')
+    if args.of_dropout_noise>0:
+        ident += '_of_dropout_' + str(args.of_dropout_noise).replace('.', '_')
     if args.of_subsample is not None:
         of_subsample=args.of_subsample[:2]
         ident += '_of_ss_' + '_'.join([str(s) for s in of_subsample])
@@ -191,6 +199,8 @@ if __name__ == '__main__':
                       of_cameras=of_cameras,
                       initial_goals=init_goals,
                      of_gaussian_noise=args.of_gaussian_noise,
+                     of_dropout_noise=args.of_dropout_noise,
+                     of_gamma_noise=args.of_gamma_noise,
                      of_subsample=of_subsample,
                       of_ignore_angular_velocity=not args.include_rotation_of,
                   )}
