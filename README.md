@@ -90,6 +90,7 @@ _TODO_: Large file storage/linking?
 * Run the project in game mode: `./<...>/Engine/Binaries/Linux/UE4Editor <...>/<PROJECT.uproject> -game -windowed`
 * This should open the project in 'game' and 'windowed' mode, which does not load the Editor GUI, and allows you to
   click offscreen
+To edit files, : `./<...>/Engine/Binaries/Linux/UE4Editor <...>/<PROJECT.uproject>`
 
 ### test basic keyboard input
 
