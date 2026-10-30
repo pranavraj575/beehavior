@@ -13,8 +13,16 @@ in another terminal, run `python3 airsim_interface/keyboard_test.py`
 """
 import airsim,os
 
-def add_gaussiannoise(of, noise):
-    return of+np.random.normal(0,noise,of.shape)
+
+def add_gaussiannoise(of, var):
+    return of+np.random.normal(0, var, of.shape)
+def add_dropoutnoise(of, p):
+    return of*np.random.binomial(1, 1-p, of.shape)
+def add_gammanoise(of, var):
+    # shape*scale is mean
+    # shape * scale^2 is var
+    # thus, to have variance v, shape=1/v, scale=v
+    return of*np.random.gamma(shape=1/var, scale=var, size=of.shape)
 def apply_subsample(of,ss):
     temp=of[...,::ss[0],::ss[1]]
     for i in range(ss[0]):
@@ -230,7 +238,9 @@ if __name__ == '__main__':
                     (np.linalg.norm(of, axis=-1, keepdims=True), 'Raw Optic Flow'),
                     (apply_subsample(np.linalg.norm(of, axis=-1, keepdims=True),[2,2]), 'Subsampled Optic Flow (2)'),
                     (apply_subsample(np.linalg.norm(of, axis=-1, keepdims=True),[4,4]), 'Subsampled Optic Flow (4)'),
-                    (add_gaussiannoise(np.linalg.norm(of, axis=-1, keepdims=True),10), 'Noisy Optic Flow'),
+                    (np.linalg.norm(add_gaussiannoise(of,10), axis=-1, keepdims=True), 'Noisy Optic Flow (gaussian var 10)'),
+                    (np.linalg.norm(add_dropoutnoise(of,.05), axis=-1, keepdims=True), 'Noisy Optic Flow (dropout p .05)'),
+                    (np.linalg.norm(add_gammanoise(of, .05), axis=-1, keepdims=True), 'Noisy Optic Flow (gamma var .05)'),
                     (np.log(np.clip(np.linalg.norm(of, axis=-1, keepdims=True), 10e-10, np.inf)), 'Log Optic Flow'),
                     # (lambda x: np.clip(np.log(x),-1,np.inf), 'Clipped Log Optic Flow'),
                     (np.sqrt(np.linalg.norm(of, axis=-1, keepdims=True)), 'Sqrt Optic Flow'),
