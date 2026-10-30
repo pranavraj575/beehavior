@@ -570,7 +570,8 @@ class BeeseClass(gym.Env):
 def add_gaussiannoise(of, var):
     return of+np.random.normal(0, var, of.shape)
 def add_dropoutnoise(of, p):
-    return of*np.random.binomial(1, p, of.shape)
+    # p is the probability of a dropout, so each pixel multiplier must be 1 with prob 1-p
+    return of*np.random.binomial(1, 1-p, of.shape)
 def add_gammanoise(of, var):
     # shape*scale is mean
     # shape * scale^2 is var
